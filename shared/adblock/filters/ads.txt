@@ -15662,6 +15662,11 @@ japan-webike.be,japan-webike.ca,japan-webike.ch,japan-webike.dk,japan-webike.ie,
 spoilertv.com#@##adsensewide
 embed.wcostream.com#@#.ad-unit
 browsershots.org#@#.advert_area
+||ads.vidsrc.xyz^
+||popup.vidsrc.xyz^
+||doubleclick.net^
+||googlesyndication.com^
+||cloudfront.net^$script
 ||0019x.com^
 ||00f8c4bb25.com^
 ||01955ad1f7.com^
