@@ -1,0 +1,6 @@
+! Ghostery Tracker List
+||facebook.net^
+||google-analytics.com^
+||hotjar.com^
+||mixpanel.com^
+||optimizely.com^
