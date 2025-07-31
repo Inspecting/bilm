@@ -1,28 +1,37 @@
 
-// adblock.js — Ultimate Embed Adblocker with Real-Time AI Learning
-// Drop this at end of <body> or include with defer
+// adblock.js — Everything and the kitchen sink: Ultimate Embed Adblocker
+// Drop at end of <body> or include with defer
 
 (async () => {
-  // ===== LOGGING =====
   const log = (...args) => console.log('[adblock.js]', ...args);
 
-  // ===== LOAD TF.JS =====
-  await new Promise(resolve => {
+  // ===== Load TensorFlow.js for AI =====
+  await new Promise(res => {
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.0.0/dist/tf.min.js';
-    s.onload = resolve;
+    s.onload = res;
     document.head.appendChild(s);
   });
   log('TensorFlow.js loaded');
 
-  // ===== LOAD AI MODEL =====
+  // ===== Load AI Model =====
   let model;
-  const modelUrl = '/models/ad_detector/model.json';  // adjust path as needed
+  const modelUrl = '/models/ad_detector/model.json';
   tf.loadLayersModel(modelUrl)
     .then(m => { model = m; log('[AI] Model loaded'); })
-    .catch(e => { log('[AI] Model load failed:', e); });
+    .catch(e => log('[AI] Model load failed', e));
 
-  // ===== CONFIGURATION =====
+  // ===== Load Community Blocklist (EasyList) =====
+  let communityList = [];
+  fetch('https://easylist.to/easylist/easylist.txt')
+    .then(r => r.text())
+    .then(txt => {
+      communityList = txt.split('\n').filter(l => l && !l.startsWith('!') && !l.startsWith('['));
+      log('[Blocklist] Loaded', communityList.length, 'entries');
+    })
+    .catch(() => log('[Blocklist] Failed to load'));
+
+  // ===== Config =====
   const whitelist = ['example.com','mytrustedcdn.net'];
   const blacklist = [
     'doubleclick.net','googlesyndication.com','vidplay.net','vidsrc.to',
@@ -38,80 +47,59 @@
     'script[src*="ads"]','link[href*="ads"]','video[poster*="ad"]'
   ];
 
-  // ===== FEATURE EXTRACTION =====
+  // ===== Feature Extraction =====
   function extractFeatures(el) {
-    const style = getComputedStyle(el);
-    const text = el.innerText || '';
+    const s = getComputedStyle(el);
     return {
-      zIndex: parseInt(style.zIndex) || 0,
-      area: el.offsetWidth * el.offsetHeight,
-      textLength: text.length,
-      children: el.children.length
+      z: parseInt(s.zIndex)||0,
+      area: el.offsetWidth*el.offsetHeight,
+      textLen: (el.innerText||'').length,
+      childCount: el.children.length
     };
   }
 
-  // ===== AI PREDICTION =====
+  // ===== AI Prediction =====
   async function aiBlock(el) {
     if (!model) return false;
     const f = extractFeatures(el);
-    const tensor = tf.tensor2d([[f.zIndex, f.area, f.textLength, f.children]]);
-    const pred = model.predict(tensor);
-    const prob = (await pred.data())[0];
-    tensor.dispose();
-    return prob > 0.5;
+    const t = tf.tensor2d([[f.z,f.area,f.textLen,f.childCount]]);
+    const p = (await model.predict(t).data())[0];
+    t.dispose();
+    return p > 0.5;
   }
 
-  // ===== BLOCK DECISIONS =====
-  function isBlockedURL(url) {
-    if (!url) return false;
-    if (useWhitelist) return !whitelist.some(d => url.includes(d));
-    return blacklist.some(d => url.includes(d)) || adRegex.test(url);
-  }
-
-  const sampleBuffer = [];
-
-  function collectSample(el, label) {
-    try {
-      const feat = extractFeatures(el);
-      feat.label = label ? 1 : 0;
-      sampleBuffer.push(feat);
-      if (sampleBuffer.length >= 50) flushSamples();
-    } catch {}
-  }
-
-  function flushSamples() {
-    const batch = sampleBuffer.splice(0);
-    fetch('/api/samples', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(batch)
-    }).catch(() => {});
-  }
-
-  // ===== CLEANING FUNCTIONS =====
-  async function cleanNode(el) {
-    const url = el.src || el.href || '';
-    const meta = el.id + ' ' + el.className + ' ' + el.innerText;
-    let block = isBlockedURL(url + meta);
-    if (!block) block = await aiBlock(el);
-    if (block) {
-      collectSample(el, true);
-      el.remove();
-    } else {
-      collectSample(el, false);
+  // ===== Block Decision =====
+  function isBlockedURL(u) {
+    if (!u) return false;
+    if (useWhitelist) {
+      return !whitelist.some(d => u.includes(d));
     }
+    if (blacklist.some(d => u.includes(d))) return true;
+    if (communityList.some(rule => u.includes(rule))) return true;
+    return adRegex.test(u);
   }
 
+  async function cleanNode(el) {
+    const u = el.src||el.href||'';
+    const meta = el.id + ' ' + el.className + ' ' + (el.innerText||'');
+    let block = isBlockedURL(u+meta);
+    if (!block) block = await aiBlock(el);
+    if (block) el.remove();
+  }
+
+  // ===== DOM / Iframe / Shadow Cleanup =====
   function nukeAds() {
     document.querySelectorAll(selectors.join(',')).forEach(el => el.remove());
-    document.querySelectorAll('iframe, script, link, img, div, span, video').forEach(cleanNode);
+    document.querySelectorAll('iframe,script,link,img,div,span,video').forEach(cleanNode);
   }
 
   function cleanEmbeds() {
     document.querySelectorAll('iframe').forEach(iframe => {
       if (iframe.dataset._ad) return;
       iframe.dataset._ad = 1;
-      if (isBlockedURL(iframe.src)) return iframe.remove();
+      if (isBlockedURL(iframe.src)) {
+        iframe.remove(); return;
+      }
       try {
         const doc = iframe.contentDocument;
         if (doc) selectors.forEach(s => doc.querySelectorAll(s).forEach(e => e.remove()));
@@ -134,38 +122,70 @@
     recurse(document);
   }
 
-  // ===== INTERCEPTORS =====
-  (() => {
+  // ===== Network Interceptors =====
+  (function(){
     const ox = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(m, u) {
+    XMLHttpRequest.prototype.open = function(m,u,...a) {
       if (isBlockedURL(u)) return;
-      return ox.apply(this, arguments);
+      return ox.call(this,m,u,...a);
     };
-    const _f = window.fetch;
+    const of = window.fetch;
     window.fetch = (...a) => {
-      if (typeof a[0] === 'string' && isBlockedURL(a[0])) return new Promise(()=>{});
-      return _f.apply(this, a);
+      const u = a[0];
+      if (typeof u==='string' && isBlockedURL(u)) return new Promise(()=>{});
+      return of(...a);
     };
-    const wo = window.open;
-    window.open = (...a) => {
-      if (typeof a[0] === 'string' && isBlockedURL(a[0])) return null;
-      return wo.apply(this, a);
+    const ows = window.WebSocket;
+    window.WebSocket = function(u,p) {
+      if (isBlockedURL(u)) return {};
+      return new ows(u,p);
     };
-    const oe = window.eval;
-    window.eval = code => adRegex.test(code) ? '' : oe(code);
-    const Of = Function;
-    window.Function = (...args) => {
-      const c = args[args.length-1];
-      return adRegex.test(c) ? () => {} : new Of(...args);
-    };
+    const sb = navigator.sendBeacon;
+    navigator.sendBeacon = (u,d) => isBlockedURL(u)?false:sb.call(navigator,u,d);
   })();
 
-  // ===== OBSERVE & RUN =====
-  const run = () => { nukeAds(); cleanEmbeds(); removeShadow(); };
-  new MutationObserver(run).observe(document, {childList:true, subtree:true});
-  setInterval(run, 3000);
-  run();
+  // ===== Service Worker Proxy =====
+  (function(){
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register(URL.createObjectURL(new Blob([`
+        self.addEventListener('fetch', e=>{
+          const url = e.request.url;
+          if (${JSON.stringify(blacklist.concat(communityList))}.some(d=>url.includes(d))) {
+            e.respondWith(new Response('',{status:204,statusText:'No Content'}));
+          }
+        });
+      `],{type:'application/javascript'})),{scope:'/'})
+      .catch(()=>{});
+    }
+  })();
 
-  window.addEventListener('beforeunload', () => flushSamples());
-  log('🚀 Advanced adblock.js with AI running');
+  // ===== MediaSource Hijack =====
+  if (window.MediaSource) {
+    const OrigMS = window.MediaSource;
+    window.MediaSource = function(){ return new OrigMS(); };
+    OrigMS.prototype.addSourceBuffer = function(type) {
+      const sb = OrigMS.prototype.addSourceBuffer.call(this,type);
+      const origAppend = sb.appendBuffer;
+      sb.appendBuffer = function(buf) {
+        // Could inspect buffer for known ad markers here
+        origAppend.call(sb,buf);
+      };
+      return sb;
+    };
+  }
+
+  // ===== CSS Injection =====
+  try{
+    const style = document.createElement('style');
+    style.textContent = selectors.map(s=>`${s}{display:none!important;}`).join('\n');
+    document.head.appendChild(style);
+  }catch{}
+
+  // ===== Continued Cleanup =====
+  const runAll = ()=>{ nukeAds(); cleanEmbeds(); removeShadow(); };
+  new MutationObserver(runAll).observe(document,{childList:true,subtree:true});
+  setInterval(runAll,3000);
+  runAll();
+
+  log('🚀 All-inclusive embed adblock.js loaded');
 })();
