@@ -1,12 +1,15 @@
 
-// adblock.js — Modular, Robust Embed Adblocker
+// adblock.js — Enhanced Modular Embed Adblocker
 // Drop at end of <body> or include with defer
 
 (async () => {
-  // ======= CONFIGURATION =======
+  const log = (...args) => console.log('[adblock.js]', ...args);
+  const warn = (...args) => console.warn('[adblock.js]', ...args);
+
+  // ===== CONFIG =====
   const CONFIG = {
-    embedHosts: ['vidsrc.xyz', 'vidplay.to', 'upstream.to', 'cdn.vidplayer.net'],
-    apiHosts: ['api.themoviedb.org', 'inspecting.github.io/bilm/'],
+    embedHosts: ['vidsrc.xyz','vidplay.to','upstream.to','cdn.vidplayer.net'],
+    apiHosts: ['api.themoviedb.org','yourdomain.com'],
     apiPrefixes: ['/api/'],
     blacklist: [
       'doubleclick.net','googlesyndication.com','popads.net','exosrv.com',
@@ -14,126 +17,95 @@
       'juicyads.com','clkmon.com','exoclick.com'
     ],
     adKeywords: /(ad|ads|sponsor|promo|banner|doubleclick|popunder|outbrain|taboola|bongacams|trafficjunky|juicyads|clkmon|exoclick)/i,
+    // Extended selectors
     selectors: [
-      'iframe[src*="ads"]','iframe[id*="ad"]','iframe[class*="ad"]',
-      '[src*="ads"]','[href*="ads"]','[class*="ad"]','[id*="ad"]',
-      '[data-ad]','.sponsor','.promo','.overlay','.ad-container','.ad-player',
-      'script[src*="ads"]','link[href*="ads"]'
+      '[id*="ad"]','[class*="ad"]','[class*="ads"]','[class*="banner"]',
+      '.ad-overlay','.ad-popup','.ad-banner','.adsbygoogle','.adsense',
+      '.ad-container','.advertisement','.sponsor','.promo','.skip-ad',
+      '.countdown','.overlay-block','.video-ads'
     ]
   };
 
-  const log = (...args) => console.log('[adblock]', ...args);
-  const warn = (...args) => console.warn('[adblock]', ...args);
-
-  // ======= URL BLOCKING LOGIC =======
+  // ===== URL DECISION =====
   function isWhitelisted(url) {
     if (!url) return true;
     const u = url.toLowerCase();
-    // self script
     if (u.includes('adblock.js')) return true;
-    // embed hosts
-    if (CONFIG.embedHosts.some(host => u.includes(host))) return true;
-    // API hosts
+    if (CONFIG.embedHosts.some(h=>u.includes(h))) return true;
     try {
-      const host = new URL(url).hostname;
-      if (CONFIG.apiHosts.includes(host)) return true;
+      const h = new URL(url).hostname;
+      if (CONFIG.apiHosts.includes(h)) return true;
     } catch {}
-    // API prefixes
-    if (CONFIG.apiPrefixes.some(pref => u.startsWith(pref) || u.includes(pref))) return true;
+    if (CONFIG.apiPrefixes.some(p=>url.startsWith(p))) return true;
     return false;
   }
-
   function isAdUrl(url) {
     const u = url.toLowerCase();
-    if (CONFIG.blacklist.some(domain => u.includes(domain))) return true;
+    if (CONFIG.blacklist.some(d=>u.includes(d))) return true;
     return CONFIG.adKeywords.test(u);
   }
-
   function shouldBlockUrl(url) {
     if (!url) return false;
     if (isWhitelisted(url)) return false;
     return isAdUrl(url);
   }
 
-  // ======= DOM CLEANUP =======
-  function cleanElement(el) {
-    const url = el.src || el.href || '';
+  // ===== CORE HIDE FUNCTION =====
+  function hideAds(root=document) {
+    CONFIG.selectors.forEach(sel=>
+      root.querySelectorAll(sel).forEach(el=>{
+        warn('Hiding ad element via selector:', sel, el);
+        el.remove?.() || el.style && Object.assign(el.style, {
+          display:'none', visibility:'hidden', opacity:'0', pointerEvents:'none'
+        });
+      })
+    );
+  }
+
+  // ===== CLEAN INDIVIDUAL ELEMENT =====
+  function cleanEl(el) {
+    const url = el.src||el.href||'';
     if (shouldBlockUrl(url)) {
       warn('Removing element:', el, 'URL:', url);
       el.remove();
     }
   }
 
-  function nukeSelectors() {
-    document.querySelectorAll(CONFIG.selectors.join(',')).forEach(el => {
-      warn('Selector nuke:', el);
-      el.remove();
-    });
-  }
-
-  function cleanDOM() {
-    nukeSelectors();
-    document.querySelectorAll('iframe,script,link,img,div,span').forEach(cleanElement);
-  }
-
-  // ======= SHADOW DOM =======
-  function cleanShadow(root) {
-    CONFIG.selectors.forEach(sel => root.querySelectorAll(sel).forEach(e => e.remove()));
-    root.querySelectorAll('*').forEach(el => {
-      if (el.shadowRoot) cleanShadow(el.shadowRoot);
-    });
-  }
-
+  // ===== FULL CLEAN =====
   function cleanAll() {
-    cleanDOM();
-    cleanShadow(document);
+    hideAds();
+    document.querySelectorAll('iframe,script,link,img,div,span').forEach(cleanEl);
   }
 
-  // ======= NETWORK INTERCEPTORS =======
-  function interceptXHR() {
-    const orig = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(m, url, ...args) {
-      if (shouldBlockUrl(url)) {
-        warn('Blocked XHR:', url);
-        return;
-      }
-      return orig.call(this, m, url, ...args);
+  // ===== NETWORK INTERCEPT =====
+  (()=>{
+    const ox=XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open=function(m,u,...a){
+      if (shouldBlockUrl(u)) { warn('Blocked XHR:',u);return; }
+      return ox.call(this,m,u,...a);
     };
-  }
-
-  function interceptFetch() {
-    const orig = window.fetch;
-    window.fetch = (...args) => {
-      const url = args[0];
-      if (typeof url === 'string' && shouldBlockUrl(url)) {
-        warn('Blocked fetch:', url);
-        return new Promise(() => {});
-      }
-      return orig.apply(this, args);
+    const of=window.fetch;
+    window.fetch=function(...a){
+      const u=a[0];
+      if(typeof u==='string' && shouldBlockUrl(u)) { warn('Blocked fetch:',u); return new Promise(()=>{}); }
+      return of.apply(this,a);
     };
-  }
-
-  function interceptWindowOpen() {
-    const orig = window.open;
-    window.open = (url, ...args) => {
-      if (typeof url === 'string' && shouldBlockUrl(url)) {
-        warn('Blocked popup:', url);
-        return null;
-      }
-      return orig.call(window, url, ...args);
+    const oo=window.open;
+    window.open=function(u,...a){
+      if(typeof u==='string' && shouldBlockUrl(u)) { warn('Blocked popup:',u); return null; }
+      return oo.call(this,u,...a);
     };
-  }
+  })();
 
-  // ======= INIT =======
-  interceptXHR();
-  interceptFetch();
-  interceptWindowOpen();
-
-  // Continuous cleanup
-  const observer = new MutationObserver(cleanAll);
-  observer.observe(document, { childList: true, subtree: true });
-  setInterval(cleanAll, 2000);
+  // ===== OBSERVER & INTERVAL =====
+  const obs=new MutationObserver(m=>{
+    m.forEach(r=>r.addedNodes.forEach(n=>{
+      if(n.nodeType===1){ hideAds(n); cleanEl(n); }
+    }));
+  });
+  obs.observe(document.body,{childList:true,subtree:true});
+  setInterval(cleanAll,2000);
   cleanAll();
 
-  log('Adblock.js initialized.');
+  log('✅ Enhanced adblock.js initialized');
 })();
