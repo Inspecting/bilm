@@ -1,5 +1,5 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
-const BASE_URL = 'https://inspecting.github.io/bilm.github.io';
+const BASE_URL = 'https://inspecting.github.io/bilm';
 const moviesPerLoad = 15;
 
 let allGenres = [];
