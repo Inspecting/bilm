@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Settings - In Progress</title>
+
+  <!-- PWA + iOS fullscreen support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#000000" />
+
+  <!-- PWA Manifest and Icon -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #000;
+      color: #ccc;
+      font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 2rem;
+      text-align: center;
+      padding: 20px;
+      gap: 40px;
+    }
+
+    .danger-button {
+      padding: 14px 24px;
+      font-size: 1.2rem;
+      background-color: #ff3b3b;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 0 12px #ff3b3b77;
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .danger-button:hover {
+      background-color: #cc0000;
+      box-shadow: 0 0 16px #ff3b3b;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Synced Navbar Container -->
+<div id="navbarContainer"></div>
+
+<main>
+  <div>Settings - Work in progress</div>
+  <button id="resetDataBtn" class="danger-button">Reset Site Data</button>
+</main>
+
+<script>
+  // Load shared navbar
+  fetch('/bilm.github.io/shared/navbar.html')
+    .then(res => res.text())
+    .then(html => {
+      document.getElementById('navbarContainer').innerHTML = html;
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = '/bilm.github.io/shared/navbar.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = '/bilm.github.io/shared/navbar.js';
+      document.body.appendChild(js);
+    });
+
+  // Reset button functionality
+  document.getElementById('resetDataBtn')?.addEventListener('click', () => {
+    const confirmReset = confirm('⚠️ This will erase all saved site data on your device. Continue?');
+    if (!confirmReset) return;
+
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Clear all cookies (best effort)
+      document.cookie.split(';').forEach(cookie => {
+        const eqPos = cookie.indexOf('=');
+        const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      });
+
+      alert('✅ Site data cleared. Reloading fresh.');
+      location.reload();
+    } catch (err) {
+      console.error('Error clearing data:', err);
+      alert('❌ Something went wrong while clearing data.');
+    }
+  });
+</script>
+
+</body>
+</html>

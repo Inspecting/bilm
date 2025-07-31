@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - Movie Viewer</title>
+
+  <!-- PWA & iOS support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <!-- Manifest & App Icon -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <!-- Fonts and Styles -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+      overflow-x: hidden;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    main {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    #playerWrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+      width: 800px;
+      max-width: 95vw;
+      position: relative;
+    }
+
+    #playerContainer {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background-color: black;
+      border-radius: 12px;
+      box-shadow: 0 0 15px #a14effaa;
+      overflow: hidden;
+      position: relative;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 12px;
+      display: block;
+      position: relative;
+      z-index: 1;
+    }
+
+    #fullscreenBtn {
+      margin-top: 12px;
+      background-color: #3a1361;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
+      max-width: 120px;
+      text-align: center;
+      user-select: none;
+      z-index: 20;
+      position: relative;
+    }
+
+    #fullscreenBtn:hover {
+      background-color: #a855f7;
+    }
+
+    #serverList {
+      position: absolute;
+      left: 100%;
+      margin-left: 20px;
+      top: 0;
+      width: 140px;
+      color: #ddd;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(26, 22, 40, 0.9);
+      border-radius: 12px;
+      box-shadow: 0 0 15px #a14effaa;
+      max-height: 300px;
+      overflow-y: auto;
+      z-index: 10;
+    }
+
+    #serverList h2 {
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: #a14eff;
+      text-align: center;
+    }
+
+    .serverBtn {
+      background-color: #3a1361;
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
+      width: 100%;
+      text-align: center;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .serverBtn:hover {
+      background-color: #a855f7;
+    }
+
+    .serverBtn.active {
+      background-color: #a14eff;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+
+<!-- 🔒 Load Shared Ad Blocker -->
+<script src="/bilm.github.io/shared/adblock.js"></script>
+
+<!-- Shared Navbar Placeholder -->
+<div id="navbarContainer"></div>
+
+<main>
+  <div id="playerWrapper">
+    <div id="playerContainer">
+      <iframe
+        id="videoPlayer"
+        src=""
+        allowfullscreen
+        allow="fullscreen; encrypted-media"
+        playsinline
+        scrolling="no"
+      ></iframe>
+    </div>
+    <button id="fullscreenBtn">Fullscreen</button>
+
+    <div id="serverList">
+      <h2>Servers</h2>
+      <button class="serverBtn active" id="serverVidsrc">VidSrc</button>
+      <button class="serverBtn" id="serverVidplay">VidPlay</button>
+    </div>
+  </div>
+</main>
+
+<!-- Load shared navbar and CSS dynamically -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    fetch('/bilm.github.io/shared/navbar.html')
+      .then(res => res.text())
+      .then(html => {
+        document.getElementById('navbarContainer').innerHTML = html;
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = '/bilm.github.io/shared/navbar.css';
+        document.head.appendChild(css);
+        const script = document.createElement('script');
+        script.src = '/bilm.github.io/shared/navbar.js';
+        document.body.appendChild(script);
+      });
+  });
+</script>
+
+<!-- Viewer Logic -->
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const movieId = params.get('id');
+
+  const iframe = document.getElementById('videoPlayer');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+  const servers = {
+    vidsrc: document.getElementById('serverVidsrc'),
+    vidplay: document.getElementById('serverVidplay')
+  };
+
+  function loadServer(server) {
+    if (!movieId) {
+      console.error('No movie ID provided.');
+      iframe.src = '';
+      return;
+    }
+
+    let url = '';
+    switch (server) {
+      case 'vidsrc':
+        url = `https://vidsrc.xyz/embed/movie/${movieId}`;
+        break;
+      case 'vidplay':
+        url = `https://vidplay.to/movie/${movieId}`;
+        break;
+      default:
+        url = '';
+    }
+    iframe.src = url;
+  }
+
+  function setActive(serverKey) {
+    Object.keys(servers).forEach(key => {
+      if (key === serverKey) servers[key].classList.add('active');
+      else servers[key].classList.remove('active');
+    });
+  }
+
+  Object.entries(servers).forEach(([key, btn]) => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('active')) return;
+      setActive(key);
+      loadServer(key);
+    });
+  });
+
+  setActive('vidsrc');
+  loadServer('vidsrc');
+
+  fullscreenBtn.onclick = () => {
+    if (iframe.requestFullscreen) iframe.requestFullscreen();
+    else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+    else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
+  };
+</script>
+
+</body>
+</html>

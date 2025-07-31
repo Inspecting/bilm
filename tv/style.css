@@ -1,0 +1,97 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Poppins', sans-serif;
+  background-color: #121212;
+  color: #f0f0f0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  width: 100vw;
+  height: calc(100vh - 60px);
+  padding: 20px 10px;
+  box-sizing: border-box;
+}
+
+.section {
+  margin-bottom: 30px;
+}
+
+.section-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #c084fc;
+}
+
+.scroll-row {
+  display: flex;
+  overflow-x: auto;
+  gap: 12px;
+  padding-bottom: 6px;
+  scroll-behavior: smooth;
+  width: 100%;
+}
+
+.scroll-row::-webkit-scrollbar {
+  height: 8px;
+}
+
+.scroll-row::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.scroll-row::-webkit-scrollbar-thumb {
+  background-color: #a14eff;
+  border-radius: 10px;
+}
+
+.movie-card {
+  flex: 0 0 auto;
+  width: 140px;
+  height: auto;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 0 8px #a14eff66;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  transition: transform 0.2s ease;
+}
+
+.movie-card:hover {
+  transform: scale(1.05);
+}
+
+.movie-card img {
+  width: 140px;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 12px 12px 0 0;
+}
+
+.movie-card p {
+  padding: 6px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #eee;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
