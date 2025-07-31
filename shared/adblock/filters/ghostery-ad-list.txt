@@ -1,6 +1,0 @@
-! Ghostery Ad List
-||doubleclick.net^
-||ads.google.com^
-||adnxs.com^
-||googlesyndication.com^
-||adservice.google.com^
