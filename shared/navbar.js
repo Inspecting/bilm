@@ -5,8 +5,8 @@
   const shadow = container.attachShadow({ mode: 'open' });
 
   const [htmlRes, cssRes] = await Promise.all([
-    fetch('/bilm.github.io/shared/navbar.html'),
-    fetch('/bilm.github.io/shared/navbar.css')
+    fetch('/bilm/shared/navbar.html'),
+    fetch('/bilm/shared/navbar.css')
   ]);
 
   const html = await htmlRes.text();
@@ -35,7 +35,7 @@
     }
     btn.onclick = () => {
       const target = btn.dataset.page;
-      window.location.href = `/bilm.github.io/${target === 'home' ? 'home/' : target}/`;
+      window.location.href = `/bilm/${target === 'home' ? 'home/' : target}/`;
     };
   });
 
@@ -55,7 +55,7 @@
         document.body.style.overflow = 'hidden';
         return;
       }
-      window.location.href = `/bilm.github.io/${target === 'home' ? 'home/' : target}/`;
+      window.location.href = `/bilm/${target === 'home' ? 'home/' : target}/`;
     };
   });
 
@@ -66,7 +66,7 @@
       if (e.key === 'Enter') {
         const query = searchInput.value.trim();
         if (query) {
-          window.location.href = `/bilm.github.io/home/search.html?q=${encodeURIComponent(query)}`;
+          window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
         }
       }
     });
@@ -102,7 +102,7 @@
       if (e.key === 'Enter') {
         const query = input.value.trim();
         if (query) {
-          window.location.href = `/bilm.github.io/home/search.html?q=${encodeURIComponent(query)}`;
+          window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
         }
       } else if (e.key === 'Escape') {
         closeOverlay();
