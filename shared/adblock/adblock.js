@@ -1,23 +1,16 @@
 (async () => {
-  // Whitelist your own site so it never gets blocked
-  const whitelist = ['inspecting.github.io'];
-
-  // Optional: Only block ads on these external hosts
-  const blacklist = ['vidsrc.xyz', 'vidplay.to', 'videocdn.tv'];
+  // Allow script to run ONLY on embed hosts
+  const allowedDomains = ['vidsrc.xyz', 'vidplay.to', 'videocdn.tv'];
 
   const hostname = location.hostname;
 
-  // Skip if the current domain is whitelisted
-  if (whitelist.some(domain => hostname.includes(domain))) {
-    console.log('[adblock.js] Skipped (whitelisted):', hostname);
+  // Exit unless we're on a matching embed domain
+  if (!allowedDomains.some(domain => hostname.includes(domain))) {
+    console.log('[adblock.js] Not running on this domain:', hostname);
     return;
   }
 
-  // Skip if blacklist is set and the current host is not in it
-  if (blacklist.length && !blacklist.some(domain => hostname.includes(domain))) {
-    console.log('[adblock.js] Skipped (not in blacklist):', hostname);
-    return;
-  }
+  console.log('[adblock.js] Running on:', hostname);
 
   const res = await fetch('/bilm/shared/adblock/filters/ads.txt');
   const txt = await res.text();
