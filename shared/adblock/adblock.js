@@ -1,64 +1,39 @@
+<script type="module">
+  import { FiltersEngine, Request } from 'https://cdn.jsdelivr.net/npm/@ghostery/adblocker@2.11.3/dist/esm/index.min.js';
 
-// Simple Adblocker Script (Self-contained)
+  async function initAdblock(){
+    // Use built-in Ghostery lists for both ad & tracker blocking
+    const engine = await FiltersEngine.fromPrebuiltAdsAndTracking(fetch);
 
-(function() {
-  const blockedPatterns = [
-    /doubleclick\.net/,
-    /googlesyndication\.com/,
-    /adservice\.google\.com/,
-    /adsystem\.com/,
-    /ads\./,
-    /\/ads\//,
-    /track(er)?\./,
-    /\/tracker\//,
-    /popads\./,
-    /vidplay\.io\/ads/,
-    /vidsrc\.to\/ads/,
-    /\/banner/,
-    /\?ad_tag=/,
-    /\&ads=/,
-  ];
-
-  function shouldBlock(url) {
-    return blockedPatterns.some(pattern => pattern.test(url));
-  }
-
-  // Block fetch
-  const originalFetch = window.fetch;
-  window.fetch = function(...args) {
-    if (shouldBlock(args[0])) {
-      console.warn("[adblock.js] Blocked fetch:", args[0]);
-      return Promise.reject("Blocked by adblocker");
+    function shouldBlock(url) {
+      const req = Request.fromRawDetails({ url, type: 'other' });
+      return engine.match(req).matched;
     }
-    return originalFetch.apply(this, args);
-  };
 
-  // Block XHR
-  const originalOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url) {
-    if (shouldBlock(url)) {
-      console.warn("[adblock.js] Blocked XHR:", url);
-      return;
-    }
-    return originalOpen.apply(this, arguments);
-  };
+    // Hook fetch
+    const origFetch = window.fetch;
+    window.fetch = (...args) => {
+      if (shouldBlock(args[0])) {
+        console.warn('[adblock] Blocked fetch:', args[0]);
+        return new Promise(() => {});
+      }
+      return origFetch(...args);
+    };
 
-  // Block iframes and scripts
-  const observer = new MutationObserver(mutations => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (node.tagName === "IFRAME" || node.tagName === "SCRIPT") {
-          const src = node.src || "";
-          if (shouldBlock(src)) {
-            console.warn("[adblock.js] Removed element:", node.tagName, "URL:", src);
+    // Monitor DOM injections
+    new MutationObserver(muts => {
+      muts.forEach(m => {
+        m.addedNodes.forEach(node => {
+          if (node.nodeType === 1 && node.src && shouldBlock(node.src)) {
+            console.warn('[adblock] Removed element:', node.src);
             node.remove();
           }
-        }
-      }
-    }
-  });
+        });
+      });
+    }).observe(document.documentElement, { childList: true, subtree: true });
 
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+    console.log('[adblock] Ghostery adblock library running');
+  }
 
-  console.log("[adblock.js] Simple adblocker initialized");
-})();
+  initAdblock();
+</script>
