@@ -1,36 +1,44 @@
-import { FiltersEngine, Request } from 'https://cdn.jsdelivr.net/npm/@ghostery/adblocker@2.11.3/dist/esm/index.min.js';
+(async () => {
+  const response = await fetch('/shared/adblock/filters/ads.txt');
+  const text = await response.text();
+  const patterns = text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('!') && !line.startsWith('#'));
 
-async function initAdblock() {
-  const adList = await fetch('/shared/adblock/filters/ads.txt').then(res => res.text());
-
-  const engine = FiltersEngine.fromLists([adList]);
-
-  function shouldBlock(url) {
-    const req = Request.fromRawDetails({ url, type: 'other' });
-    return engine.match(req).matched;
+  function matchesAd(url) {
+    return patterns.some(pat => url.includes(pat));
   }
 
-  const origFetch = window.fetch;
+  // Intercept fetch
+  const originalFetch = window.fetch;
   window.fetch = (...args) => {
-    if (shouldBlock(args[0])) {
-      console.warn('[adblock] Blocked fetch:', args[0]);
-      return new Promise(() => {});
+    if (matchesAd(args[0])) {
+      console.warn('[adblock.js] Blocked fetch:', args[0]);
+      return new Promise(() => {}); // Never resolves
     }
-    return origFetch(...args);
+    return originalFetch(...args);
   };
 
-  new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType === 1 && node.src && shouldBlock(node.src)) {
-          console.warn('[adblock] Removed element:', node.src);
-          node.remove();
+  // Intercept dynamic scripts/iframes/etc.
+  const observer = new MutationObserver(mutations => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === 1) {
+          const src = node.src || node.data || '';
+          if (src && matchesAd(src)) {
+            console.warn('[adblock.js] Removed element:', node.tagName, src);
+            node.remove();
+          }
         }
-      });
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true });
+      }
+    }
+  });
 
-  console.log('[adblock] Adblocker with ads.txt loaded');
-}
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
 
-initAdblock();
+  console.log('[adblock.js] Simple adblocker with ads.txt loaded');
+})();
