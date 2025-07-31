@@ -1,40 +1,40 @@
 (async () => {
-  console.log("[adblock.js] Ad blocker loaded");
+  const res = await fetch('/bilm/shared/adblock/filters/ads.txt');
+  const txt = await res.text();
+  const filters = txt
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('!') && !line.startsWith('@@'));
 
-  const FILTER_PATH = "/bilm/shared/adblock/filters/ads.txt";
-
-  function blockElement(el) {
-    if (el && el.remove) {
-      console.log("[adblock.js] Removed element:", el);
-      el.remove();
+  // Convert filter rules into simple regex patterns
+  const patterns = filters.map(line => {
+    try {
+      // Replace * with .*, ^ with \b to mimic adblock syntax a bit
+      const regex = line
+        .replace(/[\.\?\+\[\]\(\)\{\}\\]/g, '\\$&') // escape regex special chars
+        .replace(/\*/g, '.*')
+        .replace(/\^/g, '\\b');
+      return new RegExp(regex, 'i');
+    } catch {
+      return null;
     }
-  }
+  }).filter(Boolean);
 
-  function blockAdsByFilter(filterLines) {
-    const filters = filterLines.filter(line => line && !line.startsWith("!") && !line.startsWith("["));
-    const observer = new MutationObserver(() => {
-      document.querySelectorAll("iframe, script, img, div").forEach(el => {
-        const src = el.src || el.dataset.src || el.href || el.innerHTML;
-        if (src) {
-          for (const f of filters) {
-            if (src.includes(f.replace(/^(\|\|)?/, "").replace(/\^$/, ""))) {
-              blockElement(el);
-              break;
-            }
-          }
-        }
-      });
+  function matchAndRemove() {
+    const elements = document.querySelectorAll('iframe, script, img, link, div');
+    elements.forEach(el => {
+      const src = el.src || el.href || '';
+      if (patterns.some(rx => rx.test(src))) {
+        console.warn('[adblock.js] Removed element:', el);
+        el.remove();
+      }
     });
-
-    observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  try {
-    const res = await fetch(FILTER_PATH);
-    const txt = await res.text();
-    const lines = txt.split("\n");
-    blockAdsByFilter(lines);
-  } catch (e) {
-    console.error("[adblock.js] Failed to load filter list:", e);
-  }
+  // Run on load
+  matchAndRemove();
+
+  // Observe DOM for future elements
+  const observer = new MutationObserver(() => matchAndRemove());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
