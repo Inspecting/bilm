@@ -572,6 +572,100 @@
     };
 
     console.log('🚀 Max‑Max Stealth enabled.');
+
+// ——— ADVANCED FEATURES EXTENSION ———
+
+// Local Telemetry Logging
+const blockLog = [];
+const logBlock = (why, el) => {
+  const entry = { why, tag: el.tagName, class: el.className, time: Date.now() };
+  blockLog.push(entry);
+  if (blockLog.length > 200) blockLog.shift();
+  console.debug('[Blocked]', entry);
+};
+
+// Block Known Ad Scripts
+new MutationObserver(muts => {
+  muts.forEach(m => m.addedNodes.forEach(n => {
+    if (n.tagName === 'SCRIPT') {
+      const src = n.src || '';
+      const bad = ['ads', 'googletag', 'doubleclick', 'popper', 'analytics'];
+      if (bad.some(w => src.includes(w))) {
+        console.warn('[Ad Script Blocked]', src);
+        n.remove();
+        logBlock('ScriptSrc:' + src, n);
+      }
+    }
+  }));
+}).observe(document.documentElement, { childList: true, subtree: true });
+
+// Canvas Fingerprint Blocking
+HTMLCanvasElement.prototype.toDataURL = () => {
+  console.warn('[Blocked Canvas Fingerprint]');
+  return "data:image/png;base64,";
+};
+['fillText','strokeText'].forEach(fn => {
+  const orig = CanvasRenderingContext2D.prototype[fn];
+  CanvasRenderingContext2D.prototype[fn] = function(...args) {
+    console.warn(`[Blocked Canvas ${fn}]`);
+    return orig.call(this, ...args.map(a => String(a).replace(/[a-z]/gi, '*')));
+  };
+});
+
+// LocalStorage Fingerprint Blocking
+Object.defineProperty(window, 'localStorage', {
+  get: () => ({
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+    clear: () => {},
+    key: () => null,
+    length: 0
+  })
+});
+
+// Decoy Objects for Anti-Adblock Checks
+window.adblock = false;
+window.adsbygoogle = { push: () => {} };
+
+// Anti-Overlay and Anti-Blur Remover
+setInterval(() => {
+  document.querySelectorAll('*').forEach(el => {
+    const s = getComputedStyle(el);
+    if (parseFloat(s.zIndex) > 1000 && s.position === 'fixed' && s.opacity < 0.95) {
+      el.remove();
+      logBlock('Overlay', el);
+    }
+    if (s.filter?.includes('blur')) {
+      el.style.filter = 'none';
+      logBlock('BlurFilter', el);
+    }
+  });
+}, 5000);
+
+// Defensive HTML Element Scanning
+setInterval(() => {
+  document.querySelectorAll('[onclick],[onmouseover]').forEach(el => {
+    const txt = el.getAttribute('onclick') || el.getAttribute('onmouseover') || '';
+    if (/ad|popup|sponsor/i.test(txt)) {
+      el.remove();
+      logBlock('InlineHandler', el);
+    }
+  });
+}, 4000);
+
+// Global Mutation Scan Heuristic Expansion
+new MutationObserver(muts => {
+  muts.forEach(m => m.addedNodes.forEach(n => {
+    if (!(n instanceof HTMLElement)) return;
+    const txt = n.innerText || '';
+    if (/sponsor|click to remove|adblock/i.test(txt)) {
+      logBlock('HeuristicText', n);
+      n.remove();
+    }
+  }));
+}).observe(document.body, { childList: true, subtree: true });
+
   })();
 
 })();
