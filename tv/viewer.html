@@ -162,14 +162,39 @@
       left: 0;
       width: 40px;
       height: 40px;
-      background-color: transparent;
+      background: transparent;
       color: white;
-      font-size: 18px;
-      font-weight: bold;
       border: none;
+      font-size: 20px;
+      font-weight: bold;
+      z-index: 100;
       cursor: pointer;
-      z-index: 9999;
       display: none;
+    }
+
+    .simulated-fullscreen {
+      position: fixed !important;
+      top: 0;
+      left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99;
+      border-radius: 0 !important;
+    }
+
+    .hide-navbar {
+      display: none !important;
+    }
+
+    #clickShield {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+      background: transparent;
     }
   </style>
 </head>
@@ -187,9 +212,12 @@
         allowfullscreen
         allow="fullscreen; encrypted-media"
         playsinline
+        scrolling="no"
       ></iframe>
+      <div id="clickShield"></div>
     </div>
     <button id="fullscreenBtn">Fullscreen</button>
+    <button id="closeBtn">X</button>
 
     <div id="serverList">
       <h2>Servers</h2>
@@ -204,9 +232,6 @@
   </div>
 </main>
 
-<button id="closeBtn">X</button>
-
-<!-- Shared navbar -->
 <script>
   fetch('/bilm/shared/navbar.html')
     .then(res => res.text())
@@ -226,6 +251,9 @@
 
   const iframe = document.getElementById('videoPlayer');
   const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  const playerContainer = document.getElementById('playerContainer');
+  const navbarContainer = document.getElementById('navbarContainer');
   const seasonSelect = document.getElementById('seasonSelect');
   const episodeSelect = document.getElementById('episodeSelect');
 
@@ -237,6 +265,41 @@
   let currentSeason = 1;
   let currentEpisode = 1;
   let currentServer = 'vidsrc';
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  fullscreenBtn.onclick = () => {
+    if (!isMobile) {
+      if (playerContainer.requestFullscreen) {
+        playerContainer.requestFullscreen();
+      } else if (playerContainer.webkitRequestFullscreen) {
+        playerContainer.webkitRequestFullscreen();
+      } else if (playerContainer.msRequestFullscreen) {
+        playerContainer.msRequestFullscreen();
+      }
+    } else {
+      playerContainer.classList.add('simulated-fullscreen');
+    }
+    closeBtn.style.display = 'block';
+    navbarContainer.classList.add('hide-navbar');
+  };
+
+  closeBtn.onclick = () => {
+    if (isMobile) {
+      playerContainer.classList.remove('simulated-fullscreen');
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+    }
+    closeBtn.style.display = 'none';
+    navbarContainer.classList.remove('hide-navbar');
+  };
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      closeBtn.style.display = 'none';
+      navbarContainer.classList.remove('hide-navbar');
+    }
+  });
 
   function saveProgress() {
     localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
@@ -270,12 +333,6 @@
       if (!btn.classList.contains('active')) setActive(key);
     });
   });
-
-  fullscreenBtn.onclick = () => {
-    if (iframe.requestFullscreen) iframe.requestFullscreen();
-    else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
-    else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
-  };
 
   function updateIframe() {
     if (!imdbId) return;
@@ -339,42 +396,6 @@
 
   loadProgress();
   loadSeasons();
-
-  // Fullscreen navbar/X toggle
-  const closeBtn = document.getElementById('closeBtn');
-
-  function isFullscreen() {
-    return !!(
-      document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      document.mozFullScreenElement ||
-      document.msFullscreenElement
-    );
-  }
-
-  function updateNavbarVisibility() {
-    const navbar = document.getElementById('navbarContainer');
-    if (isFullscreen()) {
-      if (navbar) navbar.style.display = 'none';
-      closeBtn.style.display = 'block';
-    } else {
-      if (navbar) navbar.style.display = '';
-      closeBtn.style.display = 'none';
-    }
-  }
-
-  document.addEventListener('fullscreenchange', updateNavbarVisibility);
-  document.addEventListener('webkitfullscreenchange', updateNavbarVisibility);
-  document.addEventListener('mozfullscreenchange', updateNavbarVisibility);
-  document.addEventListener('MSFullscreenChange', updateNavbarVisibility);
-
-  closeBtn.onclick = () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
-    else if (document.msFullscreenElement) document.msExitFullscreen();
-  };
-
-  updateNavbarVisibility();
 </script>
 
 <!-- 🔒 Load Shared Ad Blocker -->
