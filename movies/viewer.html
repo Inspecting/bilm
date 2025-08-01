@@ -5,17 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bilm 💜 - Movie Viewer</title>
 
-  <!-- PWA & iOS support -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0a0a0a" />
 
-  <!-- Manifest & App Icon -->
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icon.png" />
 
-  <!-- Fonts and Styles -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
   <style>
     * {
@@ -64,6 +61,7 @@
       box-shadow: 0 0 15px #a14effaa;
       overflow: hidden;
       position: relative;
+      transition: all 0.3s ease;
     }
 
     iframe {
@@ -74,17 +72,6 @@
       display: block;
       position: relative;
       z-index: 1;
-    }
-
-    #clickShield {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 5;
-      pointer-events: none;
-      background: transparent;
     }
 
     #fullscreenBtn {
@@ -106,6 +93,33 @@
 
     #fullscreenBtn:hover {
       background-color: #a855f7;
+    }
+
+    #closeBtn {
+      display: none;
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 100;
+      background: #3a1361;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    #clickShield {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+      background: transparent;
     }
 
     #serverList {
@@ -160,27 +174,15 @@
       cursor: default;
     }
 
-    #closeBtn {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      z-index: 30;
-      background-color: #3a1361;
-      color: white;
-      border: none;
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
-      font-size: 18px;
-      font-weight: bold;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #closeBtn:hover {
-      background-color: #a855f7;
+    /* Simulated fullscreen style for mobile */
+    .simulated-fullscreen {
+      position: fixed !important;
+      top: 0;
+      left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99;
+      border-radius: 0 !important;
     }
   </style>
 </head>
@@ -201,9 +203,9 @@
         scrolling="no"
       ></iframe>
       <div id="clickShield"></div>
-      <button id="closeBtn">×</button>
     </div>
     <button id="fullscreenBtn">Fullscreen</button>
+    <button id="closeBtn">X</button>
 
     <div id="serverList">
       <h2>Servers</h2>
@@ -213,25 +215,6 @@
   </div>
 </main>
 
-<!-- Load shared navbar and CSS dynamically -->
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    fetch('/bilm/shared/navbar.html')
-      .then(res => res.text())
-      .then(html => {
-        document.getElementById('navbarContainer').innerHTML = html;
-        const css = document.createElement('link');
-        css.rel = 'stylesheet';
-        css.href = '/bilm/shared/navbar.css';
-        document.head.appendChild(css);
-        const script = document.createElement('script');
-        script.src = '/bilm/shared/navbar.js';
-        document.body.appendChild(script);
-      });
-  });
-</script>
-
-<!-- Viewer Logic -->
 <script>
   const params = new URLSearchParams(window.location.search);
   const movieId = params.get('id');
@@ -239,6 +222,9 @@
   const iframe = document.getElementById('videoPlayer');
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const closeBtn = document.getElementById('closeBtn');
+  const playerContainer = document.getElementById('playerContainer');
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const servers = {
     vidsrc: document.getElementById('serverVidsrc'),
@@ -264,9 +250,6 @@
         url = '';
     }
     iframe.src = url;
-
-    // Reset ad shield each time iframe is changed if needed
-    document.getElementById('clickShield').style.pointerEvents = 'none';
   }
 
   function setActive(serverKey) {
@@ -284,21 +267,61 @@
     });
   });
 
-  fullscreenBtn.onclick = () => {
-    if (iframe.requestFullscreen) iframe.requestFullscreen();
-    else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
-    else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
-  };
-
-  closeBtn.onclick = () => {
-    window.history.back();
-  };
-
   setActive('vidsrc');
   loadServer('vidsrc');
+
+  fullscreenBtn.style.display = isMobile ? 'none' : 'inline-block';
+
+  fullscreenBtn.onclick = () => {
+    if (!isMobile) {
+      // Real fullscreen (desktop)
+      if (playerContainer.requestFullscreen) playerContainer.requestFullscreen();
+      else if (playerContainer.webkitRequestFullscreen) playerContainer.webkitRequestFullscreen();
+      else if (playerContainer.msRequestFullscreen) playerContainer.msRequestFullscreen();
+      closeBtn.style.display = 'block';
+    }
+  };
+
+  // Mobile simulated fullscreen toggle
+  if (isMobile) {
+    playerContainer.addEventListener('click', () => {
+      playerContainer.classList.add('simulated-fullscreen');
+      closeBtn.style.display = 'block';
+    });
+  }
+
+  closeBtn.onclick = () => {
+    if (isMobile) {
+      playerContainer.classList.remove('simulated-fullscreen');
+      closeBtn.style.display = 'none';
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      closeBtn.style.display = 'none';
+    } else {
+      // If not fullscreen, do nothing or navigate back if needed
+    }
+  };
 </script>
 
-<!-- 🔒 Load Shared Ad Blocker -->
+<!-- Load shared navbar and styles -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    fetch('/bilm/shared/navbar.html')
+      .then(res => res.text())
+      .then(html => {
+        document.getElementById('navbarContainer').innerHTML = html;
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = '/bilm/shared/navbar.css';
+        document.head.appendChild(css);
+        const script = document.createElement('script');
+        script.src = '/bilm/shared/navbar.js';
+        document.body.appendChild(script);
+      });
+  });
+</script>
+
+<!-- Ad Blocker -->
 <script src="/bilm/shared/adblock/adblock.js"></script>
 
 </body>
