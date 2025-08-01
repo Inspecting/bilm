@@ -155,6 +155,22 @@
     select:hover {
       background-color: #3a1361;
     }
+
+    #closeBtn {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 40px;
+      height: 40px;
+      background-color: transparent;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      z-index: 9999;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -188,6 +204,8 @@
   </div>
 </main>
 
+<button id="closeBtn">X</button>
+
 <!-- Shared navbar -->
 <script>
   fetch('/bilm/shared/navbar.html')
@@ -200,7 +218,6 @@
     });
 </script>
 
-<!-- Viewer Script -->
 <script>
   const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const params = new URLSearchParams(window.location.search);
@@ -322,6 +339,42 @@
 
   loadProgress();
   loadSeasons();
+
+  // Fullscreen navbar/X toggle
+  const closeBtn = document.getElementById('closeBtn');
+
+  function isFullscreen() {
+    return !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+  }
+
+  function updateNavbarVisibility() {
+    const navbar = document.getElementById('navbarContainer');
+    if (isFullscreen()) {
+      if (navbar) navbar.style.display = 'none';
+      closeBtn.style.display = 'block';
+    } else {
+      if (navbar) navbar.style.display = '';
+      closeBtn.style.display = 'none';
+    }
+  }
+
+  document.addEventListener('fullscreenchange', updateNavbarVisibility);
+  document.addEventListener('webkitfullscreenchange', updateNavbarVisibility);
+  document.addEventListener('mozfullscreenchange', updateNavbarVisibility);
+  document.addEventListener('MSFullscreenChange', updateNavbarVisibility);
+
+  closeBtn.onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
+    else if (document.msFullscreenElement) document.msExitFullscreen();
+  };
+
+  updateNavbarVisibility();
 </script>
 
 <!-- 🔒 Load Shared Ad Blocker -->
