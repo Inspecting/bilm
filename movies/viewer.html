@@ -76,6 +76,17 @@
       z-index: 1;
     }
 
+    #clickShield {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+      background: transparent;
+    }
+
     #fullscreenBtn {
       margin-top: 12px;
       background-color: #3a1361;
@@ -148,6 +159,29 @@
       background-color: #a14eff;
       cursor: default;
     }
+
+    #closeBtn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 30;
+      background-color: #3a1361;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #closeBtn:hover {
+      background-color: #a855f7;
+    }
   </style>
 </head>
 <body>
@@ -166,6 +200,8 @@
         playsinline
         scrolling="no"
       ></iframe>
+      <div id="clickShield"></div>
+      <button id="closeBtn">×</button>
     </div>
     <button id="fullscreenBtn">Fullscreen</button>
 
@@ -202,6 +238,7 @@
 
   const iframe = document.getElementById('videoPlayer');
   const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const closeBtn = document.getElementById('closeBtn');
 
   const servers = {
     vidsrc: document.getElementById('serverVidsrc'),
@@ -227,6 +264,9 @@
         url = '';
     }
     iframe.src = url;
+
+    // Reset ad shield each time iframe is changed if needed
+    document.getElementById('clickShield').style.pointerEvents = 'none';
   }
 
   function setActive(serverKey) {
@@ -244,30 +284,18 @@
     });
   });
 
+  fullscreenBtn.onclick = () => {
+    if (iframe.requestFullscreen) iframe.requestFullscreen();
+    else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+    else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
+  };
+
+  closeBtn.onclick = () => {
+    window.history.back();
+  };
+
   setActive('vidsrc');
   loadServer('vidsrc');
-
-  fullscreenBtn.onclick = () => {
-    if (iframe.requestFullscreen) {
-      iframe.requestFullscreen().catch(err => {
-        console.warn("Fullscreen request failed:", err);
-      });
-    } else if (iframe.webkitRequestFullscreen) {
-      iframe.webkitRequestFullscreen();
-    } else if (iframe.msRequestFullscreen) {
-      iframe.msRequestFullscreen();
-    } else {
-      // Simulated fullscreen fallback (older iOS)
-      iframe.style.position = "fixed";
-      iframe.style.top = "0";
-      iframe.style.left = "0";
-      iframe.style.width = "100vw";
-      iframe.style.height = "100vh";
-      iframe.style.zIndex = "9999";
-      iframe.style.backgroundColor = "black";
-      document.body.style.overflow = "hidden";
-    }
-  };
 </script>
 
 <!-- 🔒 Load Shared Ad Blocker -->
