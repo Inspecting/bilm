@@ -22,7 +22,7 @@
     }
     html, body {
       height: 100%;
-      font-family: 'Poppins', sans-serif;
+      font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background-color: #121212;
       color: #f0f0f0;
       overflow-x: hidden;
@@ -109,7 +109,7 @@
       border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
-      opacity: 1;
+      opacity: 0;
       transition: opacity 0.3s ease;
     }
 
@@ -119,9 +119,8 @@
       left: 0;
       width: 100%;
       height: 100%;
-      z-index: 5;
+      z-index: 2;
       background: transparent;
-      display: none;
     }
 
     #serverList {
@@ -185,14 +184,6 @@
       z-index: 99;
       border-radius: 0 !important;
     }
-
-    .hide {
-      display: none !important;
-    }
-
-    .hidden-opacity {
-      opacity: 0 !important;
-    }
   </style>
 </head>
 <body>
@@ -232,7 +223,6 @@
   const closeBtn = document.getElementById('closeBtn');
   const playerContainer = document.getElementById('playerContainer');
   const clickShield = document.getElementById('clickShield');
-  const navbarContainer = document.getElementById('navbarContainer');
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -247,81 +237,85 @@
       iframe.src = '';
       return;
     }
+
     let url = '';
     switch (server) {
-      case 'vidsrc': url = `https://vidsrc.xyz/embed/movie/${movieId}`; break;
-      case 'vidplay': url = `https://vidplay.to/movie/${movieId}`; break;
+      case 'vidsrc':
+        url = `https://vidsrc.xyz/embed/movie/${movieId}`;
+        break;
+      case 'vidplay':
+        url = `https://vidplay.to/movie/${movieId}`;
+        break;
+      default:
+        url = '';
     }
     iframe.src = url;
   }
 
   function setActive(serverKey) {
     Object.keys(servers).forEach(key => {
-      servers[key].classList.toggle('active', key === serverKey);
+      if (key === serverKey) servers[key].classList.add('active');
+      else servers[key].classList.remove('active');
     });
   }
 
   Object.entries(servers).forEach(([key, btn]) => {
     btn.addEventListener('click', () => {
-      if (!btn.classList.contains('active')) {
-        setActive(key);
-        loadServer(key);
-      }
+      if (btn.classList.contains('active')) return;
+      setActive(key);
+      loadServer(key);
     });
   });
 
   setActive('vidsrc');
   loadServer('vidsrc');
 
-  fullscreenBtn.style.display = 'inline-block';
-
+  let closeBtnTimer = null;
   function showCloseBtnTemporarily() {
+    if (!document.fullscreenElement && !playerContainer.classList.contains('simulated-fullscreen')) return;
+    closeBtn.style.opacity = '1';
     closeBtn.style.display = 'block';
-    closeBtn.classList.remove('hidden-opacity');
-    clearTimeout(closeBtn._timeout);
-    closeBtn._timeout = setTimeout(() => {
-      closeBtn.classList.add('hidden-opacity');
+    if (closeBtnTimer) clearTimeout(closeBtnTimer);
+    closeBtnTimer = setTimeout(() => {
+      closeBtn.style.opacity = '0';
     }, 3000);
   }
 
+  fullscreenBtn.style.display = 'inline-block';
+
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
-      const requestFullscreen = playerContainer.requestFullscreen || playerContainer.webkitRequestFullscreen || playerContainer.msRequestFullscreen;
-      if (requestFullscreen) requestFullscreen.call(playerContainer);
+      playerContainer.requestFullscreen?.();
+      showCloseBtnTemporarily();
     } else {
       playerContainer.classList.add('simulated-fullscreen');
-      clickShield.style.display = 'block';
-    }
-    navbarContainer.style.display = 'none';
-    showCloseBtnTemporarily();
-  };
-
-  function exitFullscreen() {
-    if (!isMobile) {
-      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-      if (exit) exit.call(document);
-    } else {
-      playerContainer.classList.remove('simulated-fullscreen');
-      clickShield.style.display = 'none';
-    }
-    navbarContainer.style.display = '';
-    closeBtn.style.display = 'none';
-  }
-
-  closeBtn.onclick = exitFullscreen;
-
-  document.addEventListener('click', () => {
-    if (playerContainer.classList.contains('simulated-fullscreen') || document.fullscreenElement) {
       showCloseBtnTemporarily();
     }
-  });
+  };
 
   clickShield.addEventListener('click', () => {
     showCloseBtnTemporarily();
   });
-</script>
 
-<script>
+  closeBtn.onclick = () => {
+    if (isMobile) {
+      playerContainer.classList.remove('simulated-fullscreen');
+    } else {
+      document.exitFullscreen?.();
+    }
+    closeBtn.style.display = 'none';
+  };
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      closeBtn.style.display = 'none';
+    }
+  });
+
+  document.addEventListener('click', () => {
+    showCloseBtnTemporarily();
+  });
+
   document.addEventListener('DOMContentLoaded', () => {
     fetch('/bilm/shared/navbar.html')
       .then(res => res.text())
