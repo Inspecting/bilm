@@ -109,6 +109,8 @@
       border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
+      opacity: 1;
+      transition: opacity 0.3s ease;
     }
 
     #clickShield {
@@ -174,7 +176,6 @@
       cursor: default;
     }
 
-    /* Simulated fullscreen style for mobile */
     .simulated-fullscreen {
       position: fixed !important;
       top: 0;
@@ -222,7 +223,6 @@
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const closeBtn = document.getElementById('closeBtn');
   const playerContainer = document.getElementById('playerContainer');
-
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const servers = {
@@ -269,7 +269,7 @@
   setActive('vidsrc');
   loadServer('vidsrc');
 
-  fullscreenBtn.style.display = isMobile ? 'none' : 'inline-block';
+  fullscreenBtn.style.display = 'inline-block';
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
@@ -280,26 +280,39 @@
       } else if (playerContainer.msRequestFullscreen) {
         playerContainer.msRequestFullscreen();
       }
-      closeBtn.style.display = 'block';
+      showCloseBtn();
+    } else {
+      playerContainer.classList.add('simulated-fullscreen');
+      showCloseBtn();
     }
   };
-
-  if (isMobile) {
-    playerContainer.addEventListener('click', () => {
-      playerContainer.classList.add('simulated-fullscreen');
-      closeBtn.style.display = 'block';
-    });
-  }
 
   closeBtn.onclick = () => {
     if (isMobile) {
       playerContainer.classList.remove('simulated-fullscreen');
-      closeBtn.style.display = 'none';
-    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+    } else {
       document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-      closeBtn.style.display = 'none';
     }
+    closeBtn.style.display = 'none';
   };
+
+  let closeBtnTimeout;
+  function showCloseBtn() {
+    closeBtn.style.display = 'block';
+    closeBtn.style.opacity = '1';
+    if (closeBtnTimeout) clearTimeout(closeBtnTimeout);
+    closeBtnTimeout = setTimeout(() => {
+      closeBtn.style.opacity = '0';
+    }, 3000);
+  }
+
+  ['click', 'touchstart'].forEach(event => {
+    document.addEventListener(event, () => {
+      if (document.fullscreenElement || document.webkitFullscreenElement || playerContainer.classList.contains('simulated-fullscreen')) {
+        showCloseBtn();
+      }
+    });
+  });
 </script>
 
 <script>
