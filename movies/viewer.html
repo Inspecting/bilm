@@ -248,9 +248,25 @@
   loadServer('vidsrc');
 
   fullscreenBtn.onclick = () => {
-    if (iframe.requestFullscreen) iframe.requestFullscreen();
-    else if (iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
-    else if (iframe.msRequestFullscreen) iframe.msRequestFullscreen();
+    if (iframe.requestFullscreen) {
+      iframe.requestFullscreen().catch(err => {
+        console.warn("Fullscreen request failed:", err);
+      });
+    } else if (iframe.webkitRequestFullscreen) {
+      iframe.webkitRequestFullscreen();
+    } else if (iframe.msRequestFullscreen) {
+      iframe.msRequestFullscreen();
+    } else {
+      // Simulated fullscreen fallback (older iOS)
+      iframe.style.position = "fixed";
+      iframe.style.top = "0";
+      iframe.style.left = "0";
+      iframe.style.width = "100vw";
+      iframe.style.height = "100vh";
+      iframe.style.zIndex = "9999";
+      iframe.style.backgroundColor = "black";
+      document.body.style.overflow = "hidden";
+    }
   };
 </script>
 
