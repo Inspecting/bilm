@@ -15,14 +15,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
 
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
       height: 100%;
-      font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Poppins', sans-serif;
       background-color: #121212;
       color: #f0f0f0;
       overflow-x: hidden;
@@ -36,12 +32,10 @@
       flex: 1;
       padding: 20px;
       overflow-y: auto;
-      position: relative;
       display: flex;
       justify-content: center;
       align-items: flex-start;
     }
-
     #playerWrapper {
       display: flex;
       flex-direction: column;
@@ -51,7 +45,6 @@
       max-width: 95vw;
       position: relative;
     }
-
     #playerContainer {
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -62,7 +55,6 @@
       position: relative;
       transition: all 0.3s ease;
     }
-
     iframe {
       width: 100%;
       height: 100%;
@@ -72,7 +64,6 @@
       position: relative;
       z-index: 1;
     }
-
     #fullscreenBtn {
       margin-top: 12px;
       background-color: #3a1361;
@@ -89,11 +80,7 @@
       z-index: 20;
       position: relative;
     }
-
-    #fullscreenBtn:hover {
-      background-color: #a855f7;
-    }
-
+    #fullscreenBtn:hover { background-color: #a855f7; }
     #closeBtn {
       display: none;
       position: fixed;
@@ -108,10 +95,9 @@
       border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
-      opacity: 0;
-      transition: opacity 0.5s;
+      opacity: 1;
+      transition: opacity 0.3s ease;
     }
-
     #clickShield {
       position: absolute;
       top: 0;
@@ -120,9 +106,8 @@
       height: 100%;
       z-index: 5;
       background: transparent;
-      pointer-events: auto;
+      pointer-events: none;
     }
-
     #serverList {
       position: absolute;
       left: 100%;
@@ -142,7 +127,6 @@
       overflow-y: auto;
       z-index: 10;
     }
-
     #serverList h2 {
       margin-bottom: 8px;
       font-weight: 600;
@@ -150,7 +134,6 @@
       color: #a14eff;
       text-align: center;
     }
-
     .serverBtn {
       background-color: #3a1361;
       color: white;
@@ -165,16 +148,8 @@
       user-select: none;
       white-space: nowrap;
     }
-
-    .serverBtn:hover {
-      background-color: #a855f7;
-    }
-
-    .serverBtn.active {
-      background-color: #a14eff;
-      cursor: default;
-    }
-
+    .serverBtn:hover { background-color: #a855f7; }
+    .serverBtn.active { background-color: #a14eff; cursor: default; }
     .simulated-fullscreen {
       position: fixed !important;
       top: 0;
@@ -183,20 +158,6 @@
       height: 100vh !important;
       z-index: 99;
       border-radius: 0 !important;
-    }
-
-    body.fullscreen-active {
-      overflow: hidden;
-    }
-
-    body.fullscreen-active #navbarContainer,
-    body.fullscreen-active #fullscreenBtn,
-    body.fullscreen-active #serverList {
-      display: none !important;
-    }
-
-    body.fullscreen-active #closeBtn {
-      display: block;
     }
   </style>
 </head>
@@ -207,7 +168,14 @@
 <main>
   <div id="playerWrapper">
     <div id="playerContainer">
-      <iframe id="videoPlayer" src="" allowfullscreen allow="fullscreen; encrypted-media" playsinline scrolling="no"></iframe>
+      <iframe
+        id="videoPlayer"
+        src=""
+        allowfullscreen
+        allow="fullscreen; encrypted-media"
+        playsinline
+        scrolling="no"
+      ></iframe>
       <div id="clickShield"></div>
     </div>
     <button id="fullscreenBtn">Fullscreen</button>
@@ -238,78 +206,96 @@
 
   function loadServer(server) {
     if (!movieId) {
+      console.error('No movie ID provided.');
       iframe.src = '';
       return;
     }
     let url = '';
     switch (server) {
-      case 'vidsrc':
-        url = `https://vidsrc.xyz/embed/movie/${movieId}`;
-        break;
-      case 'vidplay':
-        url = `https://vidplay.to/movie/${movieId}`;
-        break;
+      case 'vidsrc': url = `https://vidsrc.xyz/embed/movie/${movieId}`; break;
+      case 'vidplay': url = `https://vidplay.to/movie/${movieId}`; break;
+      default: url = '';
     }
     iframe.src = url;
   }
 
   function setActive(serverKey) {
     Object.keys(servers).forEach(key => {
-      servers[key].classList.toggle('active', key === serverKey);
+      if (key === serverKey) servers[key].classList.add('active');
+      else servers[key].classList.remove('active');
     });
   }
 
   Object.entries(servers).forEach(([key, btn]) => {
     btn.addEventListener('click', () => {
-      if (!btn.classList.contains('active')) {
-        setActive(key);
-        loadServer(key);
-      }
+      if (btn.classList.contains('active')) return;
+      setActive(key);
+      loadServer(key);
     });
   });
 
   setActive('vidsrc');
   loadServer('vidsrc');
 
+  fullscreenBtn.style.display = 'inline-block';
+
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
-      if (playerContainer.requestFullscreen) {
-        playerContainer.requestFullscreen();
-      } else if (playerContainer.webkitRequestFullscreen) {
-        playerContainer.webkitRequestFullscreen();
-      }
-      document.body.classList.add('fullscreen-active');
-      showCloseBtn();
+      if (playerContainer.requestFullscreen) playerContainer.requestFullscreen();
+      else if (playerContainer.webkitRequestFullscreen) playerContainer.webkitRequestFullscreen();
+      else if (playerContainer.msRequestFullscreen) playerContainer.msRequestFullscreen();
     } else {
       playerContainer.classList.add('simulated-fullscreen');
-      document.body.classList.add('fullscreen-active');
-      showCloseBtn();
     }
+    showCloseBtn();
   };
 
   closeBtn.onclick = () => {
-    if (!isMobile) {
-      document.exitFullscreen?.();
-    } else {
+    if (isMobile) {
       playerContainer.classList.remove('simulated-fullscreen');
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
     }
-    document.body.classList.remove('fullscreen-active');
-    closeBtn.style.opacity = 0;
+    hideCloseBtn();
   };
 
-  let closeBtnTimeout;
   function showCloseBtn() {
-    closeBtn.style.opacity = 1;
-    clearTimeout(closeBtnTimeout);
-    closeBtnTimeout = setTimeout(() => {
-      closeBtn.style.opacity = 0;
-    }, 3000);
+    closeBtn.style.display = 'block';
+    closeBtn.style.opacity = '1';
+    if (closeBtn.hideTimeout) clearTimeout(closeBtn.hideTimeout);
+    closeBtn.hideTimeout = setTimeout(() => closeBtn.style.opacity = '0', 3000);
   }
 
-  clickShield.addEventListener('click', () => {
-    showCloseBtn();
+  function hideCloseBtn() {
+    closeBtn.style.opacity = '0';
+    setTimeout(() => { closeBtn.style.display = 'none'; }, 300);
+  }
+
+  document.addEventListener('mousemove', () => {
+    if (closeBtn.style.display === 'block') {
+      showCloseBtn();
+    }
   });
 
+  document.addEventListener('click', () => {
+    if (closeBtn.style.display === 'block') {
+      showCloseBtn();
+    }
+  });
+
+  // Click overlay logic
+  let interactionCaptured = false;
+  clickShield.style.pointerEvents = 'auto';
+  clickShield.addEventListener('click', () => {
+    if (!interactionCaptured) {
+      interactionCaptured = true;
+      showCloseBtn();
+      clickShield.style.pointerEvents = 'none';
+    }
+  }, { once: true });
+</script>
+
+<script>
   document.addEventListener('DOMContentLoaded', () => {
     fetch('/bilm/shared/navbar.html')
       .then(res => res.text())
