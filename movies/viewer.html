@@ -32,7 +32,6 @@
       flex-direction: column;
       height: 100vh;
     }
-
     main {
       flex: 1;
       padding: 20px;
@@ -109,8 +108,8 @@
       border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
-      opacity: 1;
-      transition: opacity 0.3s ease;
+      opacity: 0;
+      transition: opacity 0.5s;
     }
 
     #clickShield {
@@ -120,8 +119,8 @@
       width: 100%;
       height: 100%;
       z-index: 5;
-      pointer-events: none;
       background: transparent;
+      pointer-events: auto;
     }
 
     #serverList {
@@ -185,6 +184,20 @@
       z-index: 99;
       border-radius: 0 !important;
     }
+
+    body.fullscreen-active {
+      overflow: hidden;
+    }
+
+    body.fullscreen-active #navbarContainer,
+    body.fullscreen-active #fullscreenBtn,
+    body.fullscreen-active #serverList {
+      display: none !important;
+    }
+
+    body.fullscreen-active #closeBtn {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -194,14 +207,7 @@
 <main>
   <div id="playerWrapper">
     <div id="playerContainer">
-      <iframe
-        id="videoPlayer"
-        src=""
-        allowfullscreen
-        allow="fullscreen; encrypted-media"
-        playsinline
-        scrolling="no"
-      ></iframe>
+      <iframe id="videoPlayer" src="" allowfullscreen allow="fullscreen; encrypted-media" playsinline scrolling="no"></iframe>
       <div id="clickShield"></div>
     </div>
     <button id="fullscreenBtn">Fullscreen</button>
@@ -218,11 +224,11 @@
 <script>
   const params = new URLSearchParams(window.location.search);
   const movieId = params.get('id');
-
   const iframe = document.getElementById('videoPlayer');
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const closeBtn = document.getElementById('closeBtn');
   const playerContainer = document.getElementById('playerContainer');
+  const clickShield = document.getElementById('clickShield');
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const servers = {
@@ -232,11 +238,9 @@
 
   function loadServer(server) {
     if (!movieId) {
-      console.error('No movie ID provided.');
       iframe.src = '';
       return;
     }
-
     let url = '';
     switch (server) {
       case 'vidsrc':
@@ -245,31 +249,27 @@
       case 'vidplay':
         url = `https://vidplay.to/movie/${movieId}`;
         break;
-      default:
-        url = '';
     }
     iframe.src = url;
   }
 
   function setActive(serverKey) {
     Object.keys(servers).forEach(key => {
-      if (key === serverKey) servers[key].classList.add('active');
-      else servers[key].classList.remove('active');
+      servers[key].classList.toggle('active', key === serverKey);
     });
   }
 
   Object.entries(servers).forEach(([key, btn]) => {
     btn.addEventListener('click', () => {
-      if (btn.classList.contains('active')) return;
-      setActive(key);
-      loadServer(key);
+      if (!btn.classList.contains('active')) {
+        setActive(key);
+        loadServer(key);
+      }
     });
   });
 
   setActive('vidsrc');
   loadServer('vidsrc');
-
-  fullscreenBtn.style.display = 'inline-block';
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
@@ -277,45 +277,39 @@
         playerContainer.requestFullscreen();
       } else if (playerContainer.webkitRequestFullscreen) {
         playerContainer.webkitRequestFullscreen();
-      } else if (playerContainer.msRequestFullscreen) {
-        playerContainer.msRequestFullscreen();
       }
+      document.body.classList.add('fullscreen-active');
       showCloseBtn();
     } else {
       playerContainer.classList.add('simulated-fullscreen');
+      document.body.classList.add('fullscreen-active');
       showCloseBtn();
     }
   };
 
   closeBtn.onclick = () => {
-    if (isMobile) {
-      playerContainer.classList.remove('simulated-fullscreen');
+    if (!isMobile) {
+      document.exitFullscreen?.();
     } else {
-      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      playerContainer.classList.remove('simulated-fullscreen');
     }
-    closeBtn.style.display = 'none';
+    document.body.classList.remove('fullscreen-active');
+    closeBtn.style.opacity = 0;
   };
 
   let closeBtnTimeout;
   function showCloseBtn() {
-    closeBtn.style.display = 'block';
-    closeBtn.style.opacity = '1';
-    if (closeBtnTimeout) clearTimeout(closeBtnTimeout);
+    closeBtn.style.opacity = 1;
+    clearTimeout(closeBtnTimeout);
     closeBtnTimeout = setTimeout(() => {
-      closeBtn.style.opacity = '0';
+      closeBtn.style.opacity = 0;
     }, 3000);
   }
 
-  ['click', 'touchstart'].forEach(event => {
-    document.addEventListener(event, () => {
-      if (document.fullscreenElement || document.webkitFullscreenElement || playerContainer.classList.contains('simulated-fullscreen')) {
-        showCloseBtn();
-      }
-    });
+  clickShield.addEventListener('click', () => {
+    showCloseBtn();
   });
-</script>
 
-<script>
   document.addEventListener('DOMContentLoaded', () => {
     fetch('/bilm/shared/navbar.html')
       .then(res => res.text())
