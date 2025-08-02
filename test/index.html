@@ -2,146 +2,136 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bilm 💜 Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - Movie Viewer</title>
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0a0a0a" />
+
   <style>
-    body {
+    * {
       margin: 0;
-      background-color: #0d0d0d;
-      color: #fff;
-      font-family: Arial, sans-serif;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
     }
 
-    #videoPlayer {
-      width: 100vw;
+    main {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
       height: 100vh;
+    }
+
+    #playerWrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 800px;
+      max-width: 95vw;
+      position: relative;
+    }
+
+    #playerContainer {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background-color: black;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 15px #a14effaa;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
       border: none;
+      border-radius: 12px;
     }
 
-    #clickShield {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 5;
-    }
-
-    #fullscreenBtn, #closeBtn {
-      position: fixed;
-      top: 20px;
-      z-index: 10;
-      padding: 8px 12px;
-      border-radius: 6px;
-      background: rgba(0,0,0,0.7);
+    #fullscreenBtn {
+      margin-top: 12px;
+      background-color: #3a1361;
       color: white;
       border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 14px;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
     }
 
-    #fullscreenBtn { right: 70px; }
-    #closeBtn { right: 20px; opacity: 0; transition: opacity 0.3s; }
+    #fullscreenBtn:hover {
+      background-color: #a855f7;
+    }
 
-    #serverButtons {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
+    #serverList {
+      margin-top: 20px;
       display: flex;
       gap: 10px;
     }
 
-    #serverButtons button {
-      background: #ff0080;
-      border: none;
-      padding: 8px 14px;
+    .serverBtn {
+      background-color: #3a1361;
       color: white;
-      border-radius: 6px;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
       cursor: pointer;
-      font-weight: bold;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
     }
 
-    #serverButtons button:hover {
-      opacity: 0.85;
-    }
-
-    .mobile-fullscreen iframe {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: 1;
+    .serverBtn.active {
+      background-color: #a14eff;
+      cursor: default;
     }
   </style>
 </head>
 <body>
 
-  <iframe id="videoPlayer" allowfullscreen allow="autoplay"></iframe>
-  <div id="clickShield"></div>
+<main>
+  <div id="playerWrapper">
+    <div id="playerContainer">
+      <iframe id="videoPlayer" allowfullscreen allow="fullscreen; encrypted-media" playsinline></iframe>
+    </div>
 
-  <button id="fullscreenBtn">⛶ Fullscreen</button>
-  <button id="closeBtn">✕</button>
+    <button id="fullscreenBtn">Fullscreen</button>
 
-  <div id="serverButtons">
-    <button onclick="setServer('vidsrc')">VidSrc</button>
+    <div id="serverList">
+      <button class="serverBtn active" id="serverVidsrc">VidSrc</button>
+    </div>
   </div>
+</main>
 
-  <script>
-    const videoPlayer = document.getElementById("videoPlayer");
-    const id = new URLSearchParams(window.location.search).get("id") || "tt0133093";
-    let server = "vidsrc";
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const movieId = params.get('id') || 'tt0133093'; // fallback
 
-    function setServer(s) {
-      server = s;
-      updateSrc();
+  const iframe = document.getElementById('videoPlayer');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+  function loadServer() {
+    iframe.src = `https://vidsrc.xyz/embed/movie/${movieId}`;
+  }
+
+  loadServer();
+
+  fullscreenBtn.onclick = () => {
+    const container = document.getElementById('playerContainer');
+    if (container.requestFullscreen) {
+      container.requestFullscreen();
+    } else if (container.webkitRequestFullscreen) {
+      container.webkitRequestFullscreen(); // Safari
     }
-
-    function updateSrc() {
-      const base = server === "vidsrc" ? "https://vidsrc.xyz/embed/movie/" : "";
-      videoPlayer.src = base + id;
-    }
-
-    updateSrc();
-
-    // Fullscreen handling
-    const fsBtn = document.getElementById("fullscreenBtn");
-    const closeBtn = document.getElementById("closeBtn");
-
-    let isSimulatedFullscreen = false;
-
-    function showCloseBtn() {
-      closeBtn.style.opacity = 1;
-      clearTimeout(closeBtn.timeout);
-      closeBtn.timeout = setTimeout(() => {
-        closeBtn.style.opacity = 0;
-      }, 3000);
-    }
-
-    fsBtn.onclick = () => {
-      const docEl = document.documentElement;
-      const isAppleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
-
-      if (document.fullscreenEnabled && !isAppleMobile) {
-        if (!document.fullscreenElement) {
-          docEl.requestFullscreen().then(showCloseBtn);
-        } else {
-          document.exitFullscreen();
-        }
-      } else {
-        document.body.classList.add("mobile-fullscreen");
-        isSimulatedFullscreen = true;
-        showCloseBtn();
-      }
-    };
-
-    closeBtn.onclick = () => {
-      if (document.fullscreenElement) document.exitFullscreen();
-      document.body.classList.remove("mobile-fullscreen");
-      isSimulatedFullscreen = false;
-    };
-
-    document.addEventListener("click", showCloseBtn);
-  </script>
+  };
+</script>
 
 </body>
 </html>
