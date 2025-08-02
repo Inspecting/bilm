@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bilm 💜 Viewer</title>
-  <link rel="stylesheet" href="style.css" />
   <style>
     body {
       margin: 0;
@@ -65,6 +64,14 @@
     #serverButtons button:hover {
       opacity: 0.85;
     }
+
+    .mobile-fullscreen iframe {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
@@ -77,7 +84,6 @@
 
   <div id="serverButtons">
     <button onclick="setServer('vidsrc')">VidSrc</button>
-    <button onclick="setServer('vidplay')">VidPlay</button>
   </div>
 
   <script>
@@ -91,13 +97,13 @@
     }
 
     function updateSrc() {
-      const base = server === "vidsrc" ? "https://vidsrc.xyz/embed/movie/" : "https://vidplay.online/embed/movie/";
+      const base = server === "vidsrc" ? "https://vidsrc.xyz/embed/movie/" : "";
       videoPlayer.src = base + id;
     }
 
     updateSrc();
 
-    // Fullscreen behavior
+    // Fullscreen handling
     const fsBtn = document.getElementById("fullscreenBtn");
     const closeBtn = document.getElementById("closeBtn");
 
@@ -112,10 +118,15 @@
     }
 
     fsBtn.onclick = () => {
-      const elem = document.documentElement;
-      if (document.fullscreenEnabled && !isSimulatedFullscreen) {
-        if (!document.fullscreenElement) elem.requestFullscreen();
-        else document.exitFullscreen();
+      const docEl = document.documentElement;
+      const isAppleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+      if (document.fullscreenEnabled && !isAppleMobile) {
+        if (!document.fullscreenElement) {
+          docEl.requestFullscreen().then(showCloseBtn);
+        } else {
+          document.exitFullscreen();
+        }
       } else {
         document.body.classList.add("mobile-fullscreen");
         isSimulatedFullscreen = true;
@@ -123,12 +134,14 @@
       }
     };
 
-    document.addEventListener("click", showCloseBtn);
     closeBtn.onclick = () => {
       if (document.fullscreenElement) document.exitFullscreen();
       document.body.classList.remove("mobile-fullscreen");
       isSimulatedFullscreen = false;
     };
+
+    document.addEventListener("click", showCloseBtn);
   </script>
+
 </body>
 </html>
