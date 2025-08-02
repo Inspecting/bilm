@@ -2,136 +2,164 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bilm 💜 - Movie Viewer</title>
-
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0a0a0a" />
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bilm 💜</title>
   <style>
-    * {
+    body {
       margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body {
-      height: 100%;
-      font-family: 'Segoe UI', Tahoma, sans-serif;
-      background-color: #121212;
-      color: #f0f0f0;
+      font-family: sans-serif;
+      background: #000;
+      color: #fff;
     }
 
-    main {
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .title {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+
+    .inputSection {
       display: flex;
       justify-content: center;
-      align-items: flex-start;
-      padding: 20px;
-      height: 100vh;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
     }
 
-    #playerWrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 800px;
-      max-width: 95vw;
-      position: relative;
-    }
-
-    #playerContainer {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      background-color: black;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 0 15px #a14effaa;
-    }
-
-    iframe {
-      width: 100%;
-      height: 100%;
+    input#movieIdInput {
+      padding: 0.5rem;
+      width: 250px;
+      border-radius: 6px;
       border: none;
-      border-radius: 12px;
     }
 
-    #fullscreenBtn {
-      margin-top: 12px;
-      background-color: #3a1361;
-      color: white;
+    button {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
       border: none;
-      padding: 8px 14px;
-      border-radius: 8px;
+      background: #822;
+      color: #fff;
       cursor: pointer;
-      font-weight: 600;
-      transition: background-color 0.3s ease;
     }
 
-    #fullscreenBtn:hover {
-      background-color: #a855f7;
+    button:hover {
+      background: #a44;
     }
 
-    #serverList {
-      margin-top: 20px;
-      display: flex;
-      gap: 10px;
+    .serverButtons {
+      margin: 1rem 0;
     }
 
     .serverBtn {
-      background-color: #3a1361;
-      color: white;
-      border: none;
-      padding: 10px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background-color 0.3s ease;
+      margin: 0 0.3rem;
+      background: #444;
     }
 
     .serverBtn.active {
-      background-color: #a14eff;
-      cursor: default;
+      background: #822;
+    }
+
+    .videoWrapper {
+      position: relative;
+      padding-top: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(255, 0, 100, 0.3);
+    }
+
+    iframe#videoPlayer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    #fullscreenBtn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      border: none;
+      font-size: 1.2rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 5px;
+      cursor: pointer;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
+  <div class="container">
+    <h1 class="title">Bilm 💜 Movie Player</h1>
 
-<main>
-  <div id="playerWrapper">
-    <div id="playerContainer">
-      <iframe id="videoPlayer" allowfullscreen allow="fullscreen; encrypted-media" playsinline></iframe>
+    <div class="inputSection">
+      <input type="text" id="movieIdInput" placeholder="Enter IMDb ID (e.g. tt0133093)" />
+      <button onclick="playMovie()">Play</button>
     </div>
 
-    <button id="fullscreenBtn">Fullscreen</button>
+    <div class="serverButtons">
+      <button class="serverBtn active" id="serverBilm">Bilm</button>
+      <button class="serverBtn" id="serverVidsrc">VidSrc</button>
+    </div>
 
-    <div id="serverList">
-      <button class="serverBtn active" id="serverVidsrc">VidSrc</button>
+    <div class="videoWrapper">
+      <iframe id="videoPlayer" allowfullscreen loading="lazy"></iframe>
+      <button id="fullscreenBtn" onclick="toggleFullscreen()">⛶</button>
     </div>
   </div>
-</main>
 
-<script>
-  const params = new URLSearchParams(window.location.search);
-  const movieId = params.get('id') || 'tt0133093'; // fallback
+  <script>
+    const iframe = document.getElementById("videoPlayer");
+    let movieId = "";
 
-  const iframe = document.getElementById('videoPlayer');
-  const fullscreenBtn = document.getElementById('fullscreenBtn');
-
-  function loadServer() {
-    iframe.src = `https://vidsrc.xyz/embed/movie/${movieId}`;
-  }
-
-  loadServer();
-
-  fullscreenBtn.onclick = () => {
-    const container = document.getElementById('playerContainer');
-    if (container.requestFullscreen) {
-      container.requestFullscreen();
-    } else if (container.webkitRequestFullscreen) {
-      container.webkitRequestFullscreen(); // Safari
+    function playMovie() {
+      const input = document.getElementById("movieIdInput").value.trim();
+      if (!input) return;
+      movieId = input;
+      loadServer("bilm");
     }
-  };
-</script>
 
+    function loadServer(server = "bilm") {
+      document.querySelectorAll(".serverBtn").forEach(btn => btn.classList.remove("active"));
+      const serverBtn = document.getElementById("server" + server.charAt(0).toUpperCase() + server.slice(1));
+      if (serverBtn) serverBtn.classList.add("active");
+
+      if (!movieId) return;
+
+      if (server === "bilm") {
+        iframe.src = `https://bilmapi.onrender.com/api/embed/${movieId}`;
+      } else if (server === "vidsrc") {
+        iframe.src = `https://vidsrc.xyz/embed/movie/${movieId}`;
+      }
+    }
+
+    document.getElementById("serverBilm").onclick = () => loadServer("bilm");
+    document.getElementById("serverVidsrc").onclick = () => loadServer("vidsrc");
+
+    function toggleFullscreen() {
+      const videoWrapper = document.querySelector(".videoWrapper");
+      if (
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement
+      ) {
+        document.exitFullscreen?.();
+        document.webkitExitFullscreen?.();
+        document.mozCancelFullScreen?.();
+      } else {
+        videoWrapper.requestFullscreen?.();
+        videoWrapper.webkitRequestFullscreen?.();
+        videoWrapper.mozRequestFullScreen?.();
+      }
+    }
+  </script>
 </body>
 </html>
