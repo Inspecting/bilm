@@ -118,10 +118,11 @@
 
   <script>
     const iframe = document.getElementById("videoPlayer");
+    const inputField = document.getElementById("movieIdInput");
     let movieId = "";
 
     function playMovie() {
-      const input = document.getElementById("movieIdInput").value.trim();
+      const input = inputField.value.trim();
       if (!input) return;
       movieId = input;
       loadServer("bilm");
@@ -160,6 +161,13 @@
         videoWrapper.mozRequestFullScreen?.();
       }
     }
+
+    // Auto-load default movie ID on page load
+    window.onload = () => {
+      movieId = "tt2294629";
+      inputField.value = movieId;
+      loadServer("bilm");
+    };
   </script>
 </body>
 </html>
