@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 Viewer</title>
+  <style>
+    body { margin: 0; background: #000; color: #fff; font-family: sans-serif; }
+    #controls { position: absolute; top: 10px; left: 10px; z-index: 10; }
+    .btn { background: rgba(0,0,0,0.6); padding: 8px 12px; margin-right: 8px; border-radius: 4px; cursor: pointer; }
+    #player { width: 100vw; height: 100vh; border: none; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <input id="imdbInput" type="text" placeholder="Enter IMDb ID (e.g. tt0133093)" />
+    <button class="btn" onclick="load()">Play</button>
+  </div>
+  <iframe id="player" allowfullscreen sandbox="allow-same-origin allow-scripts allow-presentation"></iframe>
+
+  <script>
+    const apiBase = 'https://bilmapi.onrender.com/api/embed';
+
+    async function load() {
+      const imdb = document.getElementById('imdbInput').value.trim();
+      if (!imdb) return alert('Please enter an IMDb ID.');
+      const res = await fetch(`${apiBase}/${imdb}`);
+      if (!res.ok) return alert('Error fetching embed link.');
+      const json = await res.json();
+      document.getElementById('player').src = json.embed;
+    }
+
+    // Optionally, auto-load a demo movie on page load:
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('imdbInput').value = 'tt0133093';
+      load();
+    });
+  </script>
+</body>
+</html>
