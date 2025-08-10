@@ -2,172 +2,466 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bilm 💜</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#000000" />
+
+  <title>Bilm 💜 - TV Show Viewer (GUI)</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background: #000;
-      color: #fff;
+    :root{
+      --bg: #121212;
+      --panel: rgba(26,22,40,0.9);
+      --accent: #a14eff; /* primary purple */
+      --accent-strong: #a855f7;
+      --btn: #3a1361;
+      --muted: #2a2a2a;
+      --radius: 12px;
     }
 
-    .container {
-      max-width: 900px;
-      margin: auto;
-      padding: 2rem;
-      text-align: center;
-    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:'Poppins',sans-serif;background:var(--bg);color:#f0f0f0}
+    body{display:flex;flex-direction:column;height:100vh}
 
-    .title {
-      font-size: 2rem;
-      margin-bottom: 1rem;
-    }
+    /* static navbar placeholder (no network calls) */
+    #navbarContainer{height:56px;display:flex;align-items:center;padding:0 18px;background:linear-gradient(90deg,#1b1224,#211427);gap:12px}
+    #navbarContainer .logo{width:36px;height:36px;border-radius:8px;background:var(--muted);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)}
+    #navbarContainer .brand{font-weight:700;color:#dcd6ff}
 
-    .inputSection {
-      display: flex;
-      justify-content: center;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
+    main{flex:1;padding:20px;display:flex;justify-content:center;align-items:flex-start}
 
-    input#movieIdInput {
-      padding: 0.5rem;
-      width: 250px;
-      border-radius: 6px;
-      border: none;
-    }
+    /* player layout */
+    #playerWrapper{display:flex;flex-direction:column;align-items:center;width:900px;max-width:96vw;position:relative}
 
-    button {
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      border: none;
-      background: #822;
-      color: #fff;
-      cursor: pointer;
-    }
+    #playerContainer{width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--radius);box-shadow:0 0 20px #a14eff55;overflow:hidden;position:relative}
+    iframe{width:100%;height:100%;border:none;border-radius:var(--radius);background:transparent}
 
-    button:hover {
-      background: #a44;
-    }
-
-    .serverButtons {
-      margin: 1rem 0;
-    }
-
-    .serverBtn {
-      margin: 0 0.3rem;
-      background: #444;
-    }
-
-    .serverBtn.active {
-      background: #822;
-    }
-
-    .videoWrapper {
-      position: relative;
-      padding-top: 56.25%;
-      height: 0;
-      overflow: hidden;
-      border-radius: 12px;
-      box-shadow: 0 0 12px rgba(255, 0, 100, 0.3);
-    }
-
-    iframe#videoPlayer {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-
-    #fullscreenBtn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: rgba(0,0,0,0.6);
+    /* fullscreen/close buttons */
+    #controlsRowTop{display:flex;align-items:center;gap:12px;margin-top:12px;width:100%;justify-content:space-between}
+    #leftControls{display:flex;gap:12px;align-items:center}
+    #fullscreenBtn{
+      background: linear-gradient(135deg, #a14eff, #a855f7);
+      box-shadow: 0 0 10px #a14eff88;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
       color: white;
+      font-weight: 700;
+      font-size: 14px;
       border: none;
-      font-size: 1.2rem;
-      padding: 0.3rem 0.6rem;
-      border-radius: 5px;
       cursor: pointer;
-      z-index: 10;
+      transition: box-shadow 0.3s ease;
+    }
+    #fullscreenBtn:hover {
+      box-shadow: 0 0 20px #a855f7cc;
+    }
+    #closeBtn{display:none;position:fixed;top:8px;right:8px;z-index:120;background:transparent;color:#fff;border:none;width:44px;height:44px;font-size:20px;cursor:pointer}
+
+    /* server list (kept to the right visually) */
+    #serverList{
+      position:absolute;left:100%;margin-left:20px;top:0;width:160px;display:flex;flex-direction:column;gap:12px;
+      padding:16px;
+      background: linear-gradient(180deg, #1a1428, #2e1f43);
+      border-radius: 16px;
+      box-shadow: 0 0 15px #a14effaa;
+      max-height:320px;overflow-y:auto;
+    }
+    #serverList h2{margin-bottom:6px;font-size:1.05rem;color:var(--accent);text-align:center}
+    .serverBtn{
+      background:var(--btn);color:#fff;border:none;padding:10px 12px;border-radius:8px;
+      cursor:pointer;font-weight:600;transition:background-color .2s, box-shadow .3s;
+      box-shadow: none;
+    }
+    .serverBtn:hover{
+      background:var(--accent-strong);
+      box-shadow: 0 0 10px #a14effaa;
+    }
+    .serverBtn.active{
+      background:var(--accent);
+      cursor:default;
+      box-shadow: 0 0 12px #a14effdd;
+    }
+
+    /* compact selectors and nav */
+    #controlsCompact{
+      margin-top:18px;width:100%;display:flex;justify-content:center;gap:14px;align-items:center;
+      background: var(--panel);
+      padding: 12px 20px;
+      border-radius: 16px;
+      box-shadow: 0 0 15px #a14eff88;
+    }
+    .group{
+      display:flex;align-items:center;gap:8px;
+      /* background:linear-gradient(180deg,#161216,#241428); */
+      /* padding:8px; */
+      /* border-radius:12px; */
+    }
+    .group select{
+      appearance:none;background:transparent;border:none;color:#fff;
+      padding:6px 12px;font-weight:700;border-radius:8px;
+      cursor:pointer;
+      min-width:90px;
+      transition: background-color 0.2s ease;
+    }
+    .group select:hover, .group select:focus {
+      background: rgba(161, 78, 255, 0.2);
+      outline:none;
+    }
+    .smallBtn{
+      background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff;
+      padding:8px;border-radius:8px;cursor:pointer;min-width:40px;
+      transition: background-color 0.2s ease;
+    }
+    .smallBtn:hover:not(:disabled){
+      background:rgba(255,255,255,0.03);
+    }
+    .smallBtn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* subtle info line */
+    #infoLine{
+      margin-top:10px;color:#9a94b8;font-size:13px;text-align:center;
+      user-select:none;
+      min-height:20px;
+    }
+
+    /* episode select option watched marker */
+    option.watched::before {
+      content: "● ";
+      color: var(--accent);
+    }
+
+    /* responsive tweaks */
+    @media (max-width:880px){
+      #playerWrapper{width:100%;padding:0 10px}
+      #serverList{display:none}
+      .group select{font-size:14px}
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1 class="title">Bilm 💜 Movie Player</h1>
 
-    <div class="inputSection">
-      <input type="text" id="movieIdInput" placeholder="Enter IMDb ID (e.g. tt0133093)" />
-      <button onclick="playMovie()">Play</button>
+<div id="navbarContainer">
+  <div class="logo">B</div>
+  <div class="brand">Bilm</div>
+</div>
+
+<main>
+  <div id="playerWrapper">
+    <div id="playerContainer">
+      <!-- Keep iframe but do NOT auto-load external sources. The UI controls below are local-only. -->
+      <iframe id="videoPlayer" src="" allowfullscreen allow="fullscreen; encrypted-media" title="Video player (GUI-only)"></iframe>
+      <div id="clickShield"></div>
     </div>
 
-    <div class="serverButtons">
-      <button class="serverBtn active" id="serverBilm">Bilm</button>
-      <button class="serverBtn" id="serverVidsrc">VidSrc</button>
+    <div id="controlsRowTop">
+      <div id="leftControls">
+        <button id="fullscreenBtn" aria-label="Fullscreen" title="Fullscreen">⤢</button>
+      </div>
+      <button id="closeBtn" aria-label="Close fullscreen" title="Close fullscreen">×</button>
     </div>
 
-    <div class="videoWrapper">
-      <iframe id="videoPlayer" allowfullscreen loading="lazy"></iframe>
-      <button id="fullscreenBtn" onclick="toggleFullscreen()">⛶</button>
+    <div id="serverList">
+      <h2>Servers</h2>
+      <button class="serverBtn active" id="serverVidsrc" aria-pressed="true" aria-label="Select VidSrc server">VidSrc</button>
+      <button class="serverBtn" id="serverVidplay" aria-pressed="false" aria-label="Select VidPlay server">VidPlay</button>
     </div>
+
+    <div id="controlsCompact" role="region" aria-label="Season and episode controls">
+      <div class="group seasonGroup">
+        <button class="smallBtn" id="prevSeason" title="Previous season" aria-label="Previous season" aria-disabled="false">‹</button>
+        <select id="seasonSelect" aria-label="Select season"></select>
+        <button class="smallBtn" id="nextSeason" title="Next season" aria-label="Next season" aria-disabled="false">›</button>
+      </div>
+
+      <div class="group episodeGroup">
+        <button class="smallBtn" id="prevEpisode" title="Previous episode" aria-label="Previous episode" aria-disabled="false">‹</button>
+        <select id="episodeSelect" aria-label="Select episode"></select>
+        <button class="smallBtn" id="nextEpisode" title="Next episode" aria-label="Next episode" aria-disabled="false">›</button>
+      </div>
+    </div>
+
+    <div id="infoLine" aria-live="polite"></div>
+
   </div>
+</main>
 
-  <script>
-    const iframe = document.getElementById("videoPlayer");
-    const inputField = document.getElementById("movieIdInput");
-    let movieId = "";
+<script>
+  (function(){
+    const params = new URLSearchParams(location.search);
+    const tmdbId = params.get('id') || 'guest';
+    const storageKey = `bilm-tv-progress-${tmdbId}`;
 
-    function playMovie() {
-      const input = inputField.value.trim();
-      if (!input) return;
-      movieId = input;
-      loadServer("bilm");
-    }
+    const iframe = document.getElementById('videoPlayer');
+    const seasonSelect = document.getElementById('seasonSelect');
+    const episodeSelect = document.getElementById('episodeSelect');
 
-    function loadServer(server = "bilm") {
-      document.querySelectorAll(".serverBtn").forEach(btn => btn.classList.remove("active"));
-      const serverBtn = document.getElementById("server" + server.charAt(0).toUpperCase() + server.slice(1));
-      if (serverBtn) serverBtn.classList.add("active");
+    const prevSeason = document.getElementById('prevSeason');
+    const nextSeason = document.getElementById('nextSeason');
+    const prevEpisode = document.getElementById('prevEpisode');
+    const nextEpisode = document.getElementById('nextEpisode');
 
-      if (!movieId) return;
+    const serverVidsrc = document.getElementById('serverVidsrc');
+    const serverVidplay = document.getElementById('serverVidplay');
 
-      if (server === "bilm") {
-        iframe.src = `https://bilmapi.onrender.com/api/embed/${movieId}`;
-      } else if (server === "vidsrc") {
-        iframe.src = `https://vidsrc.xyz/embed/movie/${movieId}`;
-      }
-    }
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const closeBtn = document.getElementById('closeBtn');
+    const playerContainer = document.getElementById('playerContainer');
 
-    document.getElementById("serverBilm").onclick = () => loadServer("bilm");
-    document.getElementById("serverVidsrc").onclick = () => loadServer("vidsrc");
+    const DEFAULT_SEASONS = 6;
+    const DEFAULT_EPISODES = 12;
 
-    function toggleFullscreen() {
-      const videoWrapper = document.querySelector(".videoWrapper");
-      if (
-        document.fullscreenElement ||
-        document.webkitFullscreenElement ||
-        document.mozFullScreenElement
-      ) {
-        document.exitFullscreen?.();
-        document.webkitExitFullscreen?.();
-        document.mozCancelFullScreen?.();
-      } else {
-        videoWrapper.requestFullscreen?.();
-        videoWrapper.webkitRequestFullscreen?.();
-        videoWrapper.mozRequestFullScreen?.();
-      }
-    }
-
-    // Auto-load default movie ID on page load
-    window.onload = () => {
-      movieId = "tt2294629";
-      inputField.value = movieId;
-      loadServer("bilm");
+    // State stores current season, episode, server,
+    // plus per-season last watched episode (progress)
+    let state = {
+      seasons: DEFAULT_SEASONS,
+      episodesPerSeason: DEFAULT_EPISODES,
+      currentSeason: 1,
+      currentEpisode: 1,
+      server: 'vidsrc',
+      perSeasonProgress: {} // {seasonNumber: lastWatchedEpisode}
     };
-  </script>
+
+    // Save progress: season, episode, server, and perSeasonProgress map
+    function saveProgress(){
+      try {
+        // Save current episode as last watched for current season
+        state.perSeasonProgress[state.currentSeason] = state.currentEpisode;
+        localStorage.setItem(storageKey, JSON.stringify({
+          currentSeason: state.currentSeason,
+          currentEpisode: state.currentEpisode,
+          server: state.server,
+          perSeasonProgress: state.perSeasonProgress
+        }));
+      } catch(e){}
+    }
+
+    // Load progress data from localStorage
+    function loadProgress(){
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if(raw){
+          const parsed = JSON.parse(raw);
+          if(typeof parsed.currentSeason === 'number') state.currentSeason = parsed.currentSeason;
+          if(typeof parsed.currentEpisode === 'number') state.currentEpisode = parsed.currentEpisode;
+          if(typeof parsed.server === 'string') state.server = parsed.server;
+          if(typeof parsed.perSeasonProgress === 'object') state.perSeasonProgress = parsed.perSeasonProgress;
+        }
+      } catch(e){}
+    }
+
+    // Populate season select options
+    function populateSeasons(n){
+      seasonSelect.innerHTML = '';
+      for(let i=1; i<=n; i++){
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Season ${i}`;
+        seasonSelect.appendChild(opt);
+      }
+      seasonSelect.value = state.currentSeason;
+      updatePrevNextButtons();
+    }
+
+    // Populate episode select options, marking watched episodes with a dot prefix
+    function populateEpisodes(n){
+      episodeSelect.innerHTML = '';
+      const watchedEpisodes = state.perSeasonProgress[state.currentSeason] || 0;
+      for(let i=1; i<=n; i++){
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `Episode ${i}`;
+        if(i <= watchedEpisodes){
+          opt.classList.add('watched');
+          // Add dot prefix (some browsers support ::before on option, fallback)
+          // We'll add unicode dot prefix in textContent above or here:
+          opt.textContent = `● Episode ${i}`;
+        }
+        episodeSelect.appendChild(opt);
+      }
+      episodeSelect.value = state.currentEpisode;
+      updatePrevNextButtons();
+    }
+
+    // Update the prev/next buttons' disabled state for season and episode
+    function updatePrevNextButtons(){
+      prevSeason.disabled = (state.currentSeason <= 1);
+      nextSeason.disabled = (state.currentSeason >= state.seasons);
+      prevSeason.setAttribute('aria-disabled', prevSeason.disabled);
+      nextSeason.setAttribute('aria-disabled', nextSeason.disabled);
+
+      prevEpisode.disabled = (state.currentEpisode <= 1);
+      nextEpisode.disabled = (state.currentEpisode >= state.episodesPerSeason);
+      prevEpisode.setAttribute('aria-disabled', prevEpisode.disabled);
+      nextEpisode.setAttribute('aria-disabled', nextEpisode.disabled);
+    }
+
+    // Update iframe dataset preview URL (no actual loading)
+    function updateEmbedPreview(){
+      const imdb = '{IMDB_ID}';
+      const s = state.currentSeason;
+      const e = state.currentEpisode;
+      const server = state.server;
+      const preview = server === 'vidsrc'
+        ? `https://vidsrc.xyz/embed/tv/${imdb}/${s}-${e}`
+        : `https://vidplay.to/tv/${imdb}/${s}/${e}`;
+      iframe.dataset.preview = preview;
+      iframe.title = `Preview: ${preview}`;
+    }
+
+    // Update the info line text with current status
+    function updateInfoLine(){
+      const serverName = state.server === 'vidsrc' ? 'VidSrc' : 'VidPlay';
+      const watchedCount = state.perSeasonProgress[state.currentSeason] || 0;
+      let infoText = `Now on Season ${state.currentSeason}, Episode ${state.currentEpisode} | Server: ${serverName}. `;
+      infoText += `You have watched up to Episode ${watchedCount} this season.`;
+      document.getElementById('infoLine').textContent = infoText;
+    }
+
+    // Set the current season, update episode accordingly (to last watched or 1)
+    function setSeason(season){
+      if(season < 1) season = 1;
+      if(season > state.seasons) season = state.seasons;
+      state.currentSeason = season;
+      // Set episode to last watched for season, or 1 if none saved
+      state.currentEpisode = state.perSeasonProgress[season] || 1;
+      populateSeasons(state.seasons);
+      populateEpisodes(state.episodesPerSeason);
+      saveProgress();
+      updateEmbedPreview();
+      updateInfoLine();
+    }
+
+    // Set current episode (clamped)
+    function setEpisode(episode){
+      if(episode < 1) episode = 1;
+      if(episode > state.episodesPerSeason) episode = state.episodesPerSeason;
+      state.currentEpisode = episode;
+      // Update last watched for current season only if new episode is higher
+      if(!state.perSeasonProgress[state.currentSeason] || episode > state.perSeasonProgress[state.currentSeason]){
+        state.perSeasonProgress[state.currentSeason] = episode;
+      }
+      populateEpisodes(state.episodesPerSeason);
+      saveProgress();
+      updateEmbedPreview();
+      updateInfoLine();
+    }
+
+    // Server selection
+    function setServer(s){
+      if(s !== 'vidsrc' && s !== 'vidplay') return;
+      state.server = s;
+      serverVidsrc.classList.toggle('active', s==='vidsrc');
+      serverVidsrc.setAttribute('aria-pressed', s==='vidsrc');
+      serverVidplay.classList.toggle('active', s==='vidplay');
+      serverVidplay.setAttribute('aria-pressed', s==='vidplay');
+      saveProgress();
+      updateEmbedPreview();
+      updateInfoLine();
+    }
+
+    // Navigation functions
+    function prevSeasonFn(){
+      setSeason(state.currentSeason - 1);
+    }
+    function nextSeasonFn(){
+      setSeason(state.currentSeason + 1);
+    }
+    function prevEpisodeFn(){
+      let ep = state.currentEpisode - 1;
+      if(ep < 1){
+        if(state.currentSeason > 1){
+          setSeason(state.currentSeason - 1);
+          ep = state.perSeasonProgress[state.currentSeason] || 1;
+          setEpisode(ep);
+          return;
+        } else {
+          ep = 1;
+        }
+      }
+      setEpisode(ep);
+    }
+    function nextEpisodeFn(){
+      let ep = state.currentEpisode + 1;
+      if(ep > state.episodesPerSeason){
+        if(state.currentSeason < state.seasons){
+          setSeason(state.currentSeason + 1);
+          ep = state.perSeasonProgress[state.currentSeason] || 1;
+          setEpisode(ep);
+          return;
+        } else {
+          ep = state.episodesPerSeason;
+        }
+      }
+      setEpisode(ep);
+    }
+
+    // Wire event listeners
+    prevSeason.addEventListener('click', prevSeasonFn);
+    nextSeason.addEventListener('click', nextSeasonFn);
+    prevEpisode.addEventListener('click', prevEpisodeFn);
+    nextEpisode.addEventListener('click', nextEpisodeFn);
+
+    seasonSelect.addEventListener('change', () => {
+      const val = parseInt(seasonSelect.value, 10) || 1;
+      setSeason(val);
+    });
+
+    episodeSelect.addEventListener('change', () => {
+      const val = parseInt(episodeSelect.value, 10) || 1;
+      setEpisode(val);
+    });
+
+    serverVidsrc.addEventListener('click', () => setServer('vidsrc'));
+    serverVidplay.addEventListener('click', () => setServer('vidplay'));
+
+    // Fullscreen button logic (same as before)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    fullscreenBtn.addEventListener('click', () => {
+      if (!isMobile){
+        if(playerContainer.requestFullscreen) playerContainer.requestFullscreen();
+      } else {
+        playerContainer.classList.add('simulated-fullscreen');
+      }
+      closeBtn.style.display = 'block';
+    });
+    closeBtn.addEventListener('click', () => {
+      if(isMobile) playerContainer.classList.remove('simulated-fullscreen');
+      if(document.fullscreenElement) document.exitFullscreen?.();
+      closeBtn.style.display = 'none';
+    });
+    document.addEventListener('fullscreenchange', () => {
+      if(!document.fullscreenElement) closeBtn.style.display = 'none';
+    });
+
+    // Initialize
+    loadProgress();
+    populateSeasons(state.seasons);
+    populateEpisodes(state.episodesPerSeason);
+    setServer(state.server);
+    updateEmbedPreview();
+    updateInfoLine();
+
+    // Expose for debugging
+    window.bilmUI = {
+      state,
+      setSeason,
+      setEpisode,
+      setServer,
+      populateSeasons,
+      populateEpisodes,
+      updateEmbedPreview,
+      updateInfoLine
+    };
+  })();
+</script>
+
 </body>
 </html>
