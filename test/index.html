@@ -68,6 +68,7 @@
       transition: background-color 0.3s ease;
       max-width: 120px;
       text-align: center;
+      user-select: none;
     }
 
     #fullscreenBtn:hover {
@@ -89,6 +90,7 @@
       box-shadow: 0 0 15px #a14effaa;
       max-height: 300px;
       overflow-y: auto;
+      user-select: none;
     }
 
     #serverList h2 {
@@ -109,6 +111,7 @@
       transition: background-color 0.3s ease;
       width: 100%;
       text-align: center;
+      user-select: none;
     }
 
     .serverBtn:hover {
@@ -120,12 +123,51 @@
       cursor: default;
     }
 
-    #selectors {
+    #selectorsContainer {
       margin-top: 20px;
       width: 100%;
+      background: rgba(26, 22, 40, 0.9);
+      border-radius: 12px;
+      padding: 12px 20px;
+      box-shadow: 0 0 15px #a14effaa;
       display: flex;
       justify-content: center;
-      gap: 16px;
+      align-items: center;
+      gap: 24px;
+      user-select: none;
+    }
+
+    #seasonControls, #episodeControls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    button.controlBtn {
+      background: #3a1361;
+      border: none;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 18px;
+      line-height: 1;
+      user-select: none;
+      transition: background-color 0.3s ease;
+      min-width: 36px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    button.controlBtn:hover:not(:disabled) {
+      background-color: #a855f7;
+    }
+
+    button.controlBtn:disabled {
+      background-color: #4b3261;
+      cursor: not-allowed;
     }
 
     select {
@@ -137,6 +179,9 @@
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
+      min-width: 120px;
+      user-select: none;
+      transition: background-color 0.3s ease;
     }
 
     select:hover {
@@ -160,6 +205,7 @@
       text-align: center;
       line-height: 48px;
       border-radius: 0;
+      user-select: none;
     }
 
     .simulated-fullscreen {
@@ -186,41 +232,6 @@
       pointer-events: none;
       background: transparent;
     }
-
-    /* Additional Buttons Style */
-    #controls {
-      margin-top: 20px;
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      flex-wrap: wrap;
-      max-width: 800px;
-      width: 95vw;
-    }
-
-    #controls button {
-      background: #3a1361;
-      color: white;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 16px;
-      transition: background-color 0.3s ease;
-      min-width: 100px;
-      text-align: center;
-    }
-
-    #controls button:hover:not(:disabled) {
-      background-color: #a855f7;
-    }
-
-    #controls button:disabled {
-      background-color: #4b3261;
-      cursor: not-allowed;
-    }
-
   </style>
 </head>
 <body>
@@ -250,16 +261,18 @@
       <button class="serverBtn" id="serverVidplay">VidPlay</button>
     </div>
 
-    <div id="selectors">
-      <select id="seasonSelect"></select>
-      <select id="episodeSelect"></select>
-    </div>
+    <div id="selectorsContainer">
+      <div id="seasonControls">
+        <button class="controlBtn" id="prevSeasonBtn" title="Previous Season">‹</button>
+        <select id="seasonSelect" aria-label="Select Season"></select>
+        <button class="controlBtn" id="nextSeasonBtn" title="Next Season">›</button>
+      </div>
 
-    <div id="controls">
-      <button id="prevSeasonBtn">Prev Season</button>
-      <button id="prevEpisodeBtn">Prev Episode</button>
-      <button id="nextEpisodeBtn">Next Episode</button>
-      <button id="nextSeasonBtn">Next Season</button>
+      <div id="episodeControls">
+        <button class="controlBtn" id="prevEpisodeBtn" title="Previous Episode">‹</button>
+        <select id="episodeSelect" aria-label="Select Episode"></select>
+        <button class="controlBtn" id="nextEpisodeBtn" title="Next Episode">›</button>
+      </div>
     </div>
   </div>
 </main>
@@ -267,7 +280,7 @@
 <script>
   const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const params = new URLSearchParams(window.location.search);
-  const tmdbId = params.get('id') || '1399'; // default example tmdbId if none
+  const tmdbId = params.get('id') || '1399'; // fallback example
 
   let imdbId = null;
 
@@ -491,41 +504,11 @@
     }
   }
 
-  function loadProgress() {
-    const saved = localStorage.getItem(`bilm-tv-progress-${tmdbId}`);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        currentSeason = parsed.season || 1;
-        currentEpisode = parsed.episode || 1;
-      } catch (e) {}
-    }
-  }
-
-  // Keyboard shortcuts for navigation
-  document.addEventListener('keydown', (e) => {
-    if (e.code === 'ArrowLeft') {
-      prevEpisodeBtn.click();
-      e.preventDefault();
-    } else if (e.code === 'ArrowRight') {
-      nextEpisodeBtn.click();
-      e.preventDefault();
-    } else if (e.code === 'ArrowUp') {
-      nextSeasonBtn.click();
-      e.preventDefault();
-    } else if (e.code === 'ArrowDown') {
-      prevSeasonBtn.click();
-      e.preventDefault();
-    } else if (e.code === 'Space') {
-      fullscreenBtn.click();
-      e.preventDefault();
-    }
-  });
-
-  // Initial load
+  // Load saved progress first
   loadProgress();
   loadSeasons();
   setActiveServer(currentServer);
+
 </script>
 
 </body>
