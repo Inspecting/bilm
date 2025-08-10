@@ -89,24 +89,31 @@
 
     /* compact selectors and nav */
     #controlsCompact{
-      margin-top:18px;width:100%;display:flex;justify-content:center;gap:14px;align-items:center;
+      margin-top:18px;
+      width: 100%;
+      display:flex;
+      justify-content:center;
+      gap:12px;
+      align-items:center;
       background: var(--panel);
-      padding: 12px 20px;
+      padding: 12px 30px; /* more padding for better button spacing */
       border-radius: 16px;
       box-shadow: 0 0 15px #a14eff88;
+      /* ensure enough height for buttons */
+      min-height: 54px;
+      box-sizing: border-box;
+      flex-wrap: nowrap; /* prevent wrapping */
     }
     .group{
       display:flex;align-items:center;gap:8px;
-      /* background:linear-gradient(180deg,#161216,#241428); */
-      /* padding:8px; */
-      /* border-radius:12px; */
     }
     .group select{
       appearance:none;background:transparent;border:none;color:#fff;
-      padding:6px 12px;font-weight:700;border-radius:8px;
+      padding:6px 14px;font-weight:700;border-radius:8px;
       cursor:pointer;
-      min-width:90px;
+      min-width:100px;
       transition: background-color 0.2s ease;
+      font-size: 15px;
     }
     .group select:hover, .group select:focus {
       background: rgba(161, 78, 255, 0.2);
@@ -114,8 +121,13 @@
     }
     .smallBtn{
       background:transparent;border:1px solid rgba(255,255,255,0.06);color:#fff;
-      padding:8px;border-radius:8px;cursor:pointer;min-width:40px;
+      padding:8px 12px;border-radius:8px;cursor:pointer;min-width:40px;
       transition: background-color 0.2s ease;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select:none;
     }
     .smallBtn:hover:not(:disabled){
       background:rgba(255,255,255,0.03);
@@ -125,24 +137,27 @@
       cursor: not-allowed;
     }
 
-    /* subtle info line */
-    #infoLine{
-      margin-top:10px;color:#9a94b8;font-size:13px;text-align:center;
-      user-select:none;
-      min-height:20px;
-    }
-
-    /* episode select option watched marker */
-    option.watched::before {
-      content: "● ";
-      color: var(--accent);
+    /* hide the info line */
+    #infoLine {
+      display: none;
     }
 
     /* responsive tweaks */
     @media (max-width:880px){
       #playerWrapper{width:100%;padding:0 10px}
       #serverList{display:none}
-      .group select{font-size:14px}
+      #controlsCompact {
+        flex-wrap: wrap;
+        padding: 10px 20px;
+      }
+      .group select{
+        font-size:14px;
+        min-width: 80px;
+      }
+      .smallBtn{
+        font-size: 14px;
+        padding: 6px 10px;
+      }
     }
   </style>
 </head>
@@ -218,21 +233,17 @@
     const DEFAULT_SEASONS = 6;
     const DEFAULT_EPISODES = 12;
 
-    // State stores current season, episode, server,
-    // plus per-season last watched episode (progress)
     let state = {
       seasons: DEFAULT_SEASONS,
       episodesPerSeason: DEFAULT_EPISODES,
       currentSeason: 1,
       currentEpisode: 1,
       server: 'vidsrc',
-      perSeasonProgress: {} // {seasonNumber: lastWatchedEpisode}
+      perSeasonProgress: {}
     };
 
-    // Save progress: season, episode, server, and perSeasonProgress map
     function saveProgress(){
       try {
-        // Save current episode as last watched for current season
         state.perSeasonProgress[state.currentSeason] = state.currentEpisode;
         localStorage.setItem(storageKey, JSON.stringify({
           currentSeason: state.currentSeason,
@@ -243,7 +254,6 @@
       } catch(e){}
     }
 
-    // Load progress data from localStorage
     function loadProgress(){
       try {
         const raw = localStorage.getItem(storageKey);
@@ -257,7 +267,6 @@
       } catch(e){}
     }
 
-    // Populate season select options
     function populateSeasons(n){
       seasonSelect.innerHTML = '';
       for(let i=1; i<=n; i++){
@@ -270,27 +279,19 @@
       updatePrevNextButtons();
     }
 
-    // Populate episode select options, marking watched episodes with a dot prefix
     function populateEpisodes(n){
       episodeSelect.innerHTML = '';
-      const watchedEpisodes = state.perSeasonProgress[state.currentSeason] || 0;
+      // no watched marker now, plain text
       for(let i=1; i<=n; i++){
         const opt = document.createElement('option');
         opt.value = i;
         opt.textContent = `Episode ${i}`;
-        if(i <= watchedEpisodes){
-          opt.classList.add('watched');
-          // Add dot prefix (some browsers support ::before on option, fallback)
-          // We'll add unicode dot prefix in textContent above or here:
-          opt.textContent = `● Episode ${i}`;
-        }
         episodeSelect.appendChild(opt);
       }
       episodeSelect.value = state.currentEpisode;
       updatePrevNextButtons();
     }
 
-    // Update the prev/next buttons' disabled state for season and episode
     function updatePrevNextButtons(){
       prevSeason.disabled = (state.currentSeason <= 1);
       nextSeason.disabled = (state.currentSeason >= state.seasons);
@@ -303,7 +304,6 @@
       nextEpisode.setAttribute('aria-disabled', nextEpisode.disabled);
     }
 
-    // Update iframe dataset preview URL (no actual loading)
     function updateEmbedPreview(){
       const imdb = '{IMDB_ID}';
       const s = state.currentSeason;
@@ -316,21 +316,16 @@
       iframe.title = `Preview: ${preview}`;
     }
 
-    // Update the info line text with current status
+    // info line hidden, so empty fn for future if needed
     function updateInfoLine(){
-      const serverName = state.server === 'vidsrc' ? 'VidSrc' : 'VidPlay';
-      const watchedCount = state.perSeasonProgress[state.currentSeason] || 0;
-      let infoText = `Now on Season ${state.currentSeason}, Episode ${state.currentEpisode} | Server: ${serverName}. `;
-      infoText += `You have watched up to Episode ${watchedCount} this season.`;
-      document.getElementById('infoLine').textContent = infoText;
+      // no output, info line hidden
     }
 
-    // Set the current season, update episode accordingly (to last watched or 1)
     function setSeason(season){
       if(season < 1) season = 1;
       if(season > state.seasons) season = state.seasons;
       state.currentSeason = season;
-      // Set episode to last watched for season, or 1 if none saved
+      // episode to last watched for season or 1
       state.currentEpisode = state.perSeasonProgress[season] || 1;
       populateSeasons(state.seasons);
       populateEpisodes(state.episodesPerSeason);
@@ -339,12 +334,10 @@
       updateInfoLine();
     }
 
-    // Set current episode (clamped)
     function setEpisode(episode){
       if(episode < 1) episode = 1;
       if(episode > state.episodesPerSeason) episode = state.episodesPerSeason;
       state.currentEpisode = episode;
-      // Update last watched for current season only if new episode is higher
       if(!state.perSeasonProgress[state.currentSeason] || episode > state.perSeasonProgress[state.currentSeason]){
         state.perSeasonProgress[state.currentSeason] = episode;
       }
@@ -354,7 +347,6 @@
       updateInfoLine();
     }
 
-    // Server selection
     function setServer(s){
       if(s !== 'vidsrc' && s !== 'vidplay') return;
       state.server = s;
@@ -367,7 +359,6 @@
       updateInfoLine();
     }
 
-    // Navigation functions
     function prevSeasonFn(){
       setSeason(state.currentSeason - 1);
     }
@@ -403,7 +394,6 @@
       setEpisode(ep);
     }
 
-    // Wire event listeners
     prevSeason.addEventListener('click', prevSeasonFn);
     nextSeason.addEventListener('click', nextSeasonFn);
     prevEpisode.addEventListener('click', prevEpisodeFn);
@@ -422,7 +412,6 @@
     serverVidsrc.addEventListener('click', () => setServer('vidsrc'));
     serverVidplay.addEventListener('click', () => setServer('vidplay'));
 
-    // Fullscreen button logic (same as before)
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     fullscreenBtn.addEventListener('click', () => {
       if (!isMobile){
@@ -441,7 +430,6 @@
       if(!document.fullscreenElement) closeBtn.style.display = 'none';
     });
 
-    // Initialize
     loadProgress();
     populateSeasons(state.seasons);
     populateEpisodes(state.episodesPerSeason);
@@ -449,7 +437,6 @@
     updateEmbedPreview();
     updateInfoLine();
 
-    // Expose for debugging
     window.bilmUI = {
       state,
       setSeason,
