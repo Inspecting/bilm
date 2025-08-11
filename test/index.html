@@ -1,210 +1,535 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Viewer</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#8000ff">
-<style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- PWA + iOS fullscreen support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#000000" />
+
+  <!-- PWA Manifest and Icon -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <title>Bilm 💜 - TV Show Viewer</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/navbar.css" />
+
+  <style>
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+    }
     body {
-        background-color: #1a001f;
-        color: white;
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
-    .navbar {
-        height: 50px;
-        background-color: #2a0033;
+    main {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      position: relative;
     }
-    .container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 20px;
+
+    #playerWrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 800px;
+      max-width: 95vw;
+      position: relative;
     }
-    .player-container {
-        position: relative;
-        border-radius: 15px;
-        padding: 10px;
-        background: linear-gradient(145deg, #3a0050, #1a001f);
-        box-shadow: 0 0 20px #8000ff;
+
+    #playerContainer {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: black;
+      border-radius: 12px;
+      box-shadow: 0 0 15px #a14effaa;
+      overflow: hidden;
+      position: relative;
     }
+
     iframe {
-        width: 100%;
-        height: 500px;
-        border-radius: 10px;
-        border: none;
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 12px;
     }
-    .selector-bar, .bottom-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        justify-content: center;
-        align-items: center;
-        background-color: #2a0033;
-        padding: 10px;
-        border-radius: 10px;
-        margin-top: 10px;
-        box-shadow: 0 0 15px #8000ff;
+
+    #fullscreenBtn {
+      margin-top: 12px;
+      background: #3a1361;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
+      max-width: 120px;
+      text-align: center;
     }
-    select, button {
-        padding: 8px 12px;
-        border: none;
-        border-radius: 8px;
-        background-color: #4b0082;
-        color: white;
-        cursor: pointer;
-        font-size: 14px;
+
+    #fullscreenBtn:hover {
+      background-color: #a855f7;
     }
-    button:disabled {
-        background-color: #3a003d;
-        cursor: not-allowed;
-        opacity: 0.6;
+
+    #serverList {
+      position: absolute;
+      left: 100%;
+      margin-left: 20px;
+      top: 0;
+      width: 140px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(26, 22, 40, 0.9);
+      border-radius: 12px;
+      box-shadow: 0 0 15px #a14effaa;
+      max-height: 300px;
+      overflow-y: auto;
     }
-    .bottom-bar {
-        justify-content: flex-end;
+
+    #serverList h2 {
+      margin-bottom: 8px;
+      font-size: 1.1rem;
+      color: #a14eff;
+      text-align: center;
     }
-    .fullscreen-btn {
-        margin-left: auto;
-        background: none;
-        font-size: 18px;
-        padding: 5px;
-        cursor: pointer;
+
+    .serverBtn {
+      background: #3a1361;
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
+      width: 100%;
+      text-align: center;
     }
-</style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    .serverBtn:hover {
+      background-color: #a855f7;
+    }
+
+    .serverBtn.active {
+      background-color: #a14eff;
+      cursor: default;
+    }
+
+    /* updated season/episode controls */
+    #controlsCompact {
+      margin-top: 18px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      align-items: center;
+      background: rgba(26, 22, 40, 0.9);
+      padding: 12px 30px;
+      border-radius: 16px;
+      box-shadow: 0 0 15px #a14eff88;
+      min-height: 54px;
+      flex-wrap: nowrap;
+    }
+    .group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .group select {
+      appearance: none;
+      background: transparent;
+      border: none;
+      color: #fff;
+      padding: 6px 14px;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      min-width: 100px;
+      font-size: 15px;
+    }
+    .group select:hover, .group select:focus {
+      background: rgba(161, 78, 255, 0.2);
+      outline: none;
+    }
+    .smallBtn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      transition: background-color 0.2s ease;
+    }
+    .smallBtn:hover:not(:disabled) {
+      background: rgba(255,255,255,0.03);
+    }
+    .smallBtn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    #closeBtn {
+      display: none;
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 100;
+      background: transparent;
+      color: white;
+      border: none;
+      width: 48px;
+      height: 48px;
+      font-size: 20px;
+      cursor: pointer;
+      font-weight: 700;
+      text-align: center;
+      line-height: 48px;
+      border-radius: 0;
+    }
+
+    .simulated-fullscreen {
+      position: fixed !important;
+      top: 0;
+      left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99;
+      border-radius: 0 !important;
+    }
+
+    .hide-navbar {
+      display: none !important;
+    }
+
+    #clickShield {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+      background: transparent;
+    }
+  </style>
 </head>
 <body>
-<div class="navbar"></div>
-<div class="container">
-    <div class="player-container">
-        <iframe id="player" data-src="" allowfullscreen></iframe>
-        <div class="selector-bar">
-            <button id="prevSeason">⏮ Season</button>
-            <select id="seasonSelect"></select>
-            <button id="nextSeason">Season ⏭</button>
-            <button id="prevEpisode">⏮ Episode</button>
-            <select id="episodeSelect"></select>
-            <button id="nextEpisode">Episode ⏭</button>
-            <button id="serverToggle">Change Server</button>
-        </div>
-        <div class="bottom-bar">
-            <button class="fullscreen-btn" id="fullscreenBtn"><i class="fas fa-expand"></i></button>
-        </div>
+
+<!-- Navbar placeholder -->
+<div id="navbarContainer"></div>
+
+<main>
+  <div id="playerWrapper">
+    <div id="playerContainer">
+      <iframe
+        id="videoPlayer"
+        src=""
+        allowfullscreen
+        allow="fullscreen; encrypted-media"
+        playsinline
+        scrolling="no"
+      ></iframe>
+      <div id="clickShield"></div>
     </div>
-</div>
+    <button id="fullscreenBtn">Fullscreen</button>
+    <button id="closeBtn">X</button>
+
+    <div id="serverList">
+      <h2>Servers</h2>
+      <button class="serverBtn active" id="serverVidsrc">VidSrc</button>
+      <button class="serverBtn" id="serverVidplay">VidPlay</button>
+    </div>
+
+    <!-- updated layout -->
+    <div id="controlsCompact">
+      <div class="group seasonGroup">
+        <button class="smallBtn" id="prevSeason">‹</button>
+        <select id="seasonSelect"></select>
+        <button class="smallBtn" id="nextSeason">›</button>
+      </div>
+      <div class="group episodeGroup">
+        <button class="smallBtn" id="prevEpisode">‹</button>
+        <select id="episodeSelect"></select>
+        <button class="smallBtn" id="nextEpisode">›</button>
+      </div>
+    </div>
+  </div>
+</main>
+
 <script>
-    const seasonSelect = document.getElementById('seasonSelect');
-    const episodeSelect = document.getElementById('episodeSelect');
-    const prevSeason = document.getElementById('prevSeason');
-    const nextSeason = document.getElementById('nextSeason');
-    const prevEpisode = document.getElementById('prevEpisode');
-    const nextEpisode = document.getElementById('nextEpisode');
-    const serverToggle = document.getElementById('serverToggle');
-    const player = document.getElementById('player');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-
-    let currentSeason = parseInt(localStorage.getItem('season')) || 1;
-    let currentEpisode = parseInt(localStorage.getItem('episode')) || 1;
-    let currentServer = 1;
-    let cooldown = false;
-
-    const totalSeasons = 3;
-    const episodesPerSeason = 10;
-
-    function updateSelectors() {
-        seasonSelect.innerHTML = '';
-        episodeSelect.innerHTML = '';
-
-        for (let s = 1; s <= totalSeasons; s++) {
-            let opt = document.createElement('option');
-            opt.value = s;
-            opt.textContent = `Season ${s}`;
-            if (s === currentSeason) opt.selected = true;
-            seasonSelect.appendChild(opt);
-        }
-        for (let e = 1; e <= episodesPerSeason; e++) {
-            let opt = document.createElement('option');
-            opt.value = e;
-            opt.textContent = `Episode ${e}`;
-            if (e === currentEpisode) opt.selected = true;
-            episodeSelect.appendChild(opt);
-        }
-
-        prevSeason.disabled = currentSeason === 1;
-        nextSeason.disabled = currentSeason === totalSeasons;
-        prevEpisode.disabled = currentEpisode === 1;
-        nextEpisode.disabled = currentEpisode === episodesPerSeason;
-    }
-
-    function loadPlayer() {
-        player.src = `https://example.com/embed/s${currentSeason}e${currentEpisode}?server=${currentServer}`;
-        localStorage.setItem('season', currentSeason);
-        localStorage.setItem('episode', currentEpisode);
-    }
-
-    function changeEpisode(delta) {
-        if (cooldown) return;
-        cooldown = true;
-        setTimeout(() => cooldown = false, 1000);
-
-        currentEpisode += delta;
-        if (currentEpisode < 1) currentEpisode = 1;
-        if (currentEpisode > episodesPerSeason) currentEpisode = episodesPerSeason;
-        updateSelectors();
-        loadPlayer();
-    }
-
-    function changeSeason(delta) {
-        if (cooldown) return;
-        cooldown = true;
-        setTimeout(() => cooldown = false, 1000);
-
-        currentSeason += delta;
-        if (currentSeason < 1) currentSeason = 1;
-        if (currentSeason > totalSeasons) currentSeason = totalSeasons;
-        currentEpisode = 1;
-        updateSelectors();
-        loadPlayer();
-    }
-
-    seasonSelect.addEventListener('change', () => {
-        currentSeason = parseInt(seasonSelect.value);
-        currentEpisode = 1;
-        updateSelectors();
-        loadPlayer();
+  fetch('/bilm/shared/navbar.html')
+    .then(res => res.text())
+    .then(html => {
+      document.getElementById('navbarContainer').innerHTML = html;
+      const script = document.createElement('script');
+      script.src = '/bilm/shared/navbar.js';
+      document.body.appendChild(script);
     });
-    episodeSelect.addEventListener('change', () => {
-        currentEpisode = parseInt(episodeSelect.value);
-        updateSelectors();
-        loadPlayer();
-    });
-
-    prevSeason.addEventListener('click', () => changeSeason(-1));
-    nextSeason.addEventListener('click', () => changeSeason(1));
-    prevEpisode.addEventListener('click', () => changeEpisode(-1));
-    nextEpisode.addEventListener('click', () => changeEpisode(1));
-
-    serverToggle.addEventListener('click', () => {
-        currentServer = currentServer === 1 ? 2 : 1;
-        loadPlayer();
-    });
-
-    fullscreenBtn.addEventListener('click', () => {
-        if (player.requestFullscreen) player.requestFullscreen();
-        else if (player.webkitRequestFullscreen) player.webkitRequestFullscreen();
-        else if (player.msRequestFullscreen) player.msRequestFullscreen();
-    });
-
-    updateSelectors();
-    loadPlayer();
 </script>
+
 <script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('service-worker.js');
+  const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
+  const params = new URLSearchParams(window.location.search);
+  const tmdbId = params.get('id');
+  let imdbId = null;
+
+  const iframe = document.getElementById('videoPlayer');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  const playerContainer = document.getElementById('playerContainer');
+  const navbarContainer = document.getElementById('navbarContainer');
+  const seasonSelect = document.getElementById('seasonSelect');
+  const episodeSelect = document.getElementById('episodeSelect');
+  const prevSeasonBtn = document.getElementById('prevSeason');
+  const nextSeasonBtn = document.getElementById('nextSeason');
+  const prevEpisodeBtn = document.getElementById('prevEpisode');
+  const nextEpisodeBtn = document.getElementById('nextEpisode');
+
+  const servers = {
+    vidsrc: document.getElementById('serverVidsrc'),
+    vidplay: document.getElementById('serverVidplay')
+  };
+
+  let currentSeason = 1;
+  let currentEpisode = 1;
+  let currentServer = 'vidsrc';
+  let totalSeasons = 1;
+  let episodesPerSeason = {};
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  fullscreenBtn.onclick = () => {
+    if (!isMobile) {
+      if (playerContainer.requestFullscreen) {
+        playerContainer.requestFullscreen();
+      } else if (playerContainer.webkitRequestFullscreen) {
+        playerContainer.webkitRequestFullscreen();
+      } else if (playerContainer.msRequestFullscreen) {
+        playerContainer.msRequestFullscreen();
+      }
+    } else {
+      playerContainer.classList.add('simulated-fullscreen');
     }
+    closeBtn.style.display = 'block';
+    navbarContainer.classList.add('hide-navbar');
+  };
+
+  closeBtn.onclick = () => {
+    if (isMobile) {
+      playerContainer.classList.remove('simulated-fullscreen');
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+    }
+    closeBtn.style.display = 'none';
+    navbarContainer.classList.remove('hide-navbar');
+  };
+
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) {
+      closeBtn.style.display = 'none';
+      navbarContainer.classList.remove('hide-navbar');
+    }
+  });
+
+  function saveProgress() {
+    localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
+      season: currentSeason,
+      episode: currentEpisode
+    }));
+  }
+
+  function loadProgress() {
+    const saved = localStorage.getItem(`bilm-tv-progress-${tmdbId}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        currentSeason = parsed.season || 1;
+        currentEpisode = parsed.episode || 1;
+      } catch (e) {}
+    }
+  }
+
+  function setActive(serverKey) {
+    Object.keys(servers).forEach(key => {
+      if (key === serverKey) servers[key].classList.add('active');
+      else servers[key].classList.remove('active');
+    });
+    currentServer = serverKey;
+    updateIframe();
+  }
+
+  Object.entries(servers).forEach(([key, btn]) => {
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('active')) setActive(key);
+    });
+  });
+
+  function updateIframe() {
+    if (!imdbId) return;
+    saveProgress();
+    if (currentServer === 'vidsrc') {
+      iframe.src = `https://vidsrc.xyz/embed/tv/${imdbId}/${currentSeason}-${currentEpisode}`;
+    } else if (currentServer === 'vidplay') {
+      iframe.src = `https://vidplay.to/tv/${imdbId}/${currentSeason}/${currentEpisode}`;
+    }
+  }
+
+  // --- Added cooldown control ---
+  let changeTimeout = null;
+  function delayedChange(callback) {
+    if (changeTimeout) clearTimeout(changeTimeout);
+    changeTimeout = setTimeout(() => {
+      callback();
+      updateButtonsState();
+      updateIframe();
+    }, 1000);
+  }
+
+  // --- Disable/enable buttons ---
+  function updateButtonsState() {
+    prevSeasonBtn.disabled = currentSeason <= 1;
+    nextSeasonBtn.disabled = currentSeason >= totalSeasons;
+
+    const maxEpisodes = episodesPerSeason[currentSeason] || 1;
+    prevEpisodeBtn.disabled = currentEpisode <= 1;
+    nextEpisodeBtn.disabled = currentEpisode >= maxEpisodes;
+  }
+
+  // Updated navigation logic with cooldown
+  prevSeasonBtn.onclick = () => {
+    if (currentSeason > 1) {
+      delayedChange(() => {
+        currentSeason--;
+        currentEpisode = 1;
+        seasonSelect.value = currentSeason;
+        loadEpisodes(currentSeason);
+      });
+    }
+  };
+  nextSeasonBtn.onclick = () => {
+    if (currentSeason < totalSeasons) {
+      delayedChange(() => {
+        currentSeason++;
+        currentEpisode = 1;
+        seasonSelect.value = currentSeason;
+        loadEpisodes(currentSeason);
+      });
+    }
+  };
+  prevEpisodeBtn.onclick = () => {
+    if (currentEpisode > 1) {
+      delayedChange(() => {
+        currentEpisode--;
+        episodeSelect.value = currentEpisode;
+      });
+    } else if (currentSeason > 1) {
+      delayedChange(() => {
+        currentSeason--;
+        currentEpisode = episodesPerSeason[currentSeason] || 1;
+        seasonSelect.value = currentSeason;
+        loadEpisodes(currentSeason);
+      });
+    }
+  };
+  nextEpisodeBtn.onclick = () => {
+    const maxEpisodes = episodesPerSeason[currentSeason] || 1;
+    if (currentEpisode < maxEpisodes) {
+      delayedChange(() => {
+        currentEpisode++;
+        episodeSelect.value = currentEpisode;
+      });
+    } else if (currentSeason < totalSeasons) {
+      delayedChange(() => {
+        currentSeason++;
+        currentEpisode = 1;
+        seasonSelect.value = currentSeason;
+        loadEpisodes(currentSeason);
+      });
+    }
+  };
+
+  seasonSelect.addEventListener('change', () => {
+    delayedChange(() => {
+      currentSeason = parseInt(seasonSelect.value);
+      currentEpisode = 1;
+      loadEpisodes(currentSeason);
+    });
+  });
+
+  episodeSelect.addEventListener('change', () => {
+    delayedChange(() => {
+      currentEpisode = parseInt(episodeSelect.value);
+    });
+  });
+
+  async function loadSeasons() {
+    const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
+    const data = await res.json();
+    imdbId = data.external_ids?.imdb_id;
+
+    totalSeasons = data.seasons.filter(s => s.season_number !== 0).length;
+
+    seasonSelect.innerHTML = '';
+    data.seasons.forEach(season => {
+      if (season.season_number === 0) return;
+      const option = document.createElement('option');
+      option.value = season.season_number;
+      option.textContent = `Season ${season.season_number}`;
+      seasonSelect.appendChild(option);
+    });
+
+    seasonSelect.value = currentSeason;
+    loadEpisodes(currentSeason);
+  }
+
+  async function loadEpisodes(seasonNumber) {
+    const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
+    const data = await res.json();
+
+    episodesPerSeason[seasonNumber] = data.episodes.length;
+
+    episodeSelect.innerHTML = '';
+    data.episodes.forEach(ep => {
+      const option = document.createElement('option');
+      option.value = ep.episode_number;
+      option.textContent = `Episode ${ep.episode_number}`;
+      episodeSelect.appendChild(option);
+    });
+
+    episodeSelect.value = currentEpisode;
+    updateButtonsState();
+    updateIframe();
+  }
+
+  loadProgress();
+  loadSeasons();
 </script>
+
+<!-- 🔒 Load Shared Ad Blocker -->
+<script src="/shared/adblock/adblock.js"></script>
+
 </body>
 </html>
