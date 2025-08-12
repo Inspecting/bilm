@@ -249,24 +249,20 @@
     #closeBtn {
       display: none;
       position: fixed;
-      top: 8px;
-      right: 8px;
+      top: 0;
+      right: 0;
       z-index: 100;
       background: transparent;
       color: white;
       border: none;
       width: 48px;
       height: 48px;
-      font-size: 28px;
+      font-size: 20px;
       cursor: pointer;
       font-weight: 700;
       text-align: center;
       line-height: 48px;
-      border-radius: 6px;
-      transition: background-color 0.3s ease;
-    }
-    #closeBtn:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 0;
     }
 
     .simulated-fullscreen {
@@ -288,9 +284,6 @@
 
 <!-- Navbar placeholder -->
 <div id="navbarContainer"></div>
-
-<!-- Close fullscreen X button -->
-<button id="closeBtn" aria-label="Exit Fullscreen" title="Exit Fullscreen">✕</button>
 
 <main>
   <div id="playerWrapper">
@@ -436,9 +429,6 @@
     if (!document.fullscreenElement) {
       if (closeBtn) closeBtn.style.display = 'none';
       navbarContainer.classList.remove('hide-navbar');
-    } else {
-      if (closeBtn) closeBtn.style.display = 'block';
-      navbarContainer.classList.add('hide-navbar');
     }
   });
 
@@ -543,8 +533,7 @@
       currentSeason--;
       currentEpisode = 1;
       seasonSelect.value = currentSeason;
-      episodeSelect.value = currentEpisode;
-      updateIframe();
+      loadEpisodes(currentSeason);
       startSeasonCooldown();
     }
   };
@@ -555,9 +544,19 @@
       currentSeason++;
       currentEpisode = 1;
       seasonSelect.value = currentSeason;
-      episodeSelect.value = currentEpisode;
-      updateIframe();
+      loadEpisodes(currentSeason);
       startSeasonCooldown();
+    }
+  };
+
+  seasonSelect.onchange = async () => {
+    const val = parseInt(seasonSelect.value);
+    if (val && val !== currentSeason) {
+      currentSeason = val;
+      currentEpisode = 1;
+      await loadEpisodes(currentSeason);
+      updateButtonsState();
+      updateIframe();
     }
   };
 
@@ -566,6 +565,7 @@
     if (currentEpisode > 1) {
       currentEpisode--;
       episodeSelect.value = currentEpisode;
+      updateButtonsState();
       updateIframe();
       startEpisodeCooldown();
     }
@@ -577,96 +577,101 @@
     if (currentEpisode < maxEpisodes) {
       currentEpisode++;
       episodeSelect.value = currentEpisode;
+      updateButtonsState();
       updateIframe();
       startEpisodeCooldown();
-    }
-  };
-
-  seasonSelect.onchange = () => {
-    if (seasonCooldownActive) return;
-    const val = parseInt(seasonSelect.value);
-    if (!isNaN(val) && val !== currentSeason && val >= 1 && val <= totalSeasons) {
-      currentSeason = val;
-      currentEpisode = 1;
-      episodeSelect.value = currentEpisode;
-      updateIframe();
-      startSeasonCooldown();
     }
   };
 
   episodeSelect.onchange = () => {
-    if (episodeCooldownActive) return;
     const val = parseInt(episodeSelect.value);
-    const maxEpisodes = episodesPerSeason[currentSeason] || 1;
-    if (!isNaN(val) && val !== currentEpisode && val >= 1 && val <= maxEpisodes) {
+    if (val && val !== currentEpisode) {
       currentEpisode = val;
+      updateButtonsState();
       updateIframe();
-      startEpisodeCooldown();
     }
   };
 
-  function populateSelect(select, count) {
-    select.innerHTML = '';
-    for (let i = 1; i <= count; i++) {
-      const option = document.createElement('option');
-      option.value = i;
-      option.textContent = i;
-      select.appendChild(option);
+  async function loadSeasons() {
+    if (!tmdbId) {
+      console.error('No tmdbId provided in URL');
+      return;
+    }
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
+      if (!res.ok) {
+        console.error('Failed to fetch seasons:', res.status, res.statusText);
+        return;
+      }
+      const data = await res.json();
+
+      imdbId = data.external_ids?.imdb_id || null;
+      if (!imdbId) {
+        console.error('IMDb ID not found for this TV show');
+        return;
+      }
+
+      totalSeasons = data.seasons.filter(s => s.season_number !== 0).length;
+
+      seasonSelect.innerHTML = '';
+      data.seasons.forEach(season => {
+        if (season.season_number === 0) return;
+        const option = document.createElement('option');
+        option.value = season.season_number;
+        option.textContent = `Season ${season.season_number}`;
+        seasonSelect.appendChild(option);
+      });
+
+      if (currentSeason > totalSeasons) currentSeason = totalSeasons;
+      seasonSelect.value = currentSeason;
+      await loadEpisodes(currentSeason);
+    } catch (err) {
+      console.error('Error loading seasons:', err);
     }
   }
 
-  // Fetch TMDb info and setup seasons and episodes
-  async function fetchShowInfo() {
-    if (!tmdbId) return alert('No show ID provided');
-
+  async function loadEpisodes(seasonNumber) {
+    if (!tmdbId) {
+      console.error('No tmdbId for loadEpisodes');
+      return;
+    }
     try {
-      // Get show info
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US`);
-      if (!res.ok) throw new Error('Failed to fetch TV show data');
-      const showData = await res.json();
-
-      imdbId = showData.external_ids?.imdb_id || showData.external_ids?.imdb || showData.external_ids?.imdbID || showData.imdb_id || null;
-
-      // If imdbId is missing, try fetching external IDs
-      if (!imdbId) {
-        const extRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`);
-        if (!extRes.ok) throw new Error('Failed to fetch external IDs');
-        const extData = await extRes.json();
-        imdbId = extData.imdb_id || null;
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
+      if (!res.ok) {
+        console.error('Failed to fetch episodes:', res.status, res.statusText);
+        return;
       }
+      const data = await res.json();
 
-      totalSeasons = showData.number_of_seasons || 1;
+      episodesPerSeason[seasonNumber] = data.episodes.length;
 
-      // Fetch episode counts per season
-      episodesPerSeason = {};
-      for (let s = 1; s <= totalSeasons; s++) {
-        const seasonRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${s}?api_key=${TMDB_API_KEY}&language=en-US`);
-        if (!seasonRes.ok) throw new Error('Failed to fetch season data for season ' + s);
-        const seasonData = await seasonRes.json();
-        episodesPerSeason[s] = seasonData.episodes?.length || 0;
-      }
+      episodeSelect.innerHTML = '';
+      data.episodes.forEach(ep => {
+        const option = document.createElement('option');
+        option.value = ep.episode_number;
+        option.textContent = `Episode ${ep.episode_number}`;
+        episodeSelect.appendChild(option);
+      });
 
-      populateSelect(seasonSelect, totalSeasons);
-      populateSelect(episodeSelect, episodesPerSeason[1] || 1);
-
-      loadProgress();
-
-      // Clamp loaded values to valid ranges
-      if (currentSeason < 1 || currentSeason > totalSeasons) currentSeason = 1;
-      if (currentEpisode < 1 || currentEpisode > (episodesPerSeason[currentSeason] || 1)) currentEpisode = 1;
-
-      seasonSelect.value = currentSeason;
+      if (currentEpisode > episodesPerSeason[seasonNumber]) currentEpisode = episodesPerSeason[seasonNumber];
       episodeSelect.value = currentEpisode;
 
-      updateIframe();
       updateButtonsState();
-    } catch (error) {
-      console.error(error);
-      alert('Failed to load show information');
+      updateIframe();
+    } catch (err) {
+      console.error('Error loading episodes:', err);
     }
   }
 
-  fetchShowInfo();
+  (async () => {
+    if (!tmdbId) {
+      alert('No TV show ID provided in URL as ?id=');
+      return;
+    }
+    loadProgress();
+    await loadSeasons();
+  })();
 </script>
+
 </body>
 </html>
