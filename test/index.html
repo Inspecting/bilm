@@ -50,14 +50,16 @@
       width: 800px;
       max-width: 95vw;
       position: relative;
+      filter: drop-shadow(0 0 15px #a14effaa);
+      border-radius: 12px;
+      background: #1a1628;
     }
 
     #playerContainer {
       width: 100%;
       aspect-ratio: 16 / 9;
       background: black;
-      border-radius: 12px;
-      box-shadow: 0 0 15px #a14effaa;
+      border-radius: 12px 12px 0 0;
       overflow: hidden;
       position: relative;
     }
@@ -66,71 +68,79 @@
       width: 100%;
       height: 100%;
       border: none;
-      border-radius: 12px;
+      border-radius: 12px 12px 0 0;
     }
 
+    /* playex bar below playerContainer */
+    #playexBar {
+      width: 100%;
+      background: #1a1628;
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 0 15px #a14effaa;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 20px;
+    }
+
+    /* fullscreen button as condensed square */
     #fullscreenBtn {
-      margin-top: 12px;
-      background: #3a1361;
-      color: white;
+      background: transparent;
       border: none;
-      padding: 8px 14px;
-      border-radius: 8px;
+      color: #a14eff;
       cursor: pointer;
-      font-weight: 600;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
       transition: background-color 0.3s ease;
-      max-width: 120px;
-      text-align: center;
+      flex-shrink: 0;
     }
-
     #fullscreenBtn:hover {
       background-color: #a855f7;
+      color: #fff;
     }
 
-    #serverList {
-      position: absolute;
-      left: 100%;
-      margin-left: 20px;
-      top: 0;
-      width: 140px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding: 12px;
-      background: rgba(26, 22, 40, 0.9);
-      border-radius: 12px;
-      box-shadow: 0 0 15px #a14effaa;
-      max-height: 300px;
-      overflow-y: auto;
+    #fullscreenBtn svg {
+      width: 20px;
+      height: 20px;
+      stroke-width: 2;
+      stroke: currentColor;
     }
 
-    #serverList h2 {
-      margin-bottom: 8px;
-      font-size: 1.1rem;
-      color: #a14eff;
-      text-align: center;
-    }
-
-    .serverBtn {
-      background: #3a1361;
-      color: white;
+    /* server selector dropdown styling */
+    #serverSelect {
+      background: transparent;
       border: none;
-      padding: 10px 14px;
-      border-radius: 8px;
+      color: #a14eff;
+      font-weight: 700;
+      font-size: 15px;
       cursor: pointer;
-      font-weight: 600;
-      transition: background-color 0.3s ease;
-      width: 100%;
-      text-align: center;
+      padding: 6px 12px;
+      border-radius: 8px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      flex-shrink: 0;
+      width: 120px;
+      text-align-last: center;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #a14eff 50%),
+        linear-gradient(135deg, #a14eff 50%, transparent 50%),
+        linear-gradient(to right, #2a1e4d, #1a1628);
+      background-position:
+        calc(100% - 20px) calc(1em + 2px),
+        calc(100% - 15px) calc(1em + 2px),
+        100% 0;
+      background-size: 5px 5px, 5px 5px, 1px 1.5em;
+      background-repeat: no-repeat;
     }
-
-    .serverBtn:hover {
-      background-color: #a855f7;
-    }
-
-    .serverBtn.active {
-      background-color: #a14eff;
-      cursor: default;
+    #serverSelect:hover, #serverSelect:focus {
+      background-color: rgba(161, 78, 255, 0.2);
+      outline: none;
     }
 
     /* updated season/episode controls */
@@ -164,6 +174,17 @@
       cursor: pointer;
       min-width: 100px;
       font-size: 15px;
+      text-align-last: center;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #a14eff 50%),
+        linear-gradient(135deg, #a14eff 50%, transparent 50%),
+        linear-gradient(to right, #2a1e4d, #1a1628);
+      background-position:
+        calc(100% - 20px) calc(1em + 2px),
+        calc(100% - 15px) calc(1em + 2px),
+        100% 0;
+      background-size: 5px 5px, 5px 5px, 1px 1.5em;
+      background-repeat: no-repeat;
     }
     .group select:hover, .group select:focus {
       background: rgba(161, 78, 255, 0.2);
@@ -182,6 +203,7 @@
       justify-content: center;
       user-select: none;
       transition: background-color 0.2s ease;
+      flex-shrink: 0;
     }
     .smallBtn:hover:not(:disabled) {
       background: rgba(255,255,255,0.03);
@@ -254,26 +276,31 @@
       ></iframe>
       <div id="clickShield"></div>
     </div>
-    <button id="fullscreenBtn">Fullscreen</button>
-    <button id="closeBtn">X</button>
 
-    <div id="serverList">
-      <h2>Servers</h2>
-      <button class="serverBtn active" id="serverVidsrc">VidSrc</button>
-      <button class="serverBtn" id="serverVidplay">VidPlay</button>
+    <!-- playex bar with fullscreen button and server select -->
+    <div id="playexBar">
+      <select id="serverSelect" title="Select server">
+        <option value="vidsrc">VidSrc</option>
+        <option value="vidplay">VidPlay</option>
+      </select>
+      <button id="fullscreenBtn" title="Fullscreen" aria-label="Fullscreen">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M4 4h6M4 4v6M20 20h-6M20 20v-6M4 20l6-6M20 4l-6 6"/></svg>
+      </button>
     </div>
+
+    <button id="closeBtn" title="Exit Fullscreen">X</button>
 
     <!-- updated layout -->
     <div id="controlsCompact">
       <div class="group seasonGroup">
-        <button class="smallBtn" id="prevSeason">‹</button>
-        <select id="seasonSelect"></select>
-        <button class="smallBtn" id="nextSeason">›</button>
+        <button class="smallBtn" id="prevSeason" title="Previous Season">‹</button>
+        <select id="seasonSelect" title="Select Season"></select>
+        <button class="smallBtn" id="nextSeason" title="Next Season">›</button>
       </div>
       <div class="group episodeGroup">
-        <button class="smallBtn" id="prevEpisode">‹</button>
-        <select id="episodeSelect"></select>
-        <button class="smallBtn" id="nextEpisode">›</button>
+        <button class="smallBtn" id="prevEpisode" title="Previous Episode">‹</button>
+        <select id="episodeSelect" title="Select Episode"></select>
+        <button class="smallBtn" id="nextEpisode" title="Next Episode">›</button>
       </div>
     </div>
   </div>
@@ -307,11 +334,7 @@
   const nextSeasonBtn = document.getElementById('nextSeason');
   const prevEpisodeBtn = document.getElementById('prevEpisode');
   const nextEpisodeBtn = document.getElementById('nextEpisode');
-
-  const servers = {
-    vidsrc: document.getElementById('serverVidsrc'),
-    vidplay: document.getElementById('serverVidplay')
-  };
+  const serverSelect = document.getElementById('serverSelect');
 
   let currentSeason = 1;
   let currentEpisode = 1;
@@ -377,21 +400,6 @@
     }
   }
 
-  function setActive(serverKey) {
-    Object.keys(servers).forEach(key => {
-      if (key === serverKey) servers[key].classList.add('active');
-      else servers[key].classList.remove('active');
-    });
-    currentServer = serverKey;
-    updateIframe();
-  }
-
-  Object.entries(servers).forEach(([key, btn]) => {
-    btn.addEventListener('click', () => {
-      if (!btn.classList.contains('active')) setActive(key);
-    });
-  });
-
   function updateIframe() {
     if (!imdbId) return;
     saveProgress();
@@ -402,12 +410,15 @@
     }
   }
 
+  serverSelect.addEventListener('change', () => {
+    currentServer = serverSelect.value;
+    updateIframe();
+  });
+
   function updateButtonsState() {
-    // Season buttons disabled if cooldown active or at limits
     prevSeasonBtn.disabled = seasonCooldownActive || currentSeason <= 1;
     nextSeasonBtn.disabled = seasonCooldownActive || currentSeason >= totalSeasons;
 
-    // Episode buttons disabled if cooldown active or at limits
     const maxEpisodes = episodesPerSeason[currentSeason] || 1;
     prevEpisodeBtn.disabled = episodeCooldownActive || currentEpisode <= 1;
     nextEpisodeBtn.disabled = episodeCooldownActive || currentEpisode >= maxEpisodes;
