@@ -133,27 +133,62 @@
       cursor: default;
     }
 
-    #selectors {
-      margin-top: 20px;
+    /* updated season/episode controls */
+    #controlsCompact {
+      margin-top: 18px;
       width: 100%;
       display: flex;
       justify-content: center;
-      gap: 16px;
+      gap: 12px;
+      align-items: center;
+      background: rgba(26, 22, 40, 0.9);
+      padding: 12px 30px;
+      border-radius: 16px;
+      box-shadow: 0 0 15px #a14eff88;
+      min-height: 54px;
+      flex-wrap: nowrap;
     }
-
-    select {
-      background: #2a2a2a;
+    .group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .group select {
+      appearance: none;
+      background: transparent;
       border: none;
+      color: #fff;
+      padding: 6px 14px;
+      font-weight: 700;
       border-radius: 8px;
-      color: #eee;
-      padding: 8px 12px;
-      font-size: 16px;
-      font-weight: 600;
       cursor: pointer;
+      min-width: 100px;
+      font-size: 15px;
     }
-
-    select:hover {
-      background-color: #3a1361;
+    .group select:hover, .group select:focus {
+      background: rgba(161, 78, 255, 0.2);
+      outline: none;
+    }
+    .smallBtn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      transition: background-color 0.2s ease;
+    }
+    .smallBtn:hover:not(:disabled) {
+      background: rgba(255,255,255,0.03);
+    }
+    .smallBtn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
     }
 
     #closeBtn {
@@ -228,9 +263,18 @@
       <button class="serverBtn" id="serverVidplay">VidPlay</button>
     </div>
 
-    <div id="selectors">
-      <select id="seasonSelect"></select>
-      <select id="episodeSelect"></select>
+    <!-- updated layout -->
+    <div id="controlsCompact">
+      <div class="group seasonGroup">
+        <button class="smallBtn" id="prevSeason">‹</button>
+        <select id="seasonSelect"></select>
+        <button class="smallBtn" id="nextSeason">›</button>
+      </div>
+      <div class="group episodeGroup">
+        <button class="smallBtn" id="prevEpisode">‹</button>
+        <select id="episodeSelect"></select>
+        <button class="smallBtn" id="nextEpisode">›</button>
+      </div>
     </div>
   </div>
 </main>
@@ -259,6 +303,10 @@
   const navbarContainer = document.getElementById('navbarContainer');
   const seasonSelect = document.getElementById('seasonSelect');
   const episodeSelect = document.getElementById('episodeSelect');
+  const prevSeasonBtn = document.getElementById('prevSeason');
+  const nextSeasonBtn = document.getElementById('nextSeason');
+  const prevEpisodeBtn = document.getElementById('prevEpisode');
+  const nextEpisodeBtn = document.getElementById('nextEpisode');
 
   const servers = {
     vidsrc: document.getElementById('serverVidsrc'),
@@ -268,8 +316,15 @@
   let currentSeason = 1;
   let currentEpisode = 1;
   let currentServer = 'vidsrc';
+  let totalSeasons = 1;
+  let episodesPerSeason = {};
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  let seasonCooldownActive = false;
+  let episodeCooldownActive = false;
+  let seasonCooldownTimer = null;
+  let episodeCooldownTimer = null;
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
@@ -347,8 +402,97 @@
     }
   }
 
+  function updateButtonsState() {
+    // Season buttons disabled if cooldown active or at limits
+    prevSeasonBtn.disabled = seasonCooldownActive || currentSeason <= 1;
+    nextSeasonBtn.disabled = seasonCooldownActive || currentSeason >= totalSeasons;
+
+    // Episode buttons disabled if cooldown active or at limits
+    const maxEpisodes = episodesPerSeason[currentSeason] || 1;
+    prevEpisodeBtn.disabled = episodeCooldownActive || currentEpisode <= 1;
+    nextEpisodeBtn.disabled = episodeCooldownActive || currentEpisode >= maxEpisodes;
+  }
+
+  function startSeasonCooldown() {
+    seasonCooldownActive = true;
+    updateButtonsState();
+    if (seasonCooldownTimer) clearTimeout(seasonCooldownTimer);
+    seasonCooldownTimer = setTimeout(() => {
+      seasonCooldownActive = false;
+      updateButtonsState();
+      seasonCooldownTimer = null;
+    }, 1000);
+  }
+
+  function startEpisodeCooldown() {
+    episodeCooldownActive = true;
+    updateButtonsState();
+    if (episodeCooldownTimer) clearTimeout(episodeCooldownTimer);
+    episodeCooldownTimer = setTimeout(() => {
+      episodeCooldownActive = false;
+      updateButtonsState();
+      episodeCooldownTimer = null;
+    }, 1000);
+  }
+
+  prevSeasonBtn.onclick = () => {
+    if (prevSeasonBtn.disabled) return;
+    if (currentSeason > 1) {
+      currentSeason--;
+      currentEpisode = 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      startSeasonCooldown();
+    }
+  };
+
+  nextSeasonBtn.onclick = () => {
+    if (nextSeasonBtn.disabled) return;
+    if (currentSeason < totalSeasons) {
+      currentSeason++;
+      currentEpisode = 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      startSeasonCooldown();
+    }
+  };
+
+  prevEpisodeBtn.onclick = () => {
+    if (prevEpisodeBtn.disabled) return;
+    if (currentEpisode > 1) {
+      currentEpisode--;
+      episodeSelect.value = currentEpisode;
+      updateIframe();
+      startEpisodeCooldown();
+    } else if (currentSeason > 1) {
+      currentSeason--;
+      currentEpisode = episodesPerSeason[currentSeason] || 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      startSeasonCooldown();
+    }
+  };
+
+  nextEpisodeBtn.onclick = () => {
+    if (nextEpisodeBtn.disabled) return;
+    const maxEpisodes = episodesPerSeason[currentSeason] || 1;
+    if (currentEpisode < maxEpisodes) {
+      currentEpisode++;
+      episodeSelect.value = currentEpisode;
+      updateIframe();
+      startEpisodeCooldown();
+    } else if (currentSeason < totalSeasons) {
+      currentSeason++;
+      currentEpisode = 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      startSeasonCooldown();
+    }
+  };
+
   seasonSelect.addEventListener('change', () => {
     currentSeason = parseInt(seasonSelect.value);
+    currentEpisode = 1;
     loadEpisodes(currentSeason);
   });
 
@@ -358,15 +502,11 @@
   });
 
   async function loadSeasons() {
-    const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
+    const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
     const data = await res.json();
     imdbId = data.external_ids?.imdb_id;
 
-    if (!imdbId) {
-      const altRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`);
-      const altData = await altRes.json();
-      imdbId = altData.imdb_id;
-    }
+    totalSeasons = data.seasons.filter(s => s.season_number !== 0).length;
 
     seasonSelect.innerHTML = '';
     data.seasons.forEach(season => {
@@ -385,6 +525,8 @@
     const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
     const data = await res.json();
 
+    episodesPerSeason[seasonNumber] = data.episodes.length;
+
     episodeSelect.innerHTML = '';
     data.episodes.forEach(ep => {
       const option = document.createElement('option');
@@ -394,11 +536,13 @@
     });
 
     episodeSelect.value = currentEpisode;
+    updateButtonsState();
     updateIframe();
   }
 
   loadProgress();
   loadSeasons();
+  updateButtonsState();
 </script>
 
 <!-- 🔒 Load Shared Ad Blocker -->
