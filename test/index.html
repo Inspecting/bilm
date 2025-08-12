@@ -397,17 +397,6 @@
     }
   }
 
-  // --- Added cooldown control ---
-  let changeTimeout = null;
-  function delayedChange(callback) {
-    if (changeTimeout) clearTimeout(changeTimeout);
-    changeTimeout = setTimeout(() => {
-      callback();
-      updateButtonsState();
-      updateIframe();
-    }, 1000);
-  }
-
   // --- Disable/enable buttons ---
   function updateButtonsState() {
     prevSeasonBtn.disabled = currentSeason <= 1;
@@ -416,73 +405,103 @@
     const maxEpisodes = episodesPerSeason[currentSeason] || 1;
     prevEpisodeBtn.disabled = currentEpisode <= 1;
     nextEpisodeBtn.disabled = currentEpisode >= maxEpisodes;
+
+    // Also disable selects if buttons disabled for cooldown (added below)
+    // But we won't disable selects here — only buttons, to keep selects accessible
   }
 
-  // Updated navigation logic with cooldown
+  // --- Disable all season/episode controls for cooldown ---
+  function setControlsDisabled(disabled) {
+    prevSeasonBtn.disabled = disabled || currentSeason <= 1;
+    nextSeasonBtn.disabled = disabled || currentSeason >= totalSeasons;
+    prevEpisodeBtn.disabled = disabled || currentEpisode <= 1;
+    nextEpisodeBtn.disabled = disabled || currentEpisode >= (episodesPerSeason[currentSeason] || 1);
+
+    seasonSelect.disabled = disabled;
+    episodeSelect.disabled = disabled;
+  }
+
+  // Cooldown timer handle
+  let cooldownTimer = null;
+
+  // On change, apply instantly, then disable controls for 1 second
+  function startCooldown() {
+    setControlsDisabled(true);
+    if (cooldownTimer) clearTimeout(cooldownTimer);
+    cooldownTimer = setTimeout(() => {
+      setControlsDisabled(false);
+      updateButtonsState(); // reapply boundary disables
+      cooldownTimer = null;
+    }, 1000);
+  }
+
+  // Updated navigation logic, instant change + cooldown
   prevSeasonBtn.onclick = () => {
-    if (currentSeason > 1) {
-      delayedChange(() => {
-        currentSeason--;
-        currentEpisode = 1;
-        seasonSelect.value = currentSeason;
-        loadEpisodes(currentSeason);
-      });
+    if (currentSeason > 1 && !prevSeasonBtn.disabled) {
+      currentSeason--;
+      currentEpisode = 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      updateIframe();
+      startCooldown();
     }
   };
   nextSeasonBtn.onclick = () => {
-    if (currentSeason < totalSeasons) {
-      delayedChange(() => {
-        currentSeason++;
-        currentEpisode = 1;
-        seasonSelect.value = currentSeason;
-        loadEpisodes(currentSeason);
-      });
+    if (currentSeason < totalSeasons && !nextSeasonBtn.disabled) {
+      currentSeason++;
+      currentEpisode = 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      updateIframe();
+      startCooldown();
     }
   };
   prevEpisodeBtn.onclick = () => {
-    if (currentEpisode > 1) {
-      delayedChange(() => {
-        currentEpisode--;
-        episodeSelect.value = currentEpisode;
-      });
-    } else if (currentSeason > 1) {
-      delayedChange(() => {
-        currentSeason--;
-        currentEpisode = episodesPerSeason[currentSeason] || 1;
-        seasonSelect.value = currentSeason;
-        loadEpisodes(currentSeason);
-      });
+    if (currentEpisode > 1 && !prevEpisodeBtn.disabled) {
+      currentEpisode--;
+      episodeSelect.value = currentEpisode;
+      updateIframe();
+      startCooldown();
+    } else if (currentSeason > 1 && !prevEpisodeBtn.disabled) {
+      currentSeason--;
+      currentEpisode = episodesPerSeason[currentSeason] || 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      updateIframe();
+      startCooldown();
     }
   };
   nextEpisodeBtn.onclick = () => {
     const maxEpisodes = episodesPerSeason[currentSeason] || 1;
-    if (currentEpisode < maxEpisodes) {
-      delayedChange(() => {
-        currentEpisode++;
-        episodeSelect.value = currentEpisode;
-      });
-    } else if (currentSeason < totalSeasons) {
-      delayedChange(() => {
-        currentSeason++;
-        currentEpisode = 1;
-        seasonSelect.value = currentSeason;
-        loadEpisodes(currentSeason);
-      });
+    if (currentEpisode < maxEpisodes && !nextEpisodeBtn.disabled) {
+      currentEpisode++;
+      episodeSelect.value = currentEpisode;
+      updateIframe();
+      startCooldown();
+    } else if (currentSeason < totalSeasons && !nextEpisodeBtn.disabled) {
+      currentSeason++;
+      currentEpisode = 1;
+      seasonSelect.value = currentSeason;
+      loadEpisodes(currentSeason);
+      updateIframe();
+      startCooldown();
     }
   };
 
   seasonSelect.addEventListener('change', () => {
-    delayedChange(() => {
-      currentSeason = parseInt(seasonSelect.value);
-      currentEpisode = 1;
-      loadEpisodes(currentSeason);
-    });
+    if (seasonSelect.disabled) return; // Ignore if disabled during cooldown
+    currentSeason = parseInt(seasonSelect.value);
+    currentEpisode = 1;
+    loadEpisodes(currentSeason);
+    updateIframe();
+    startCooldown();
   });
 
   episodeSelect.addEventListener('change', () => {
-    delayedChange(() => {
-      currentEpisode = parseInt(episodeSelect.value);
-    });
+    if (episodeSelect.disabled) return; // Ignore if disabled during cooldown
+    currentEpisode = parseInt(episodeSelect.value);
+    updateIframe();
+    startCooldown();
   });
 
   async function loadSeasons() {
@@ -526,6 +545,8 @@
 
   loadProgress();
   loadSeasons();
+  // Initial enable/disable buttons setup
+  updateButtonsState();
 </script>
 
 <!-- 🔒 Load Shared Ad Blocker -->
