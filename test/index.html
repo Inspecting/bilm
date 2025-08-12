@@ -58,10 +58,11 @@
       width: 100%;
       border-radius: 12px;
       box-shadow: 0 0 20px #a14effcc;
-      overflow: hidden;
+      overflow: visible; /* must be visible so dropdown can escape */
       display: flex;
       flex-direction: column;
       background: black;
+      position: relative; /* parent for dropdown */
     }
 
     #playerContainer {
@@ -98,6 +99,8 @@
       justify-content: flex-end;
       gap: 12px;
       user-select: none;
+      position: relative;
+      z-index: 10;
     }
 
     /* Fullscreen button */
@@ -133,7 +136,7 @@
       justify-content: center;
       padding: 0;
       border-radius: 6px;
-      position: relative;
+      position: relative; /* IMPORTANT: relative to position dropdown */
       transition: background-color 0.3s ease;
       flex-shrink: 0;
     }
@@ -141,30 +144,38 @@
       background-color: #a855f7;
     }
 
-    /* Server dropdown menu */
+    /* Server dropdown positioned relative to serverBtn */
     #serverDropdown {
       position: absolute;
-      top: 44px;
-      right: 0;
-      background: rgba(26, 22, 40, 0.95);
-      border-radius: 10px;
-      box-shadow: 0 0 12px #a14effcc;
+      top: 100%; /* directly below the button */
+      left: 50%;  /* horizontally center */
+      transform: translateX(-50%);
+      background: rgba(26, 22, 40, 0.97);
+      border-radius: 12px;
+      box-shadow: 0 0 16px #a14effcc;
       padding: 8px 0;
-      width: 140px;
-      display: none;
+      width: 160px;
+      display: none; /* hidden initially */
       flex-direction: column;
-      z-index: 20;
+      z-index: 9999;
       user-select: auto;
+      white-space: nowrap;
+    }
+
+    /* Remove close button if you have it elsewhere */
+    /* If your HTML still has the close button element, remove it from HTML or hide with: */
+    #serverDropdownCloseBtn {
+      display: none !important;
     }
 
     .serverDropdownItem {
-      padding: 10px 16px;
+      padding: 10px 20px;
       color: #f0f0f0;
       cursor: pointer;
       font-weight: 600;
       font-size: 15px;
-      white-space: nowrap;
       transition: background-color 0.2s ease;
+      user-select: none;
     }
     .serverDropdownItem:hover {
       background-color: #a855f7;
@@ -196,7 +207,6 @@
       gap: 8px;
     }
 
-    /* Season and Episode selects, remove arrows with appearance:none */
     .group select {
       appearance: none;
       -webkit-appearance: none;
@@ -213,7 +223,6 @@
       position: relative;
       z-index: 1;
     }
-    /* Remove default dropdown arrow on select */
     .group select::-ms-expand {
       display: none;
     }
@@ -287,7 +296,6 @@
 
 <main>
   <div id="playerWrapper">
-    <!-- Combined container for player + bottom control bar -->
     <div id="playerWithControls">
       <div id="playerContainer">
         <iframe
@@ -301,7 +309,6 @@
         <div id="clickShield"></div>
       </div>
 
-      <!-- Bottom control bar connected visually to player -->
       <div id="playexBar">
         <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -310,6 +317,11 @@
             <line x1="6" y1="8" x2="6" y2="8"></line>
             <line x1="6" y1="17" x2="6" y2="17"></line>
           </svg>
+          <!-- moved dropdown inside button -->
+          <div id="serverDropdown" role="menu" aria-label="Server selection">
+            <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
+            <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
+          </div>
         </button>
         <button id="fullscreenBtn" title="Fullscreen">
           <svg
@@ -326,16 +338,10 @@
             <path d="M4 4h6M4 4v6M20 20h-6M20 20v-6M4 20l6-6M20 4l-6 6" />
           </svg>
         </button>
-
-        <!-- Server dropdown menu -->
-        <div id="serverDropdown" role="menu" aria-label="Server selection">
-          <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
-          <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
-        </div>
       </div>
     </div>
 
-    <!-- Season & episode controls separate below -->
+    <!-- Season & episode controls -->
     <div id="controlsCompact">
       <div class="group seasonGroup">
         <button class="smallBtn" id="prevSeason" aria-label="Previous Season">‹</button>
@@ -432,7 +438,9 @@
     }
   });
 
-  // Toggle server dropdown visibility
+  // --- SERVER DROPDOWN LOGIC ---
+
+  // Toggle dropdown visibility on server button click
   serverBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpen = serverDropdown.style.display === 'flex';
@@ -445,7 +453,7 @@
     }
   });
 
-  // Close server dropdown if clicking outside
+  // Close dropdown if clicking outside
   document.addEventListener('click', () => {
     serverDropdown.style.display = 'none';
     serverBtn.setAttribute('aria-expanded', 'false');
@@ -456,7 +464,6 @@
     item.addEventListener('click', () => {
       if (item.classList.contains('active')) return;
 
-      // Remove active class from previous
       serverItems.forEach(i => i.classList.remove('active'));
       item.classList.add('active');
 
@@ -467,6 +474,8 @@
       serverBtn.setAttribute('aria-expanded', 'false');
     });
   });
+
+  // --- END SERVER DROPDOWN LOGIC ---
 
   function saveProgress() {
     localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
@@ -482,195 +491,150 @@
         const parsed = JSON.parse(saved);
         currentSeason = parsed.season || 1;
         currentEpisode = parsed.episode || 1;
-      } catch (e) {}
+      } catch {
+        currentSeason = 1;
+        currentEpisode = 1;
+      }
     }
   }
 
   function updateIframe() {
-    if (!imdbId) return;
     saveProgress();
+    if (!imdbId) return;
     if (currentServer === 'vidsrc') {
-      iframe.src = `https://vidsrc.xyz/embed/tv/${imdbId}/${currentSeason}-${currentEpisode}`;
+      iframe.src = `https://vidsrc.me/embed/${imdbId}/${currentSeason}-${currentEpisode}`;
     } else if (currentServer === 'vidplay') {
       iframe.src = `https://vidplay.to/tv/${imdbId}/${currentSeason}/${currentEpisode}`;
     }
   }
 
-  function updateButtonsState() {
-    prevSeasonBtn.disabled = seasonCooldownActive || currentSeason <= 1;
-    nextSeasonBtn.disabled = seasonCooldownActive || currentSeason >= totalSeasons;
-
-    const maxEpisodes = episodesPerSeason[currentSeason] || 1;
-    prevEpisodeBtn.disabled = episodeCooldownActive || currentEpisode <= 1;
-    nextEpisodeBtn.disabled = episodeCooldownActive || currentEpisode >= maxEpisodes;
+  function populateSeasons(total) {
+    seasonSelect.innerHTML = '';
+    for (let i = 1; i <= total; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Season ${i}`;
+      seasonSelect.appendChild(opt);
+    }
   }
 
-  function startSeasonCooldown() {
+  function populateEpisodes(count) {
+    episodeSelect.innerHTML = '';
+    for (let i = 1; i <= count; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Episode ${i}`;
+      episodeSelect.appendChild(opt);
+    }
+  }
+
+  function updateControls() {
+    seasonSelect.value = currentSeason;
+    episodeSelect.value = currentEpisode;
+
+    prevSeasonBtn.disabled = currentSeason <= 1;
+    nextSeasonBtn.disabled = currentSeason >= totalSeasons;
+
+    prevEpisodeBtn.disabled = currentEpisode <= 1;
+    nextEpisodeBtn.disabled = currentEpisode >= episodesPerSeason[currentSeason];
+  }
+
+  seasonSelect.addEventListener('change', () => {
+    if (seasonCooldownActive) return;
+    currentSeason = parseInt(seasonSelect.value);
+    currentEpisode = 1;
+    updateIframe();
+    updateControls();
+
     seasonCooldownActive = true;
-    updateButtonsState();
-    if (seasonCooldownTimer) clearTimeout(seasonCooldownTimer);
+    clearTimeout(seasonCooldownTimer);
     seasonCooldownTimer = setTimeout(() => {
       seasonCooldownActive = false;
-      updateButtonsState();
-      seasonCooldownTimer = null;
-    }, 1000);
-  }
+    }, 250);
+  });
 
-  function startEpisodeCooldown() {
+  episodeSelect.addEventListener('change', () => {
+    if (episodeCooldownActive) return;
+    currentEpisode = parseInt(episodeSelect.value);
+    updateIframe();
+    updateControls();
+
     episodeCooldownActive = true;
-    updateButtonsState();
-    if (episodeCooldownTimer) clearTimeout(episodeCooldownTimer);
+    clearTimeout(episodeCooldownTimer);
     episodeCooldownTimer = setTimeout(() => {
       episodeCooldownActive = false;
-      updateButtonsState();
-      episodeCooldownTimer = null;
-    }, 1000);
-  }
+    }, 250);
+  });
 
-  prevSeasonBtn.onclick = () => {
-    if (prevSeasonBtn.disabled) return;
+  prevSeasonBtn.addEventListener('click', () => {
     if (currentSeason > 1) {
       currentSeason--;
       currentEpisode = 1;
-      seasonSelect.value = currentSeason;
-      loadEpisodes(currentSeason);
-      startSeasonCooldown();
+      updateIframe();
+      updateControls();
     }
-  };
+  });
 
-  nextSeasonBtn.onclick = () => {
-    if (nextSeasonBtn.disabled) return;
+  nextSeasonBtn.addEventListener('click', () => {
     if (currentSeason < totalSeasons) {
       currentSeason++;
       currentEpisode = 1;
-      seasonSelect.value = currentSeason;
-      loadEpisodes(currentSeason);
-      startSeasonCooldown();
-    }
-  };
-
-  seasonSelect.onchange = async () => {
-    const val = parseInt(seasonSelect.value);
-    if (val && val !== currentSeason) {
-      currentSeason = val;
-      currentEpisode = 1;
-      await loadEpisodes(currentSeason);
-      updateButtonsState();
       updateIframe();
+      updateControls();
     }
-  };
+  });
 
-  prevEpisodeBtn.onclick = () => {
-    if (prevEpisodeBtn.disabled) return;
+  prevEpisodeBtn.addEventListener('click', () => {
     if (currentEpisode > 1) {
       currentEpisode--;
-      episodeSelect.value = currentEpisode;
-      updateButtonsState();
       updateIframe();
-      startEpisodeCooldown();
+      updateControls();
     }
-  };
+  });
 
-  nextEpisodeBtn.onclick = () => {
-    if (nextEpisodeBtn.disabled) return;
-    const maxEpisodes = episodesPerSeason[currentSeason] || 1;
-    if (currentEpisode < maxEpisodes) {
+  nextEpisodeBtn.addEventListener('click', () => {
+    if (currentEpisode < episodesPerSeason[currentSeason]) {
       currentEpisode++;
-      episodeSelect.value = currentEpisode;
-      updateButtonsState();
       updateIframe();
-      startEpisodeCooldown();
+      updateControls();
     }
-  };
+  });
 
-  episodeSelect.onchange = () => {
-    const val = parseInt(episodeSelect.value);
-    if (val && val !== currentEpisode) {
-      currentEpisode = val;
-      updateButtonsState();
-      updateIframe();
+  async function fetchShowInfo() {
+    if (!tmdbId) return;
+    const resp = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US`);
+    if (!resp.ok) return;
+
+    const data = await resp.json();
+
+    // Save total seasons and episodes per season
+    totalSeasons = data.number_of_seasons || 1;
+    episodesPerSeason = {};
+    (data.seasons || []).forEach(s => {
+      episodesPerSeason[s.season_number] = s.episode_count;
+    });
+
+    populateSeasons(totalSeasons);
+    populateEpisodes(episodesPerSeason[currentSeason] || 1);
+
+    currentSeason = Math.min(currentSeason, totalSeasons);
+    currentEpisode = Math.min(currentEpisode, episodesPerSeason[currentSeason] || 1);
+
+    updateControls();
+
+    imdbId = data.imdb_id ? data.imdb_id.replace(/^tt/, '') : null;
+    if (!imdbId) {
+      // fallback or alert?
+      console.warn('IMDB ID not found for this show.');
     }
-  };
 
-  async function loadSeasons() {
-    if (!tmdbId) {
-      console.error('No tmdbId provided in URL');
-      return;
-    }
-    try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
-      if (!res.ok) {
-        console.error('Failed to fetch seasons:', res.status, res.statusText);
-        return;
-      }
-      const data = await res.json();
-
-      imdbId = data.external_ids?.imdb_id || null;
-      if (!imdbId) {
-        console.error('IMDb ID not found for this TV show');
-        return;
-      }
-
-      totalSeasons = data.seasons.filter(s => s.season_number !== 0).length;
-
-      seasonSelect.innerHTML = '';
-      data.seasons.forEach(season => {
-        if (season.season_number === 0) return;
-        const option = document.createElement('option');
-        option.value = season.season_number;
-        option.textContent = `Season ${season.season_number}`;
-        seasonSelect.appendChild(option);
-      });
-
-      if (currentSeason > totalSeasons) currentSeason = totalSeasons;
-      seasonSelect.value = currentSeason;
-      await loadEpisodes(currentSeason);
-    } catch (err) {
-      console.error('Error loading seasons:', err);
-    }
+    updateIframe();
   }
 
-  async function loadEpisodes(seasonNumber) {
-    if (!tmdbId) {
-      console.error('No tmdbId for loadEpisodes');
-      return;
-    }
-    try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
-      if (!res.ok) {
-        console.error('Failed to fetch episodes:', res.status, res.statusText);
-        return;
-      }
-      const data = await res.json();
+  // Load saved progress and then fetch show info
+  loadProgress();
+  fetchShowInfo();
 
-      episodesPerSeason[seasonNumber] = data.episodes.length;
-
-      episodeSelect.innerHTML = '';
-      data.episodes.forEach(ep => {
-        const option = document.createElement('option');
-        option.value = ep.episode_number;
-        option.textContent = `Episode ${ep.episode_number}`;
-        episodeSelect.appendChild(option);
-      });
-
-      if (currentEpisode > episodesPerSeason[seasonNumber]) currentEpisode = episodesPerSeason[seasonNumber];
-      episodeSelect.value = currentEpisode;
-
-      updateButtonsState();
-      updateIframe();
-    } catch (err) {
-      console.error('Error loading episodes:', err);
-    }
-  }
-
-  (async () => {
-    if (!tmdbId) {
-      alert('No TV show ID provided in URL as ?id=');
-      return;
-    }
-    loadProgress();
-    await loadSeasons();
-  })();
 </script>
 
 </body>
