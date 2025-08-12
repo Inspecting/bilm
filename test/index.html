@@ -523,32 +523,52 @@
   }
 
   // Updated cooldowns to 500ms (0.5 seconds)
-  seasonSelect.addEventListener('change', () => {
-    if (seasonCooldownActive) return;
-    currentSeason = parseInt(seasonSelect.value);
-    currentEpisode = 1;
-    updateIframe();
+seasonSelect.addEventListener('change', () => {
+  if (seasonCooldownActive) return;
+
+  // Disable season buttons during cooldown
+  prevSeasonBtn.disabled = true;
+  nextSeasonBtn.disabled = true;
+  seasonSelect.disabled = true;
+
+  currentSeason = parseInt(seasonSelect.value);
+  currentEpisode = 1;
+  updateIframe();
+  updateControls();
+
+  seasonCooldownActive = true;
+  clearTimeout(seasonCooldownTimer);
+  seasonCooldownTimer = setTimeout(() => {
+    seasonCooldownActive = false;
+
+    // Re-enable season controls but respect actual bounds
     updateControls();
+    seasonSelect.disabled = false;
+  }, 500);
+});
 
-    seasonCooldownActive = true;
-    clearTimeout(seasonCooldownTimer);
-    seasonCooldownTimer = setTimeout(() => {
-      seasonCooldownActive = false;
-    }, 500);
-  });
+episodeSelect.addEventListener('change', () => {
+  if (episodeCooldownActive) return;
 
-  episodeSelect.addEventListener('change', () => {
-    if (episodeCooldownActive) return;
-    currentEpisode = parseInt(episodeSelect.value);
-    updateIframe();
+  // Disable episode buttons during cooldown
+  prevEpisodeBtn.disabled = true;
+  nextEpisodeBtn.disabled = true;
+  episodeSelect.disabled = true;
+
+  currentEpisode = parseInt(episodeSelect.value);
+  updateIframe();
+  updateControls();
+
+  episodeCooldownActive = true;
+  clearTimeout(episodeCooldownTimer);
+  episodeCooldownTimer = setTimeout(() => {
+    episodeCooldownActive = false;
+
+    // Re-enable episode controls but respect actual bounds
     updateControls();
-
-    episodeCooldownActive = true;
-    clearTimeout(episodeCooldownTimer);
-    episodeCooldownTimer = setTimeout(() => {
-      episodeCooldownActive = false;
-    }, 500);
-  });
+    episodeSelect.disabled = false;
+  }, 250);
+});
 
   prevSeasonBtn.addEventListener('click', () => {
     if (seasonCooldownActive) return;
