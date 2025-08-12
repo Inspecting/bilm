@@ -53,22 +53,29 @@
       gap: 12px;
     }
 
-    /* Player container with glow */
+    /* Combined container for player + controls with one glow */
+    #playerWithControls {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 0 20px #a14effcc;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: black;
+    }
+
     #playerContainer {
       width: 100%;
       aspect-ratio: 16 / 9;
-      background: black;
-      border-radius: 12px;
-      box-shadow: 0 0 15px #a14effaa;
-      overflow: hidden;
       position: relative;
+      background: black;
     }
 
     iframe {
       width: 100%;
       height: 100%;
       border: none;
-      border-radius: 12px;
+      display: block;
     }
 
     #clickShield {
@@ -82,18 +89,14 @@
       background: transparent;
     }
 
-    /* New bottom bar (playex) below player with glow */
+    /* Bottom control bar visually connected to player (no separate glow) */
     #playexBar {
-      width: 100%;
       background: rgba(26, 22, 40, 0.9);
-      border-radius: 12px;
-      box-shadow: 0 0 15px #a14effaa;
       padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: flex-end;
       gap: 12px;
-      position: relative;
       user-select: none;
     }
 
@@ -284,52 +287,55 @@
 
 <main>
   <div id="playerWrapper">
-    <div id="playerContainer">
-      <iframe
-        id="videoPlayer"
-        src=""
-        allowfullscreen
-        allow="fullscreen; encrypted-media"
-        playsinline
-        scrolling="no"
-      ></iframe>
-      <div id="clickShield"></div>
-    </div>
+    <!-- Combined container for player + bottom control bar -->
+    <div id="playerWithControls">
+      <div id="playerContainer">
+        <iframe
+          id="videoPlayer"
+          src=""
+          allowfullscreen
+          allow="fullscreen; encrypted-media"
+          playsinline
+          scrolling="no"
+        ></iframe>
+        <div id="clickShield"></div>
+      </div>
 
-    <!-- New bottom bar playex with server icon and fullscreen at right -->
-    <div id="playexBar">
-      <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
-          <rect x="2" y="13" width="20" height="7" rx="2" ry="2"></rect>
-          <line x1="6" y1="8" x2="6" y2="8"></line>
-          <line x1="6" y1="17" x2="6" y2="17"></line>
-        </svg>
-      </button>
-      <button id="fullscreenBtn" title="Fullscreen">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="20"
-          height="20"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          viewBox="0 0 24 24"
-        >
-          <path d="M4 4h6M4 4v6M20 20h-6M20 20v-6M4 20l6-6M20 4l-6 6" />
-        </svg>
-      </button>
+      <!-- Bottom control bar connected visually to player -->
+      <div id="playexBar">
+        <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
+            <rect x="2" y="13" width="20" height="7" rx="2" ry="2"></rect>
+            <line x1="6" y1="8" x2="6" y2="8"></line>
+            <line x1="6" y1="17" x2="6" y2="17"></line>
+          </svg>
+        </button>
+        <button id="fullscreenBtn" title="Fullscreen">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            viewBox="0 0 24 24"
+          >
+            <path d="M4 4h6M4 4v6M20 20h-6M20 20v-6M4 20l6-6M20 4l-6 6" />
+          </svg>
+        </button>
 
-      <!-- Server dropdown menu -->
-      <div id="serverDropdown" role="menu" aria-label="Server selection">
-        <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
-        <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
+        <!-- Server dropdown menu -->
+        <div id="serverDropdown" role="menu" aria-label="Server selection">
+          <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
+          <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
+        </div>
       </div>
     </div>
 
-    <!-- updated season and episode controls below playex bar -->
+    <!-- Season & episode controls separate below -->
     <div id="controlsCompact">
       <div class="group seasonGroup">
         <button class="smallBtn" id="prevSeason" aria-label="Previous Season">‹</button>
@@ -478,6 +484,7 @@
     }
   }
 
+  // We update iframe only when imdbId and current info are ready
   function updateIframe() {
     if (!imdbId) return;
     saveProgress();
@@ -586,9 +593,15 @@
   });
 
   async function loadSeasons() {
+    if (!tmdbId) return;
     const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
     const data = await res.json();
-    imdbId = data.external_ids?.imdb_id;
+    imdbId = data.external_ids?.imdb_id || null;
+
+    if (!imdbId) {
+      console.error('IMDb ID not found for this TV show');
+      return;
+    }
 
     totalSeasons = data.seasons.filter(s => s.season_number !== 0).length;
 
@@ -601,11 +614,13 @@
       seasonSelect.appendChild(option);
     });
 
+    if (currentSeason > totalSeasons) currentSeason = totalSeasons;
     seasonSelect.value = currentSeason;
-    loadEpisodes(currentSeason);
+    await loadEpisodes(currentSeason);
   }
 
   async function loadEpisodes(seasonNumber) {
+    if (!tmdbId) return;
     const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
     const data = await res.json();
 
@@ -619,7 +634,9 @@
       episodeSelect.appendChild(option);
     });
 
+    if (currentEpisode > episodesPerSeason[seasonNumber]) currentEpisode = episodesPerSeason[seasonNumber];
     episodeSelect.value = currentEpisode;
+
     updateButtonsState();
     updateIframe();
   }
