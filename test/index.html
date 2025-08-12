@@ -225,7 +225,8 @@
       opacity: 0.3;
       cursor: not-allowed;
     }
-    #closeBtn {
+    
+      #closeBtn {
       display: none;
       position: fixed;
       top: 0;
@@ -243,6 +244,7 @@
       line-height: 48px;
       border-radius: 0;
     }
+
     .simulated-fullscreen {
       position: fixed !important;
       top: 0;
@@ -382,25 +384,23 @@
     } else {
       playerContainer.classList.add('simulated-fullscreen');
     }
-    if (closeBtn) closeBtn.style.display = 'block';
+    closeBtn.style.display = 'block';
     navbarContainer.classList.add('hide-navbar');
   };
 
-  if (closeBtn) {
-    closeBtn.onclick = () => {
-      if (isMobile) {
-        playerContainer.classList.remove('simulated-fullscreen');
-      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
-        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-      }
-      closeBtn.style.display = 'none';
-      navbarContainer.classList.remove('hide-navbar');
-    };
-  }
+  closeBtn.onclick = () => {
+    if (isMobile) {
+      playerContainer.classList.remove('simulated-fullscreen');
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+    }
+    closeBtn.style.display = 'none';
+    navbarContainer.classList.remove('hide-navbar');
+  };
 
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) {
-      if (closeBtn) closeBtn.style.display = 'none';
+      closeBtn.style.display = 'none';
       navbarContainer.classList.remove('hide-navbar');
     }
   });
