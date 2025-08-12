@@ -512,157 +512,166 @@
     }
   }
 
-  function updateControls() {
-    seasonSelect.value = currentSeason;
-    episodeSelect.value = currentEpisode;
+// Helper to disable or enable season controls
+function setSeasonControlsDisabled(disabled) {
+  prevSeasonBtn.disabled = disabled || currentSeason <= 1;
+  nextSeasonBtn.disabled = disabled || currentSeason >= totalSeasons;
+  seasonSelect.disabled = disabled;
+}
 
+// Helper to disable or enable episode controls
+function setEpisodeControlsDisabled(disabled) {
+  prevEpisodeBtn.disabled = disabled || currentEpisode <= 1;
+  nextEpisodeBtn.disabled = disabled || currentEpisode >= (episodesPerSeason[currentSeason] || 1);
+  episodeSelect.disabled = disabled;
+}
+
+function updateControls() {
+  // Update selects values
+  seasonSelect.value = currentSeason;
+  episodeSelect.value = currentEpisode;
+
+  // Disable buttons if at limits and not in cooldown
+  if (!seasonCooldownActive) {
     prevSeasonBtn.disabled = currentSeason <= 1;
     nextSeasonBtn.disabled = currentSeason >= totalSeasons;
-
-    prevEpisodeBtn.disabled = currentEpisode <= 1;
-    nextEpisodeBtn.disabled = currentEpisode >= (episodesPerSeason[currentSeason] || 1);
-
-    // Remove cooldown visual on controls if cooldown inactive
-    if (!seasonCooldownActive) {
-      prevSeasonBtn.classList.remove('cooldown-disabled');
-      nextSeasonBtn.classList.remove('cooldown-disabled');
-      seasonSelect.classList.remove('cooldown-disabled');
-    }
-    if (!episodeCooldownActive) {
-      prevEpisodeBtn.classList.remove('cooldown-disabled');
-      nextEpisodeBtn.classList.remove('cooldown-disabled');
-      episodeSelect.classList.remove('cooldown-disabled');
-    }
+    seasonSelect.disabled = false;
   }
 
-  // Season buttons
-  prevSeasonBtn.addEventListener('click', () => {
-    if (seasonCooldownActive) return;
-    if (currentSeason > 1) {
-      currentSeason--;
-      currentEpisode = 1;
-      updateIframe();
-      updateControls();
+  if (!episodeCooldownActive) {
+    prevEpisodeBtn.disabled = currentEpisode <= 1;
+    nextEpisodeBtn.disabled = currentEpisode >= (episodesPerSeason[currentSeason] || 1);
+    episodeSelect.disabled = false;
+  }
+}
 
-      // Start cooldown visual
-      seasonCooldownActive = true;
-      prevSeasonBtn.classList.add('cooldown-disabled');
-      nextSeasonBtn.classList.add('cooldown-disabled');
-      seasonSelect.classList.add('cooldown-disabled');
-
-      clearTimeout(seasonCooldownTimer);
-      seasonCooldownTimer = setTimeout(() => {
-        seasonCooldownActive = false;
-        updateControls();
-      }, 250);
-    }
-  });
-
-  nextSeasonBtn.addEventListener('click', () => {
-    if (seasonCooldownActive) return;
-    if (currentSeason < totalSeasons) {
-      currentSeason++;
-      currentEpisode = 1;
-      updateIframe();
-      updateControls();
-
-      // Start cooldown visual
-      seasonCooldownActive = true;
-      prevSeasonBtn.classList.add('cooldown-disabled');
-      nextSeasonBtn.classList.add('cooldown-disabled');
-      seasonSelect.classList.add('cooldown-disabled');
-
-      clearTimeout(seasonCooldownTimer);
-      seasonCooldownTimer = setTimeout(() => {
-        seasonCooldownActive = false;
-        updateControls();
-      }, 250);
-    }
-  });
-
-  seasonSelect.addEventListener('change', () => {
-    if (seasonCooldownActive) return;
-
-    currentSeason = parseInt(seasonSelect.value);
+// Season buttons
+prevSeasonBtn.addEventListener('click', () => {
+  if (seasonCooldownActive) return;
+  if (currentSeason > 1) {
+    currentSeason--;
     currentEpisode = 1;
     updateIframe();
-    updateControls();
-
-    // Start cooldown visual
     seasonCooldownActive = true;
-    prevSeasonBtn.classList.add('cooldown-disabled');
-    nextSeasonBtn.classList.add('cooldown-disabled');
-    seasonSelect.classList.add('cooldown-disabled');
+
+    // Disable all season controls
+    setSeasonControlsDisabled(true);
+    setEpisodeControlsDisabled(false);
+
+    updateControls();
 
     clearTimeout(seasonCooldownTimer);
     seasonCooldownTimer = setTimeout(() => {
       seasonCooldownActive = false;
+      setSeasonControlsDisabled(false);
       updateControls();
     }, 250);
-  });
+  }
+});
 
-  // Episode buttons
-  prevEpisodeBtn.addEventListener('click', () => {
-    if (episodeCooldownActive) return;
-    if (currentEpisode > 1) {
-      currentEpisode--;
-      updateIframe();
-      updateControls();
-
-      // Start cooldown visual
-      episodeCooldownActive = true;
-      prevEpisodeBtn.classList.add('cooldown-disabled');
-      nextEpisodeBtn.classList.add('cooldown-disabled');
-      episodeSelect.classList.add('cooldown-disabled');
-
-      clearTimeout(episodeCooldownTimer);
-      episodeCooldownTimer = setTimeout(() => {
-        episodeCooldownActive = false;
-        updateControls();
-      }, 250);
-    }
-  });
-
-  nextEpisodeBtn.addEventListener('click', () => {
-    if (episodeCooldownActive) return;
-    if (currentEpisode < (episodesPerSeason[currentSeason] || 1)) {
-      currentEpisode++;
-      updateIframe();
-      updateControls();
-
-      // Start cooldown visual
-      episodeCooldownActive = true;
-      prevEpisodeBtn.classList.add('cooldown-disabled');
-      nextEpisodeBtn.classList.add('cooldown-disabled');
-      episodeSelect.classList.add('cooldown-disabled');
-
-      clearTimeout(episodeCooldownTimer);
-      episodeCooldownTimer = setTimeout(() => {
-        episodeCooldownActive = false;
-        updateControls();
-      }, 250);
-    }
-  });
-
-  episodeSelect.addEventListener('change', () => {
-    if (episodeCooldownActive) return;
-
-    currentEpisode = parseInt(episodeSelect.value);
+nextSeasonBtn.addEventListener('click', () => {
+  if (seasonCooldownActive) return;
+  if (currentSeason < totalSeasons) {
+    currentSeason++;
+    currentEpisode = 1;
     updateIframe();
+    seasonCooldownActive = true;
+
+    setSeasonControlsDisabled(true);
+    setEpisodeControlsDisabled(false);
+
     updateControls();
 
-    // Start cooldown visual
+    clearTimeout(seasonCooldownTimer);
+    seasonCooldownTimer = setTimeout(() => {
+      seasonCooldownActive = false;
+      setSeasonControlsDisabled(false);
+      updateControls();
+    }, 250);
+  }
+});
+
+seasonSelect.addEventListener('change', () => {
+  if (seasonCooldownActive) return;
+  currentSeason = parseInt(seasonSelect.value);
+  currentEpisode = 1;
+  updateIframe();
+  seasonCooldownActive = true;
+
+  setSeasonControlsDisabled(true);
+  setEpisodeControlsDisabled(false);
+
+  updateControls();
+
+  clearTimeout(seasonCooldownTimer);
+  seasonCooldownTimer = setTimeout(() => {
+    seasonCooldownActive = false;
+    setSeasonControlsDisabled(false);
+    updateControls();
+  }, 250);
+});
+
+// Episode buttons
+prevEpisodeBtn.addEventListener('click', () => {
+  if (episodeCooldownActive) return;
+  if (currentEpisode > 1) {
+    currentEpisode--;
+    updateIframe();
     episodeCooldownActive = true;
-    prevEpisodeBtn.classList.add('cooldown-disabled');
-    nextEpisodeBtn.classList.add('cooldown-disabled');
-    episodeSelect.classList.add('cooldown-disabled');
+
+    setEpisodeControlsDisabled(true);
+    setSeasonControlsDisabled(false);
+
+    updateControls();
 
     clearTimeout(episodeCooldownTimer);
     episodeCooldownTimer = setTimeout(() => {
       episodeCooldownActive = false;
+      setEpisodeControlsDisabled(false);
       updateControls();
     }, 250);
-  });
+  }
+});
+
+nextEpisodeBtn.addEventListener('click', () => {
+  if (episodeCooldownActive) return;
+  if (currentEpisode < (episodesPerSeason[currentSeason] || 1)) {
+    currentEpisode++;
+    updateIframe();
+    episodeCooldownActive = true;
+
+    setEpisodeControlsDisabled(true);
+    setSeasonControlsDisabled(false);
+
+    updateControls();
+
+    clearTimeout(episodeCooldownTimer);
+    episodeCooldownTimer = setTimeout(() => {
+      episodeCooldownActive = false;
+      setEpisodeControlsDisabled(false);
+      updateControls();
+    }, 250);
+  }
+});
+
+episodeSelect.addEventListener('change', () => {
+  if (episodeCooldownActive) return;
+  currentEpisode = parseInt(episodeSelect.value);
+  updateIframe();
+  episodeCooldownActive = true;
+
+  setEpisodeControlsDisabled(true);
+  setSeasonControlsDisabled(false);
+
+  updateControls();
+
+  clearTimeout(episodeCooldownTimer);
+  episodeCooldownTimer = setTimeout(() => {
+    episodeCooldownActive = false;
+    setEpisodeControlsDisabled(false);
+    updateControls();
+  }, 250);
+});
 
   // Fetch TMDB data for season/episode info
   async function fetchTMDBData() {
