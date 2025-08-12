@@ -225,23 +225,29 @@
       opacity: 0.3;
       cursor: not-allowed;
     }
+    /* Added close button style */
     #closeBtn {
       display: none;
       position: fixed;
-      top: 0;
-      right: 0;
-      z-index: 100;
-      background: transparent;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.7);
       color: white;
       border: none;
-      width: 48px;
-      height: 48px;
-      font-size: 20px;
+      width: 40px;
+      height: 40px;
+      font-size: 28px;
       cursor: pointer;
       font-weight: 700;
       text-align: center;
-      line-height: 48px;
-      border-radius: 0;
+      line-height: 40px;
+      border-radius: 50%;
+      user-select: none;
+      transition: background-color 0.3s ease;
+    }
+    #closeBtn:hover {
+      background-color: #a855f7;
     }
     .simulated-fullscreen {
       position: fixed !important;
@@ -322,6 +328,9 @@
   </div>
 </main>
 
+<!-- Added close button here -->
+<button id="closeBtn" aria-label="Close fullscreen">×</button>
+
 <script>
   // Loads your navbar (ensure /bilm/shared/navbar.html and navbar.js exist on your server)
   fetch('/bilm/shared/navbar.html')
@@ -363,12 +372,11 @@
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+  // --- Adjusted cooldown timers to 500ms ---
   let seasonCooldownActive = false;
   let episodeCooldownActive = false;
   let seasonCooldownTimer = null;
   let episodeCooldownTimer = null;
-
-  let imdbId = null;
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
@@ -511,6 +519,7 @@
     nextEpisodeBtn.disabled = currentEpisode >= (episodesPerSeason[currentSeason] || 1);
   }
 
+  // Updated cooldowns to 500ms (0.5 seconds)
   seasonSelect.addEventListener('change', () => {
     if (seasonCooldownActive) return;
     currentSeason = parseInt(seasonSelect.value);
@@ -522,7 +531,7 @@
     clearTimeout(seasonCooldownTimer);
     seasonCooldownTimer = setTimeout(() => {
       seasonCooldownActive = false;
-    }, 250);
+    }, 500);
   });
 
   episodeSelect.addEventListener('change', () => {
@@ -535,10 +544,11 @@
     clearTimeout(episodeCooldownTimer);
     episodeCooldownTimer = setTimeout(() => {
       episodeCooldownActive = false;
-    }, 250);
+    }, 500);
   });
 
   prevSeasonBtn.addEventListener('click', () => {
+    if (seasonCooldownActive) return;
     if (currentSeason > 1) {
       currentSeason--;
       currentEpisode = 1;
@@ -546,9 +556,15 @@
       updateIframe();
       updateControls();
     }
+    seasonCooldownActive = true;
+    clearTimeout(seasonCooldownTimer);
+    seasonCooldownTimer = setTimeout(() => {
+      seasonCooldownActive = false;
+    }, 500);
   });
 
   nextSeasonBtn.addEventListener('click', () => {
+    if (seasonCooldownActive) return;
     if (currentSeason < totalSeasons) {
       currentSeason++;
       currentEpisode = 1;
@@ -556,22 +572,39 @@
       updateIframe();
       updateControls();
     }
+    seasonCooldownActive = true;
+    clearTimeout(seasonCooldownTimer);
+    seasonCooldownTimer = setTimeout(() => {
+      seasonCooldownActive = false;
+    }, 500);
   });
 
   prevEpisodeBtn.addEventListener('click', () => {
+    if (episodeCooldownActive) return;
     if (currentEpisode > 1) {
       currentEpisode--;
       updateIframe();
       updateControls();
     }
+    episodeCooldownActive = true;
+    clearTimeout(episodeCooldownTimer);
+    episodeCooldownTimer = setTimeout(() => {
+      episodeCooldownActive = false;
+    }, 500);
   });
 
   nextEpisodeBtn.addEventListener('click', () => {
+    if (episodeCooldownActive) return;
     if (currentEpisode < (episodesPerSeason[currentSeason] || 1)) {
       currentEpisode++;
       updateIframe();
       updateControls();
     }
+    episodeCooldownActive = true;
+    clearTimeout(episodeCooldownTimer);
+    episodeCooldownTimer = setTimeout(() => {
+      episodeCooldownActive = false;
+    }, 500);
   });
 
   // Fetch TMDB show data to get seasons and episodes, plus IMDb ID
