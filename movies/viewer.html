@@ -32,6 +32,7 @@
       flex-direction: column;
       height: 100vh;
     }
+
     main {
       flex: 1;
       padding: 20px;
@@ -41,6 +42,7 @@
       justify-content: center;
       align-items: flex-start;
     }
+
     #playerWrapper {
       display: flex;
       flex-direction: column;
@@ -51,6 +53,7 @@
       position: relative;
       gap: 12px;
     }
+
     #playerContainer {
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -61,6 +64,7 @@
       position: relative;
       transition: all 0.3s ease;
     }
+
     iframe {
       width: 100%;
       height: 100%;
@@ -70,43 +74,7 @@
       position: relative;
       z-index: 1;
     }
-    #fullscreenBtn {
-      margin-top: 12px;
-      background-color: #3a1361;
-      color: white;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background-color 0.3s ease;
-      max-width: 120px;
-      text-align: center;
-      user-select: none;
-      z-index: 20;
-      position: relative;
-    }
-    #fullscreenBtn:hover {
-      background-color: #a855f7;
-    }
-    #closeBtn {
-      display: none;
-      position: fixed;
-      top: 0;
-      right: 0;
-      z-index: 100;
-      background: transparent;
-      color: white;
-      border: none;
-      width: 48px;
-      height: 48px;
-      font-size: 20px;
-      cursor: pointer;
-      font-weight: 700;
-      text-align: center;
-      line-height: 48px;
-      border-radius: 0;
-    }
+
     #clickShield {
       position: absolute;
       top: 0;
@@ -118,7 +86,6 @@
       background: transparent;
     }
 
-    /* --- NEW player bar styling like TV viewer, no seasons/episodes --- */
     #playexBar {
       background: rgba(26, 22, 40, 0.9);
       padding: 8px 20px;
@@ -181,6 +148,58 @@
       background-color: #a14eff;
       cursor: default;
     }
+
+    #fullscreenBtn {
+      background-color: #3a1361;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background-color 0.3s ease;
+      max-width: 120px;
+      text-align: center;
+      user-select: none;
+      z-index: 20;
+      position: relative;
+    }
+    #fullscreenBtn:hover {
+      background-color: #a855f7;
+    }
+
+    #closeBtn {
+      display: none;
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 100;
+      background: transparent;
+      color: white;
+      border: none;
+      width: 48px;
+      height: 48px;
+      font-size: 20px;
+      cursor: pointer;
+      font-weight: 700;
+      text-align: center;
+      line-height: 48px;
+      border-radius: 0;
+    }
+
+    .simulated-fullscreen {
+      position: fixed !important;
+      top: 0;
+      left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99;
+      border-radius: 0 !important;
+    }
+
+    .hide-navbar {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
@@ -201,7 +220,6 @@
       <div id="clickShield"></div>
     </div>
 
-    <!-- NEW player bar without seasons/episodes -->
     <div id="playexBar">
       <button id="serverBtn" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" title="Select Server" aria-label="Select server">
         Server: <span id="currentServerName">VidSrc</span>
@@ -209,6 +227,7 @@
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </button>
+
       <div id="serverDropdown" role="menu" aria-label="Server selection">
         <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
         <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
@@ -219,11 +238,9 @@
       </button>
     </div>
 
-    <!-- Removed old #serverList from original -->
+    <button id="closeBtn" title="Close Fullscreen" aria-label="Close fullscreen">X</button>
   </div>
 </main>
-
-<button id="closeBtn">X</button>
 
 <script>
   const params = new URLSearchParams(window.location.search);
