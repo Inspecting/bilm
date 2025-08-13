@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bilm 💜 - Movie Viewer</title>
 
+  <!-- PWA + iOS fullscreen support -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -16,13 +17,11 @@
 
   <style>
     * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+      margin: 0; padding: 0; box-sizing: border-box;
     }
     html, body {
       height: 100%;
-      font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Poppins', sans-serif;
       background-color: #121212;
       color: #f0f0f0;
       overflow-x: hidden;
@@ -32,88 +31,98 @@
       flex-direction: column;
       height: 100vh;
     }
-
     main {
       flex: 1;
       padding: 20px;
-      overflow-y: auto;
-      position: relative;
       display: flex;
       justify-content: center;
       align-items: flex-start;
+      position: relative;
     }
-
     #playerWrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
-      flex-shrink: 0;
       width: 800px;
       max-width: 95vw;
       position: relative;
       gap: 12px;
     }
-
+    #playerWithControls {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 0 20px #a14effcc;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      background: black;
+      position: relative;
+    }
     #playerContainer {
       width: 100%;
       aspect-ratio: 16 / 9;
-      background-color: black;
-      border-radius: 12px;
-      box-shadow: 0 0 15px #a14effaa;
-      overflow: hidden;
       position: relative;
-      transition: all 0.3s ease;
+      background: black;
     }
-
     iframe {
       width: 100%;
       height: 100%;
       border: none;
-      border-radius: 12px;
       display: block;
-      position: relative;
-      z-index: 1;
+      border-radius: 12px;
     }
-
     #clickShield {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       z-index: 5;
       pointer-events: none;
       background: transparent;
     }
-
     #playexBar {
       background: rgba(26, 22, 40, 0.9);
-      padding: 8px 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 15px #a14effaa;
-      width: 100%;
+      padding: 10px 20px;
       display: flex;
-      justify-content: flex-end;
       align-items: center;
+      justify-content: flex-end;
       gap: 12px;
       user-select: none;
       position: relative;
       z-index: 10;
+    }
+    #fullscreenBtn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #f0f0f0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: 6px;
+      transition: background-color 0.3s ease;
+      flex-shrink: 0;
+    }
+    #fullscreenBtn:hover {
+      background-color: #a855f7;
     }
     #serverBtn {
       background: transparent;
       border: none;
       cursor: pointer;
       color: #f0f0f0;
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 15px;
+      width: 36px;
+      height: 36px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      user-select: none;
+      justify-content: center;
+      padding: 0;
+      border-radius: 6px;
       position: relative;
+      transition: background-color 0.3s ease;
+      flex-shrink: 0;
     }
     #serverBtn:hover {
       background-color: #a855f7;
@@ -121,25 +130,30 @@
     #serverDropdown {
       position: absolute;
       top: 100%;
-      right: 0;
+      left: 50%;
+      transform: translateX(-50%);
       background: rgba(26, 22, 40, 0.97);
       border-radius: 12px;
-      box-shadow: 0 0 15px #a14effaa;
+      box-shadow: 0 0 16px #a14effcc;
+      padding: 8px 0;
       width: 160px;
       display: none;
       flex-direction: column;
       z-index: 9999;
       user-select: auto;
       white-space: nowrap;
-      margin-top: 6px;
+    }
+    #serverDropdownCloseBtn {
+      display: none !important;
     }
     .serverDropdownItem {
-      padding: 10px 16px;
+      padding: 10px 20px;
       color: #f0f0f0;
       cursor: pointer;
       font-weight: 600;
       font-size: 15px;
-      transition: background-color 0.3s ease;
+      transition: background-color 0.2s ease;
+      user-select: none;
     }
     .serverDropdownItem:hover {
       background-color: #a855f7;
@@ -148,26 +162,6 @@
       background-color: #a14eff;
       cursor: default;
     }
-
-    #fullscreenBtn {
-      background-color: #3a1361;
-      color: white;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background-color 0.3s ease;
-      max-width: 120px;
-      text-align: center;
-      user-select: none;
-      z-index: 20;
-      position: relative;
-    }
-    #fullscreenBtn:hover {
-      background-color: #a855f7;
-    }
-
     #closeBtn {
       display: none;
       position: fixed;
@@ -186,7 +180,6 @@
       line-height: 48px;
       border-radius: 0;
     }
-
     .simulated-fullscreen {
       position: fixed !important;
       top: 0;
@@ -196,7 +189,6 @@
       z-index: 99;
       border-radius: 0 !important;
     }
-
     .hide-navbar {
       display: none !important;
     }
@@ -208,57 +200,99 @@
 
 <main>
   <div id="playerWrapper">
-    <div id="playerContainer">
-      <iframe
-        id="videoPlayer"
-        src=""
-        allowfullscreen
-        allow="fullscreen; encrypted-media"
-        playsinline
-        scrolling="no"
-      ></iframe>
-      <div id="clickShield"></div>
-    </div>
-
-    <div id="playexBar">
-      <button id="serverBtn" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" title="Select Server" aria-label="Select server">
-        Server: <span id="currentServerName">VidSrc</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" style="margin-left:4px;">
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-      </button>
-
-      <div id="serverDropdown" role="menu" aria-label="Server selection">
-        <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
-        <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
+    <div id="playerWithControls">
+      <div id="playerContainer">
+        <iframe
+          id="videoPlayer"
+          src=""
+          allowfullscreen
+          allow="fullscreen; encrypted-media"
+          playsinline
+          scrolling="no"
+        ></iframe>
+        <div id="clickShield"></div>
       </div>
 
-      <button id="fullscreenBtn" title="Fullscreen" aria-label="Fullscreen">
-        Fullscreen
-      </button>
+      <div id="playexBar">
+        <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
+            <rect x="2" y="13" width="20" height="7" rx="2" ry="2"></rect>
+            <line x1="6" y1="8" x2="6" y2="8"></line>
+            <line x1="6" y1="17" x2="6" y2="17"></line>
+          </svg>
+          <div id="serverDropdown" role="menu" aria-label="Server selection">
+            <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
+            <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
+          </div>
+        </button>
+        <button id="fullscreenBtn" title="Fullscreen" aria-label="Fullscreen">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            viewBox="0 0 24 24"
+          >
+            <path d="M4 4h6M4 4v6M20 20h-6M20 20v-6M4 20l6-6M20 4l-6 6" />
+          </svg>
+        </button>
+      </div>
     </div>
-
-    <button id="closeBtn" title="Close Fullscreen" aria-label="Close fullscreen">X</button>
   </div>
 </main>
 
 <script>
+  // Load navbar HTML and scripts
+  fetch('/bilm/shared/navbar.html')
+    .then(res => res.text())
+    .then(html => {
+      document.getElementById('navbarContainer').innerHTML = html;
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = '/bilm/shared/navbar.css';
+      document.head.appendChild(css);
+      const script = document.createElement('script');
+      script.src = '/bilm/shared/navbar.js';
+      document.body.appendChild(script);
+    });
+
   const params = new URLSearchParams(window.location.search);
-  const movieId = params.get('id');
+  const contentId = params.get('id'); // movie or TV id
 
   const iframe = document.getElementById('videoPlayer');
   const fullscreenBtn = document.getElementById('fullscreenBtn');
-  const closeBtn = document.getElementById('closeBtn');
   const playerContainer = document.getElementById('playerContainer');
   const navbarContainer = document.getElementById('navbarContainer');
+
   const serverBtn = document.getElementById('serverBtn');
   const serverDropdown = document.getElementById('serverDropdown');
-  const currentServerName = document.getElementById('currentServerName');
   const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
+
+  let currentServer = 'vidsrc';
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  // Server dropdown toggle
+  function updateIframe() {
+    if (!contentId) {
+      console.warn('No id parameter provided.');
+      iframe.src = '';
+      return;
+    }
+    let url = '';
+    if (currentServer === 'vidsrc') {
+      // vidsrc supports movie and tv embeds using id only
+      url = `https://vidsrc.me/embed/${contentId}`;
+    } else if (currentServer === 'vidplay') {
+      url = `https://vidplay.to/movie/${contentId}`;
+    }
+    iframe.src = url;
+  }
+
   serverBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpen = serverDropdown.style.display === 'flex';
@@ -271,51 +305,22 @@
     }
   });
 
-  // Close dropdown on outside click
   document.addEventListener('click', () => {
     serverDropdown.style.display = 'none';
     serverBtn.setAttribute('aria-expanded', 'false');
   });
 
-  // Server selection
   serverItems.forEach(item => {
     item.addEventListener('click', () => {
       if (item.classList.contains('active')) return;
-
       serverItems.forEach(i => i.classList.remove('active'));
       item.classList.add('active');
-
-      const server = item.getAttribute('data-server');
-      currentServerName.textContent = item.textContent;
-      loadServer(server);
-
+      currentServer = item.getAttribute('data-server');
+      updateIframe();
       serverDropdown.style.display = 'none';
       serverBtn.setAttribute('aria-expanded', 'false');
     });
   });
-
-  function loadServer(server) {
-    if (!movieId) {
-      console.error('No movie ID provided.');
-      iframe.src = '';
-      return;
-    }
-
-    let url = '';
-    switch (server) {
-      case 'vidsrc':
-        url = `https://vidsrc.xyz/embed/movie/${movieId}`;
-        break;
-      case 'vidplay':
-        url = `https://vidplay.to/movie/${movieId}`;
-        break;
-      default:
-        url = '';
-    }
-    iframe.src = url;
-  }
-
-  loadServer('vidsrc');
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
@@ -329,43 +334,23 @@
     } else {
       playerContainer.classList.add('simulated-fullscreen');
     }
-    closeBtn.style.display = 'block';
-    navbarContainer.classList.add('hide-navbar');
-  };
-
-  closeBtn.onclick = () => {
-    if (isMobile) {
-      playerContainer.classList.remove('simulated-fullscreen');
-    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
-      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+    if (document.getElementById('closeBtn')) {
+      document.getElementById('closeBtn').style.display = 'block';
     }
-    closeBtn.style.display = 'none';
-    navbarContainer.classList.remove('hide-navbar');
+    navbarContainer.classList.add('hide-navbar');
   };
 
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) {
-      closeBtn.style.display = 'none';
+      if (document.getElementById('closeBtn')) {
+        document.getElementById('closeBtn').style.display = 'none';
+      }
       navbarContainer.classList.remove('hide-navbar');
     }
   });
-</script>
 
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    fetch('/bilm/shared/navbar.html')
-      .then(res => res.text())
-      .then(html => {
-        document.getElementById('navbarContainer').innerHTML = html;
-        const css = document.createElement('link');
-        css.rel = 'stylesheet';
-        css.href = '/bilm/shared/navbar.css';
-        document.head.appendChild(css);
-        const script = document.createElement('script');
-        script.src = '/bilm/shared/navbar.js';
-        document.body.appendChild(script);
-      });
-  });
+  // Initial load
+  updateIframe();
 </script>
 
 <script src="/bilm/shared/adblock/adblock.js"></script>
