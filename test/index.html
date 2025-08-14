@@ -6,7 +6,7 @@
   <title>Bilm 💜 - Tv Viewer</title>
 
   <!-- PWA + iOS fullscreen support -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
+   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0a0a0a" />
@@ -16,37 +16,264 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
 
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; font-family: 'Poppins', sans-serif; background-color: #121212; color: #f0f0f0; }
-    body { display: flex; flex-direction: column; height: 100vh; }
-    main { flex: 1; padding: 20px; display: flex; justify-content: center; align-items: flex-start; position: relative; }
-    #playerWrapper { display: flex; flex-direction: column; align-items: center; width: 800px; max-width: 95vw; position: relative; gap: 12px; }
-    #playerWithControls { width: 100%; border-radius: 12px; box-shadow: 0 0 20px #a14effcc; overflow: visible; display: flex; flex-direction: column; background: black; position: relative; }
-    #playerContainer { width: 100%; aspect-ratio: 16 / 9; position: relative; background: black; border-radius: 12px; overflow: hidden; }
-    iframe { width: 100%; height: 100%; border: none; display: block; border-radius: 12px; }
-    #clickShield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; background: transparent; }
-    #playexBar { background: rgba(26, 22, 40, 0.9); padding: 10px 20px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; user-select: none; position: relative; z-index: 10; border-radius: 0 0 12px 12px; }
-    #fullscreenBtn, #heartBtn, #serverBtn { background: transparent; border: none; cursor: pointer; color: #f0f0f0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 6px; transition: background-color 0.3s ease; flex-shrink: 0; }
-    #fullscreenBtn:hover, #heartBtn:hover, #serverBtn:hover { background-color: #a855f7; }
-    #serverBtn { position: relative; }
-    #serverDropdown { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: rgba(26, 22, 40, 0.97); border-radius: 12px; box-shadow: 0 0 16px #a14effcc; padding: 8px 0; width: 160px; display: none; flex-direction: column; z-index: 9999; user-select: auto; white-space: nowrap; }
-    #serverDropdownCloseBtn { display: none !important; }
-    .serverDropdownItem { padding: 10px 20px; color: #f0f0f0; cursor: pointer; font-weight: 600; font-size: 15px; transition: background-color 0.2s ease; user-select: none; }
-    .serverDropdownItem:hover { background-color: #a855f7; }
-    .serverDropdownItem.active { background-color: #a14eff; cursor: default; }
-    #controlsCompact { margin-top: 12px; width: 100%; display: flex; justify-content: center; gap: 12px; align-items: center; background: rgba(26, 22, 40, 0.9); padding: 12px 30px; border-radius: 16px; box-shadow: 0 0 15px #a14eff88; min-height: 54px; flex-wrap: nowrap; }
-    .group { display: flex; align-items: center; gap: 8px; }
-    .group select { appearance: none; -webkit-appearance: none; -moz-appearance: none; background: transparent; border: none; color: #fff; padding: 6px 14px; font-weight: 700; border-radius: 8px; cursor: pointer; min-width: 100px; font-size: 15px; position: relative; z-index: 1; transition: background-color 0.3s ease; }
-    .group select:hover, .group select:focus { background: rgba(161, 78, 255, 0.2); outline: none; }
-    .smallBtn { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: #fff; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; user-select: none; transition: background-color 0.2s ease; transition-property: background-color, opacity, filter; }
-    .smallBtn:hover:not(:disabled) { background: rgba(255,255,255,0.03); }
-    .smallBtn:disabled { opacity: 0.3; cursor: not-allowed; }
-    #closeBtn { display: none; position: fixed; top: 0; right: 0; z-index: 100; background: transparent; color: white; border: none; width: 48px; height: 48px; font-size: 20px; cursor: pointer; font-weight: 700; text-align: center; line-height: 48px; border-radius: 0; }
-    .simulated-fullscreen { position: fixed !important; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 99; border-radius: 0 !important; }
-    .hide-navbar { display: none !important; }
-    .cooldown-disabled { opacity: 0.4 !important; filter: grayscale(70%); cursor: not-allowed !important; pointer-events: auto !important; user-select: none; transition: opacity 0.3s ease, filter 0.3s ease; }
-    .cooldown-disabled:hover { background-color: transparent !important; }
-    .heart-active svg { fill: #a855f7; stroke: #a855f7; }
+    /* Your CSS here, unchanged */
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    main {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      position: relative;
+    }
+    #playerWrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 800px;
+      max-width: 95vw;
+      position: relative;
+      gap: 12px;
+    }
+    #playerWithControls {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 0 20px #a14effcc;
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      background: black;
+      position: relative;
+    }
+  #playerContainer {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  position: relative;
+  background: black;
+  border-radius: 12px;      /* Rounded corners */
+  overflow: hidden;         /* Clips iframe edges */
+}
+
+iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  border-radius: 12px;      /* Rounded corners (for safety) */
+}
+    #clickShield {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+      background: transparent;
+    }
+#playexBar {
+  background: rgba(26, 22, 40, 0.9);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  user-select: none;
+  position: relative;
+  z-index: 10;
+  border-radius: 0 0 12px 12px;  /* Rounded bottom corners */
+}
+    #fullscreenBtn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #f0f0f0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: 6px;
+      transition: background-color 0.3s ease;
+      flex-shrink: 0;
+    }
+    #fullscreenBtn:hover {
+      background-color: #a855f7;
+    }
+    #serverBtn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #f0f0f0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: 6px;
+      position: relative;
+      transition: background-color 0.3s ease;
+      flex-shrink: 0;
+    }
+    #serverBtn:hover {
+      background-color: #a855f7;
+    }
+    #serverDropdown {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(26, 22, 40, 0.97);
+      border-radius: 12px;
+      box-shadow: 0 0 16px #a14effcc;
+      padding: 8px 0;
+      width: 160px;
+      display: none;
+      flex-direction: column;
+      z-index: 9999;
+      user-select: auto;
+      white-space: nowrap;
+    }
+    #serverDropdownCloseBtn {
+      display: none !important;
+    }
+    .serverDropdownItem {
+      padding: 10px 20px;
+      color: #f0f0f0;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 15px;
+      transition: background-color 0.2s ease;
+      user-select: none;
+    }
+    .serverDropdownItem:hover {
+      background-color: #a855f7;
+    }
+    .serverDropdownItem.active {
+      background-color: #a14eff;
+      cursor: default;
+    }
+
+    #controlsCompact {
+      margin-top: 12px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      align-items: center;
+      background: rgba(26, 22, 40, 0.9);
+      padding: 12px 30px;
+      border-radius: 16px;
+      box-shadow: 0 0 15px #a14eff88;
+      min-height: 54px;
+      flex-wrap: nowrap;
+    }
+    .group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .group select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background: transparent;
+      border: none;
+      color: #fff;
+      padding: 6px 14px;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      min-width: 100px;
+      font-size: 15px;
+      position: relative;
+      z-index: 1;
+      transition: background-color 0.3s ease;
+    }
+    .group select:hover, .group select:focus {
+      background: rgba(161, 78, 255, 0.2);
+      outline: none;
+    }
+    .smallBtn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      transition: background-color 0.2s ease;
+      transition-property: background-color, opacity, filter;
+    }
+    .smallBtn:hover:not(:disabled) {
+      background: rgba(255,255,255,0.03);
+    }
+    .smallBtn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    #closeBtn {
+      display: none;
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 100;
+      background: transparent;
+      color: white;
+      border: none;
+      width: 48px;
+      height: 48px;
+      font-size: 20px;
+      cursor: pointer;
+      font-weight: 700;
+      text-align: center;
+      line-height: 48px;
+      border-radius: 0;
+    }
+    .simulated-fullscreen {
+      position: fixed !important;
+      top: 0;
+      left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99;
+      border-radius: 0 !important;
+    }
+    .hide-navbar {
+      display: none !important;
+    }
+
+    /* New cooldown-disabled class: visual greying out but still enabled */
+    .cooldown-disabled {
+      opacity: 0.4 !important;
+      filter: grayscale(70%);
+      cursor: not-allowed !important;
+      pointer-events: auto !important;
+      user-select: none;
+      transition: opacity 0.3s ease, filter 0.3s ease;
+    }
+    .cooldown-disabled:hover {
+      background-color: transparent !important;
+    }
   </style>
 </head>
 <body>
@@ -69,12 +296,10 @@
       </div>
 
       <div id="playexBar">
-        <button id="heartBtn" title="Favorite" aria-label="Favorite">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-            <path d="M12 21C12 21 4 13.5 4 8.5C4 5.5 6.5 3 9.5 3C11.4 3 13.1 4.2 14 5.7C14.9 4.2 16.6 3 18.5 3C21.5 3 24 5.5 24 8.5C24 13.5 16 21 16 21H12Z"/>
-          </svg>
-        </button>
-
+<!-- Add this button inside #playexBar or #controlsCompact where you want the favorite button -->
+<button id="favoriteBtn" title="Toggle Favorite" class="smallBtn" aria-label="Toggle Favorite">
+  💜
+</button>
         <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
@@ -87,9 +312,18 @@
             <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
           </div>
         </button>
-
         <button id="fullscreenBtn" title="Fullscreen">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            viewBox="0 0 24 24"
+          >
             <path d="M4 4h6M4 4v6M20 20h-6M20 20v-6M4 20l6-6M20 4l-6 6" />
           </svg>
         </button>
@@ -112,7 +346,7 @@
 </main>
 
 <script>
-  // Navbar load
+  // Loads your navbar (ensure /bilm/shared/navbar.html and navbar.js exist on your server)
   fetch('/bilm/shared/navbar.html')
     .then(res => res.text())
     .then(html => {
@@ -121,14 +355,15 @@
       script.src = '/bilm/shared/navbar.js';
       document.body.appendChild(script);
     });
+</script>
 
+<script>
   const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const params = new URLSearchParams(window.location.search);
   const tmdbId = params.get('id');
 
   const iframe = document.getElementById('videoPlayer');
   const fullscreenBtn = document.getElementById('fullscreenBtn');
-  const heartBtn = document.getElementById('heartBtn');
   const closeBtn = document.getElementById('closeBtn');
   const playerContainer = document.getElementById('playerContainer');
   const navbarContainer = document.getElementById('navbarContainer');
@@ -138,6 +373,7 @@
   const nextSeasonBtn = document.getElementById('nextSeason');
   const prevEpisodeBtn = document.getElementById('prevEpisode');
   const nextEpisodeBtn = document.getElementById('nextEpisode');
+
   const serverBtn = document.getElementById('serverBtn');
   const serverDropdown = document.getElementById('serverDropdown');
   const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
@@ -147,114 +383,402 @@
   let currentServer = 'vidsrc';
   let totalSeasons = 1;
   let episodesPerSeason = {};
+
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   let seasonCooldownActive = false;
   let episodeCooldownActive = false;
   let seasonCooldownTimer = null;
   let episodeCooldownTimer = null;
-  let imdbId = null;
 
-  // Favorite toggle
-  function loadFavorites() {
-    if (!tmdbId) return false;
-    return localStorage.getItem('bilm-favorites')?.split(',').includes(tmdbId) || false;
-  }
-  function saveFavorite(state) {
-    if (!tmdbId) return;
-    let favs = localStorage.getItem('bilm-favorites')?.split(',') || [];
-    if (state) {
-      if (!favs.includes(tmdbId)) favs.push(tmdbId);
-    } else {
-      favs = favs.filter(i => i !== tmdbId);
-    }
-    localStorage.setItem('bilm-favorites', favs.join(','));
-  }
-  function updateHeartUI() {
-    if(loadFavorites()) heartBtn.classList.add('heart-active');
-    else heartBtn.classList.remove('heart-active');
-  }
-  heartBtn.addEventListener('click', () => {
-    const isFav = loadFavorites();
-    saveFavorite(!isFav);
-    updateHeartUI();
-  });
-  updateHeartUI();
+  let imdbId = null;
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
-      playerContainer.requestFullscreen?.() || playerContainer.webkitRequestFullscreen?.() || playerContainer.msRequestFullscreen?.();
+      if (playerContainer.requestFullscreen) {
+        playerContainer.requestFullscreen();
+      } else if (playerContainer.webkitRequestFullscreen) {
+        playerContainer.webkitRequestFullscreen();
+      } else if (playerContainer.msRequestFullscreen) {
+        playerContainer.msRequestFullscreen();
+      }
     } else {
       playerContainer.classList.add('simulated-fullscreen');
     }
-    closeBtn.style.display = 'block';
+    if (closeBtn) closeBtn.style.display = 'block';
     navbarContainer.classList.add('hide-navbar');
   };
 
-  if (closeBtn) closeBtn.onclick = () => {
-    if (isMobile) playerContainer.classList.remove('simulated-fullscreen');
-    else document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-    closeBtn.style.display = 'none';
-    navbarContainer.classList.remove('hide-navbar');
-  };
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      if (isMobile) {
+        playerContainer.classList.remove('simulated-fullscreen');
+      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      }
+      closeBtn.style.display = 'none';
+      navbarContainer.classList.remove('hide-navbar');
+    };
+  }
 
   document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement) closeBtn.style.display = 'none', navbarContainer.classList.remove('hide-navbar');
+    if (!document.fullscreenElement) {
+      if (closeBtn) closeBtn.style.display = 'none';
+      navbarContainer.classList.remove('hide-navbar');
+    }
   });
 
-  // Server dropdown
-  serverBtn.addEventListener('click', e => {
+  // Server dropdown toggle
+  serverBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpen = serverDropdown.style.display === 'flex';
-    serverDropdown.style.display = isOpen ? 'none' : 'flex';
-    serverBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+    if (isOpen) {
+      serverDropdown.style.display = 'none';
+      serverBtn.setAttribute('aria-expanded', 'false');
+    } else {
+      serverDropdown.style.display = 'flex';
+      serverBtn.setAttribute('aria-expanded', 'true');
+    }
   });
-  document.addEventListener('click', () => { serverDropdown.style.display = 'none'; serverBtn.setAttribute('aria-expanded', 'false'); });
-  serverItems.forEach(item => item.addEventListener('click', () => {
-    if (item.classList.contains('active')) return;
-    serverItems.forEach(i => i.classList.remove('active'));
-    item.classList.add('active');
-    currentServer = item.getAttribute('data-server');
-    updateIframe();
+
+  // Close server dropdown on outside click
+  document.addEventListener('click', () => {
     serverDropdown.style.display = 'none';
     serverBtn.setAttribute('aria-expanded', 'false');
-  }));
+  });
 
-  function saveProgress() { if (!tmdbId) return; localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({ season: currentSeason, episode: currentEpisode })); }
-  function loadProgress() { if (!tmdbId) return; const saved = localStorage.getItem(`bilm-tv-progress-${tmdbId}`); if (saved) { try { const parsed = JSON.parse(saved); currentSeason = parsed.season || 1; currentEpisode = parsed.episode || 1; } catch { currentSeason = 1; currentEpisode = 1; } } }
+  // Server selection
+  serverItems.forEach(item => {
+    item.addEventListener('click', () => {
+      if (item.classList.contains('active')) return;
+
+      serverItems.forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+
+      currentServer = item.getAttribute('data-server');
+      updateIframe();
+
+      serverDropdown.style.display = 'none';
+      serverBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+// FAVORITE BUTTON FUNCTIONALITY
+const favoriteBtn = document.getElementById('favoriteBtn');
+
+function getFavorites() {
+  const stored = localStorage.getItem('bilm-tv-favorites');
+  try {
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFavorites(favs) {
+  localStorage.setItem('bilm-tv-favorites', JSON.stringify(favs));
+}
+
+function isFavorite(id) {
+  const favs = getFavorites();
+  return favs.includes(id);
+}
+
+function updateFavoriteButton() {
+  if (!tmdbId) return;
+  if (isFavorite(tmdbId)) {
+    favoriteBtn.textContent = '💖'; // filled heart
+    favoriteBtn.style.color = '#ff69b4';
+  } else {
+    favoriteBtn.textContent = '💜'; // empty heart
+    favoriteBtn.style.color = '#fff';
+  }
+}
+
+// Toggle favorite on click
+favoriteBtn.addEventListener('click', () => {
+  if (!tmdbId) return;
+
+  let favs = getFavorites();
+  if (isFavorite(tmdbId)) {
+    favs = favs.filter(f => f !== tmdbId);
+  } else {
+    favs.push(tmdbId);
+  }
+  saveFavorites(favs);
+  updateFavoriteButton();
+});
+
+// Update button state on page load
+updateFavoriteButton();
+
+
+  function saveProgress() {
+    if (!tmdbId) return;
+    localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
+      season: currentSeason,
+      episode: currentEpisode
+    }));
+  }
+
+  function loadProgress() {
+    if (!tmdbId) return;
+    const saved = localStorage.getItem(`bilm-tv-progress-${tmdbId}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        currentSeason = parsed.season || 1;
+        currentEpisode = parsed.episode || 1;
+      } catch {
+        currentSeason = 1;
+        currentEpisode = 1;
+      }
+    }
+  }
 
   function updateIframe() {
     saveProgress();
+
     const idToUse = imdbId || tmdbId;
-    if (!idToUse) { iframe.src = ''; return; }
-    if (currentServer === 'vidsrc') iframe.src = `https://vidsrc.me/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
-    else if (currentServer === 'vidplay') iframe.src = `https://vidplay.to/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
+    if (!idToUse) {
+      console.warn('No valid ID for embed URL.');
+      iframe.src = '';
+      return;
+    }
+
+    if (currentServer === 'vidsrc') {
+      iframe.src = `https://vidsrc.me/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
+    } else if (currentServer === 'vidplay') {
+      iframe.src = `https://vidplay.to/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
+    }
   }
 
-  function populateSeasons(total) { seasonSelect.innerHTML=''; for (let i=1;i<=total;i++){ const opt=document.createElement('option'); opt.value=i; opt.textContent=`Season ${i}`; seasonSelect.appendChild(opt); } }
-  function populateEpisodes(count) { episodeSelect.innerHTML=''; for (let i=1;i<=count;i++){ const opt=document.createElement('option'); opt.value=i; opt.textContent=`Episode ${i}`; episodeSelect.appendChild(opt); } }
-
-  function setSeasonControlsDisabled(disabled){ prevSeasonBtn.disabled = disabled||currentSeason<=1; nextSeasonBtn.disabled = disabled||currentSeason>=totalSeasons; seasonSelect.disabled=disabled; }
-  function setEpisodeControlsDisabled(disabled){ prevEpisodeBtn.disabled = disabled||currentEpisode<=1; nextEpisodeBtn.disabled = disabled||currentEpisode>=(episodesPerSeason[currentSeason]||1); episodeSelect.disabled=disabled; }
-
-  function updateControls(){
-    seasonSelect.value=currentSeason; episodeSelect.value=currentEpisode;
-    if(!seasonCooldownActive){ setSeasonControlsDisabled(false); }
-    if(!episodeCooldownActive){ setEpisodeControlsDisabled(false); }
+  function populateSeasons(total) {
+    seasonSelect.innerHTML = '';
+    for (let i = 1; i <= total; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Season ${i}`;
+      seasonSelect.appendChild(opt);
+    }
   }
 
-  prevSeasonBtn.addEventListener('click',()=>{ if(seasonCooldownActive||currentSeason<=1)return; currentSeason--; currentEpisode=1; updateIframe(); seasonCooldownActive=true; setSeasonControlsDisabled(true); updateControls(); clearTimeout(seasonCooldownTimer); seasonCooldownTimer=setTimeout(()=>{ seasonCooldownActive=false; setSeasonControlsDisabled(false); updateControls(); },500); });
-  nextSeasonBtn.addEventListener('click',()=>{ if(seasonCooldownActive||currentSeason>=totalSeasons)return; currentSeason++; currentEpisode=1; updateIframe(); seasonCooldownActive=true; setSeasonControlsDisabled(true); updateControls(); clearTimeout(seasonCooldownTimer); seasonCooldownTimer=setTimeout(()=>{ seasonCooldownActive=false; setSeasonControlsDisabled(false); updateControls(); },500); });
+  function populateEpisodes(count) {
+    episodeSelect.innerHTML = '';
+    for (let i = 1; i <= count; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Episode ${i}`;
+      episodeSelect.appendChild(opt);
+    }
+  }
 
-  prevEpisodeBtn.addEventListener('click',()=>{ if(episodeCooldownActive||currentEpisode<=1)return; currentEpisode--; updateIframe(); episodeCooldownActive=true; setEpisodeControlsDisabled(true); updateControls(); clearTimeout(episodeCooldownTimer); episodeCooldownTimer=setTimeout(()=>{ episodeCooldownActive=false; setEpisodeControlsDisabled(false); updateControls(); },500); });
-  nextEpisodeBtn.addEventListener('click',()=>{ if(episodeCooldownActive||currentEpisode>=(episodesPerSeason[currentSeason]||1))return; currentEpisode++; updateIframe(); episodeCooldownActive=true; setEpisodeControlsDisabled(true); updateControls(); clearTimeout(episodeCooldownTimer); episodeCooldownTimer=setTimeout(()=>{ episodeCooldownActive=false; setEpisodeControlsDisabled(false); updateControls(); },500); });
+// Helper to disable or enable season controls
+function setSeasonControlsDisabled(disabled) {
+  prevSeasonBtn.disabled = disabled || currentSeason <= 1;
+  nextSeasonBtn.disabled = disabled || currentSeason >= totalSeasons;
+  seasonSelect.disabled = disabled;
+}
 
-  seasonSelect.addEventListener('change',()=>{ currentSeason=parseInt(seasonSelect.value); currentEpisode=1; updateIframe(); updateControls(); });
-  episodeSelect.addEventListener('change',()=>{ currentEpisode=parseInt(episodeSelect.value); updateIframe(); updateControls(); });
+// Helper to disable or enable episode controls
+function setEpisodeControlsDisabled(disabled) {
+  prevEpisodeBtn.disabled = disabled || currentEpisode <= 1;
+  nextEpisodeBtn.disabled = disabled || currentEpisode >= (episodesPerSeason[currentSeason] || 1);
+  episodeSelect.disabled = disabled;
+}
 
-  // Initialize
-  loadProgress();
-  // Example initialization
-  totalSeasons=3; episodesPerSeason={1:10,2:8,3:12}; populateSeasons(totalSeasons); populateEpisodes(episodesPerSeason[currentSeason]); updateControls(); updateIframe();
+function updateControls() {
+  // Update selects values
+  seasonSelect.value = currentSeason;
+  episodeSelect.value = currentEpisode;
+
+  // Disable buttons if at limits and not in cooldown
+  if (!seasonCooldownActive) {
+    prevSeasonBtn.disabled = currentSeason <= 1;
+    nextSeasonBtn.disabled = currentSeason >= totalSeasons;
+    seasonSelect.disabled = false;
+  }
+
+  if (!episodeCooldownActive) {
+    prevEpisodeBtn.disabled = currentEpisode <= 1;
+    nextEpisodeBtn.disabled = currentEpisode >= (episodesPerSeason[currentSeason] || 1);
+    episodeSelect.disabled = false;
+  }
+}
+
+// Season buttons
+prevSeasonBtn.addEventListener('click', () => {
+  if (seasonCooldownActive) return;
+  if (currentSeason > 1) {
+    currentSeason--;
+    currentEpisode = 1;
+    updateIframe();
+    seasonCooldownActive = true;
+
+    // Disable all season controls
+    setSeasonControlsDisabled(true);
+    setEpisodeControlsDisabled(false);
+
+    updateControls();
+
+    clearTimeout(seasonCooldownTimer);
+    seasonCooldownTimer = setTimeout(() => {
+      seasonCooldownActive = false;
+      setSeasonControlsDisabled(false);
+      updateControls();
+    }, 500);
+  }
+});
+
+nextSeasonBtn.addEventListener('click', () => {
+  if (seasonCooldownActive) return;
+  if (currentSeason < totalSeasons) {
+    currentSeason++;
+    currentEpisode = 1;
+    updateIframe();
+    seasonCooldownActive = true;
+
+    setSeasonControlsDisabled(true);
+    setEpisodeControlsDisabled(false);
+
+    updateControls();
+
+    clearTimeout(seasonCooldownTimer);
+    seasonCooldownTimer = setTimeout(() => {
+      seasonCooldownActive = false;
+      setSeasonControlsDisabled(false);
+      updateControls();
+    }, 500);
+  }
+});
+
+seasonSelect.addEventListener('change', () => {
+  if (seasonCooldownActive) return;
+  currentSeason = parseInt(seasonSelect.value);
+  currentEpisode = 1;
+  updateIframe();
+  seasonCooldownActive = true;
+
+  setSeasonControlsDisabled(true);
+  setEpisodeControlsDisabled(false);
+
+  updateControls();
+
+  clearTimeout(seasonCooldownTimer);
+  seasonCooldownTimer = setTimeout(() => {
+    seasonCooldownActive = false;
+    setSeasonControlsDisabled(false);
+    updateControls();
+  }, 500);
+});
+
+// Episode buttons
+prevEpisodeBtn.addEventListener('click', () => {
+  if (episodeCooldownActive) return;
+  if (currentEpisode > 1) {
+    currentEpisode--;
+    updateIframe();
+    episodeCooldownActive = true;
+
+    setEpisodeControlsDisabled(true);
+    setSeasonControlsDisabled(false);
+
+    updateControls();
+
+    clearTimeout(episodeCooldownTimer);
+    episodeCooldownTimer = setTimeout(() => {
+      episodeCooldownActive = false;
+      setEpisodeControlsDisabled(false);
+      updateControls();
+    }, 500);
+  }
+});
+
+nextEpisodeBtn.addEventListener('click', () => {
+  if (episodeCooldownActive) return;
+  if (currentEpisode < (episodesPerSeason[currentSeason] || 1)) {
+    currentEpisode++;
+    updateIframe();
+    episodeCooldownActive = true;
+
+    setEpisodeControlsDisabled(true);
+    setSeasonControlsDisabled(false);
+
+    updateControls();
+
+    clearTimeout(episodeCooldownTimer);
+    episodeCooldownTimer = setTimeout(() => {
+      episodeCooldownActive = false;
+      setEpisodeControlsDisabled(false);
+      updateControls();
+    }, 500);
+  }
+});
+
+episodeSelect.addEventListener('change', () => {
+  if (episodeCooldownActive) return;
+  currentEpisode = parseInt(episodeSelect.value);
+  updateIframe();
+  episodeCooldownActive = true;
+
+  setEpisodeControlsDisabled(true);
+  setSeasonControlsDisabled(false);
+
+  updateControls();
+
+  clearTimeout(episodeCooldownTimer);
+  episodeCooldownTimer = setTimeout(() => {
+    episodeCooldownActive = false;
+    setEpisodeControlsDisabled(false);
+    updateControls();
+  }, 500);
+});
+
+  // Fetch TMDB data for season/episode info
+  async function fetchTMDBData() {
+    if (!tmdbId) return;
+
+    try {
+      // First get external IDs (like imdb_id)
+      const externalRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`);
+      const externalData = await externalRes.json();
+      imdbId = externalData.imdb_id || null;
+
+      // Get season info
+      const detailsRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
+      const details = await detailsRes.json();
+
+      totalSeasons = details.number_of_seasons || 1;
+
+      episodesPerSeason = {};
+      details.seasons.forEach(season => {
+        episodesPerSeason[season.season_number] = season.episode_count || 1;
+      });
+
+      populateSeasons(totalSeasons);
+      if (!episodesPerSeason[currentSeason]) {
+        episodesPerSeason[currentSeason] = 1;
+      }
+      populateEpisodes(episodesPerSeason[currentSeason]);
+
+      loadProgress();
+
+      updateControls();
+      updateIframe();
+    } catch (e) {
+      console.error('Error fetching TMDB data:', e);
+    }
+  }
+
+  seasonSelect.addEventListener('change', () => {
+    // Update episodes dropdown for new season
+    const seasonNum = parseInt(seasonSelect.value);
+    if (episodesPerSeason[seasonNum]) {
+      populateEpisodes(episodesPerSeason[seasonNum]);
+    }
+  });
+
+  fetchTMDBData();
 </script>
 
 </body>
