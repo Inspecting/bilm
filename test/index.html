@@ -168,7 +168,6 @@ iframe {
       background-color: #a14eff;
       cursor: default;
     }
-
     #controlsCompact {
       margin-top: 12px;
       width: 100%;
@@ -296,10 +295,6 @@ iframe {
       </div>
 
       <div id="playexBar">
-<!-- Add this button inside #playexBar or #controlsCompact where you want the favorite button -->
-<button id="favoriteBtn" title="Toggle Favorite" class="smallBtn" aria-label="Toggle Favorite">
-  💜
-</button>
         <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
@@ -462,56 +457,6 @@ iframe {
       serverBtn.setAttribute('aria-expanded', 'false');
     });
   });
-
-// FAVORITE BUTTON FUNCTIONALITY
-const favoriteBtn = document.getElementById('favoriteBtn');
-
-function getFavorites() {
-  const stored = localStorage.getItem('bilm-tv-favorites');
-  try {
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveFavorites(favs) {
-  localStorage.setItem('bilm-tv-favorites', JSON.stringify(favs));
-}
-
-function isFavorite(id) {
-  const favs = getFavorites();
-  return favs.includes(id);
-}
-
-function updateFavoriteButton() {
-  if (!tmdbId) return;
-  if (isFavorite(tmdbId)) {
-    favoriteBtn.textContent = '💖'; // filled heart
-    favoriteBtn.style.color = '#ff69b4';
-  } else {
-    favoriteBtn.textContent = '💜'; // empty heart
-    favoriteBtn.style.color = '#fff';
-  }
-}
-
-// Toggle favorite on click
-favoriteBtn.addEventListener('click', () => {
-  if (!tmdbId) return;
-
-  let favs = getFavorites();
-  if (isFavorite(tmdbId)) {
-    favs = favs.filter(f => f !== tmdbId);
-  } else {
-    favs.push(tmdbId);
-  }
-  saveFavorites(favs);
-  updateFavoriteButton();
-});
-
-// Update button state on page load
-updateFavoriteButton();
-
 
   function saveProgress() {
     if (!tmdbId) return;
