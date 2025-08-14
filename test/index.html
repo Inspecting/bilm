@@ -290,7 +290,6 @@ iframe {
           allow="fullscreen; encrypted-media"
           playsinline
           scrolling="no"
-          <button id="closeBtn" aria-label="Close Player">✕</button>
         ></iframe>
         <div id="clickShield"></div>
       </div>
@@ -339,6 +338,9 @@ iframe {
       </div>
     </div>
   </div>
+
+  <!-- Add the close button here, outside #playerWrapper but still inside <main> -->
+  <button id="closeBtn" aria-label="Close Player">✕</button>
 </main>
 
 <script>
