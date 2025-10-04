@@ -4,564 +4,231 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Roulette — Red / Black</title>
-<meta name="description" content="Simple Red/Black Roulette — single-file, mobile friendly, sounds, and background music. Ready for GitHub Pages." />
 <style>
   :root{
     --bg:#061226;
     --panel:#0e2433;
-    --muted:#98b0c4;
     --accent:#ffbf00;
-    --glass: rgba(255,255,255,0.03);
-    --win:#9ff3d4;
+    --muted:#8da6c1;
+    --red:#e85b5b;
+    --black:#111827;
   }
   *{box-sizing:border-box}
-  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:
-    radial-gradient(800px 400px at 10% 10%, rgba(255,255,255,0.02), transparent 6%),
-    linear-gradient(180deg,#04101b 0%, #071825 100%);color:#eaf6ff;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:980px;margin:18px auto;padding:18px;display:grid;grid-template-columns:1fr 360px;gap:18px}
-  header{grid-column:1/-1;display:flex;align-items:center;gap:12px}
-  h1{margin:0;color:var(--accent);font-size:20px}
-  .subtitle{color:var(--muted);font-size:13px}
-  .panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:14px;box-shadow:0 12px 30px rgba(0,0,0,0.6)}
-  .left{padding:12px}
-  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-  label{font-size:13px;color:var(--muted);display:block}
-  input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:120px}
-  button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#06121b;font-weight:700;cursor:pointer;box-shadow:0 8px 18px rgba(0,0,0,0.45);transition:transform .08s}
-  button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:inherit}
-  button:active{transform:scale(.98)}
-  .status{display:flex;gap:12px;align-items:center;margin-bottom:10px}
-  .balance{font-weight:800;font-size:18px;color:#dff8ff}
-  .bet-area{display:flex;gap:8px;align-items:center}
-  .message{padding:10px;border-radius:8px;background:var(--glass);color:inherit;font-weight:700;min-width:220px;text-align:center}
-  .wheel-wrap{display:flex;align-items:center;justify-content:center;padding:12px}
-  canvas#wheel{width:100%;height:100%;max-height:420px;border-radius:999px;background:radial-gradient(circle at 50% 50%, rgba(255,255,255,0.02), transparent 20%);display:block}
-  .wheel-controls{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px}
-  .small{font-size:13px;color:var(--muted)}
-  .right .panel{padding:12px}
-  .toggle{display:flex;align-items:center;gap:8px}
-  .switch{width:46px;height:24px;background:rgba(255,255,255,0.06);border-radius:999px;position:relative;cursor:pointer}
-  .knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:white;transition:left .15s}
-  .switch.on{background:linear-gradient(90deg,var(--accent),#3fe0c6)}
-  .switch.on .knob{left:25px}
-  .results{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px}
-  .result-badge{padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.03);font-weight:800}
-  .win-flash{animation:winPulse .9s ease-out 0s 1}
-  @keyframes winPulse{0%{box-shadow:0 0 0 rgba(255,191,0,0)}50%{box-shadow:0 0 38px rgba(160,255,200,0.25)}100%{box-shadow:0 0 0 rgba(255,191,0,0)}}
-  footer{grid-column:1/-1;text-align:center;color:var(--muted);font-size:12px;margin-top:10px}
-  @media(max-width:920px){
-    .wrap{grid-template-columns:1fr; padding:12px}
-    canvas#wheel{height:340px}
-    .controls{justify-content:flex-start}
+  body{
+    margin:0;
+    font-family:Inter,system-ui,Segoe UI,Roboto,Arial;
+    background:radial-gradient(800px 400px at 10% 10%, rgba(255,255,255,0.02), transparent 6%),linear-gradient(180deg,#04101b 0%, #071825 100%);
+    color:#eaf6ff;
+    -webkit-font-smoothing:antialiased;
   }
-  /* touch target adjustments */
-  button, .switch { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .wrap{max-width:950px;margin:auto;padding:18px;display:grid;grid-template-columns:1fr 350px;gap:16px}
+  header{grid-column:1/-1;margin-bottom:10px}
+  h1{margin:0;color:var(--accent);font-size:22px}
+  .panel{background:rgba(255,255,255,0.03);border-radius:12px;padding:14px;box-shadow:0 8px 28px rgba(0,0,0,0.5)}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+  input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);background:transparent;color:inherit;width:100px}
+  button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#04101b;font-weight:700;cursor:pointer;box-shadow:0 8px 16px rgba(0,0,0,0.4);transition:transform .08s}
+  button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.07);color:inherit}
+  button:active{transform:scale(.97)}
+  .status{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .balance{font-weight:800;font-size:18px}
+  .message{padding:10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-top:10px;text-align:center}
+  .wheel-wrap{display:flex;align-items:center;justify-content:center;padding:12px}
+  canvas#wheel{max-width:100%;border-radius:999px;display:block}
+  .bet-buttons{display:flex;gap:8px;margin-bottom:8px}
+  .bet-buttons button{flex:1}
+  .selected{outline:3px solid var(--accent)!important;box-shadow:0 0 18px rgba(255,191,0,0.5)!important;transform:scale(1.02)!important}
+  .small{font-size:13px;color:var(--muted)}
+  footer{grid-column:1/-1;text-align:center;margin-top:10px;color:var(--muted);font-size:12px}
+  @media(max-width:850px){.wrap{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1>Roulette — Red / Black</h1>
-        <div class="subtitle">No numbers — just pick Red or Black. Mobile-friendly. Save balance between sessions.</div>
-      </div>
-      <div style="margin-left:auto" class="small">Ready for GitHub Pages — save as <code>index.html</code></div>
-    </header>
+<div class="wrap">
+  <header>
+    <h1>Roulette — Red / Black</h1>
+  </header>
 
-    <section class="panel left">
-      <div class="controls">
-        <div>
-          <label>Starting Balance</label>
-          <input id="startBalance" type="number" min="1" value="1000" />
-        </div>
-        <div style="display:flex;align-items:center">
-          <button id="setBalance">Set</button>
-        </div>
-        <div style="margin-left:auto">
-          <div class="balance">Balance: $<span id="balanceDisplay">1000</span></div>
-        </div>
-      </div>
+  <section class="panel">
+    <div class="controls">
+      <label>Starting Balance</label>
+      <input id="startBalance" type="number" min="1" value="1000">
+      <button id="setBalance">Set</button>
+      <div style="margin-left:auto" class="balance">Balance: $<span id="balanceDisplay">1000</span></div>
+    </div>
 
-      <div class="status">
-        <div class="bet-area">
-          <label style="margin-right:6px">Bet</label>
-          <input id="betInput" type="number" min="1" value="10" />
-          <button id="halfBtn" class="ghost">Half Bet</button>
-          <button id="doubleBtn" class="ghost">Double Bet</button>
-        </div>
+    <div class="controls">
+      <label>Bet</label>
+      <input id="betInput" type="number" min="1" value="10">
+      <button id="halfBtn" class="ghost">Half</button>
+      <button id="doubleBtn" class="ghost">Double</button>
+      <div style="margin-left:auto" class="small">Music: <button id="musicBtn" class="ghost">On</button></div>
+    </div>
 
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <div class="small">Music</div>
-          <div id="musicSwitch" class="switch"><div class="knob"></div></div>
-        </div>
-      </div>
+    <div class="bet-buttons">
+      <button id="betRed" style="background:var(--red);color:#fff">Bet Red</button>
+      <button id="betBlack" style="background:var(--black);color:#fff">Bet Black</button>
+    </div>
 
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-        <button id="betRed" style="background:#e85b5b">Bet Red</button>
-        <button id="betBlack" style="background:#111827;color:#fff">Bet Black</button>
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <button id="spinBtn" class="ghost">Spin</button>
-          <button id="resetBtn" class="ghost">Reset</button>
-        </div>
-      </div>
+    <div class="controls">
+      <button id="spinBtn">Spin</button>
+      <button id="resetBtn" class="ghost">Reset</button>
+    </div>
 
-      <div class="message" id="message">Pick Red or Black, set your bet, then press Spin.</div>
-    </section>
+    <div class="message" id="message">Pick Red or Black, set your bet, then press Spin.</div>
+  </section>
 
-    <aside class="panel right">
-      <div class="wheel-wrap">
-        <canvas id="wheel" width="520" height="520" aria-label="Roulette wheel"></canvas>
-      </div>
+  <aside class="panel">
+    <div class="wheel-wrap">
+      <canvas id="wheel" width="400" height="400"></canvas>
+    </div>
+  </aside>
 
-      <div class="wheel-controls">
-        <button id="spinBtn2">Spin Wheel</button>
-        <button id="stopAuto" class="ghost">Stop Auto-Spin</button>
-      </div>
-
-      <div class="results">
-        <div class="small">Last outcome:</div>
-        <div id="lastResult" class="result-badge">—</div>
-      </div>
-
-      <div style="margin-top:12px" class="small">
-        Win pays 1:1 (if you bet $10 and win you gain $10 — net +$10). Loss loses your bet. Balance saved locally.
-      </div>
-    </aside>
-
-    <footer>
-      Built for demo/play only — no real money. To host: push this file to a GitHub repo and enable GitHub Pages.
-    </footer>
-  </div>
+  <footer>Roulette — Red or Black | Works on GitHub Pages</footer>
+</div>
 
 <script>
-/*
-  Roulette (Red / Black only)
-  - Single file
-  - Wheel with alternating red/black segments (no numbers)
-  - Bet Red or Black, Spin, wins pay 1:1
-  - Half / Double bet buttons
-  - LocalStorage persistence
-  - Sounds + background music (casino lounge jazz) embedded base64
-  - Music On by default in UI, but playback only starts after user interaction (browser policies)
-*/
-
 (() => {
-  // ---- DOM elements ----
+  const betInput = document.getElementById('betInput');
+  const balanceDisplay = document.getElementById('balanceDisplay');
   const startBalanceEl = document.getElementById('startBalance');
   const setBalanceBtn = document.getElementById('setBalance');
-  const balanceDisplay = document.getElementById('balanceDisplay');
-  const betInput = document.getElementById('betInput');
   const halfBtn = document.getElementById('halfBtn');
   const doubleBtn = document.getElementById('doubleBtn');
-  const betRedBtn = document.getElementById('betRed');
-  const betBlackBtn = document.getElementById('betBlack');
+  const betRed = document.getElementById('betRed');
+  const betBlack = document.getElementById('betBlack');
   const spinBtn = document.getElementById('spinBtn');
-  const spinBtn2 = document.getElementById('spinBtn2');
   const resetBtn = document.getElementById('resetBtn');
   const messageEl = document.getElementById('message');
-  const lastResultEl = document.getElementById('lastResult');
-  const wheelCanvas = document.getElementById('wheel');
-  const ctx = wheelCanvas.getContext('2d');
-  const musicSwitch = document.getElementById('musicSwitch');
-  const stopAutoBtn = document.getElementById('stopAuto');
+  const musicBtn = document.getElementById('musicBtn');
+  const canvas = document.getElementById('wheel');
+  const ctx = canvas.getContext('2d');
 
-  // ---- state ----
-  const STORAGE_KEY = 'rb_roulette_balance_v1';
-  const MUSIC_KEY = 'rb_roulette_music_v1';
-  let balance = Number(localStorage.getItem(STORAGE_KEY) || 1000);
-  let bet = Number(betInput.value) || 10;
-  let selectedBetColor = null; // 'red' or 'black'
+  let balance = +localStorage.getItem('rb_balance') || 1000;
+  let bet = +betInput.value || 10;
+  let selected = null;
   let spinning = false;
-  let musicOn = localStorage.getItem(MUSIC_KEY) !== '0'; // default ON per user's request
-  let autoSpin = true;
+  let musicOn = localStorage.getItem('rb_music') !== '0';
 
-  // ---- audio (tiny base64 placeholders) ----
-  // NOTE: These are short embedded clips. Replace with longer base64 tracks if you want richer audio.
-  const audio = {
-    click: new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRAAAAAA"),
-    spinStart: new Audio("data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAAA"),
-    spinTick: new Audio("data:audio/wav;base64,UklGRhQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAA"),
-    win: new Audio("data:audio/wav;base64,UklGRgIAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAA"),
-    lose: new Audio("data:audio/wav;base64,UklGRgQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==")
-  };
-  for(const k in audio){ audio[k].preload='auto'; audio[k].volume = 0.9; }
-
-  // Background lounge jazz (small loop sample — short to keep file size reasonable)
-  const music = new Audio("data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA..."); // placeholder short clip
+  const music = new Audio("data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA...");
   music.loop = true;
   music.volume = 0.2;
 
-  // attempt to set UI music switch to on/off
-  function updateMusicUI(){
-    if(musicOn) musicSwitch.classList.add('on'); else musicSwitch.classList.remove('on');
-  }
-
-  // ---- utils ----
-  function fmt(n){ return Number.isInteger(n) ? String(n) : n.toFixed(2); }
-
-  function saveBalance(){
-    localStorage.setItem(STORAGE_KEY, String(balance));
-  }
-
-  function setMessage(msg, short=true){
-    messageEl.textContent = msg;
-    // small ephemeral behavior: if short, keep; otherwise leave
-    if(short){
-      clearTimeout(setMessage._t);
-      setMessage._t = setTimeout(()=>{ if(!messageEl.dataset.important) messageEl.textContent = 'Pick Red or Black, set your bet, then press Spin.'; }, 3600);
-    }
-  }
-
-  // ---- initial UI ----
-  function refreshUI(){
-    balanceDisplay.textContent = fmt(balance);
-    betInput.value = bet;
-    updateMusicUI();
-    lastResultEl.textContent = '—';
-  }
-  refreshUI();
-
-  // ---- wheel drawing ----
-  // create many small segments alternating red/black so wheel looks round and realistic
-  const segCount = 36; // even number
-  const segments = [];
-  for(let i=0;i<segCount;i++){
-    segments.push({ color: (i % 2 === 0) ? 'red' : 'black' });
-  }
-
-  const W = wheelCanvas.width = Math.min(720, Math.max(420, Math.floor(window.innerWidth * 0.6)));
-  const H = wheelCanvas.height = W;
-  const cx = W/2, cy = H/2, radius = Math.min(cx,cy)-12;
-  let rotation = 0; // radians
+  const segCount = 36;
+  const cx = canvas.width/2, cy = canvas.height/2, r = 180;
+  let rotation = 0;
 
   function drawWheel(){
-    ctx.clearRect(0,0,W,H);
-
-    const anglePer = (Math.PI*2) / segCount;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const ang = (Math.PI*2)/segCount;
     for(let i=0;i<segCount;i++){
-      const start = rotation + i*anglePer;
       ctx.beginPath();
       ctx.moveTo(cx,cy);
-      ctx.arc(cx,cy,radius,start,start+anglePer);
+      ctx.arc(cx,cy,r,i*ang+rotation,(i+1)*ang+rotation);
       ctx.closePath();
-      ctx.fillStyle = (segments[i].color === 'red') ? '#e24b4b' : '#0b0f13';
+      ctx.fillStyle = i%2? "#111":"#e24b4b";
       ctx.fill();
-
-      // subtle edge
-      ctx.strokeStyle = 'rgba(255,255,255,0.02)';
-      ctx.stroke();
-
-      // label small dot
-      ctx.save();
-      ctx.translate(cx,cy);
-      ctx.rotate(start + anglePer/2);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.beginPath();
-      ctx.arc(radius - 28, 0, 6, 0, Math.PI*2);
-      ctx.fill();
-      ctx.restore();
     }
-
-    // center hub
     ctx.beginPath();
-    ctx.arc(cx,cy,58,0,Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.stroke();
-
-    // pointer (triangle at top)
+    ctx.arc(cx,cy,30,0,Math.PI*2);
+    ctx.fillStyle="#000";ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(cx, cy - radius - 6);
-    ctx.lineTo(cx - 14, cy - radius + 28);
-    ctx.lineTo(cx + 14, cy - radius + 28);
-    ctx.closePath();
-    ctx.fillStyle = '#fff';
-    ctx.fill();
-
-    // ball indicator (we will render ball separately)
+    ctx.moveTo(cx,cy-r-4);ctx.lineTo(cx-12,cy-r+20);ctx.lineTo(cx+12,cy-r+20);ctx.closePath();
+    ctx.fillStyle="#fff";ctx.fill();
   }
 
-  drawWheel();
+  function updateUI(){
+    balanceDisplay.textContent = balance;
+    betInput.value = bet;
+    musicBtn.textContent = musicOn?"On":"Off";
+  }
 
-  // ---- spin logic ----
-  // Choose a random segment index as winning spot
-  function spinOnceAnimation(callback){
+  function setMessage(msg){ messageEl.textContent = msg; }
+
+  function save(){ localStorage.setItem('rb_balance',balance); }
+
+  function spinWheel(callback){
     if(spinning) return;
     spinning = true;
-    playAudio('spinStart');
-
-    const chosenIndex = Math.floor(Math.random() * segCount); // winning segment
-    // We want the chosenIndex to come to pointer at top (angle = -Math.PI/2)
-    const anglePer = (Math.PI*2) / segCount;
-    // compute target rotation so the chosen segment's center aligns at -PI/2 (top pointer)
-    const target = (Math.PI/2) - (chosenIndex * anglePer + anglePer/2);
-    // add many full rotations
-    const fullRotations = 5 + Math.floor(Math.random() * 4);
-    const targetRotation = rotation + fullRotations * Math.PI * 2 + (target - rotation % (Math.PI*2));
-    const startRotation = rotation;
-    const duration = 3000 + Math.random()*1200;
-    const startTime = performance.now();
-
-    function frame(t){
-      const elapsed = t - startTime;
-      const p = Math.min(1, elapsed / duration);
-      // ease out cubic
-      const eased = 1 - Math.pow(1 - p, 3);
-      rotation = startRotation + (targetRotation - startRotation) * eased;
+    const chosen = Math.floor(Math.random()*segCount);
+    const spins = 5 + Math.random()*3;
+    const angPer = (Math.PI*2)/segCount;
+    const target = (Math.PI/2)-(chosen*angPer+angPer/2);
+    const start = rotation;
+    const total = start + spins*Math.PI*2 + (target - start%(Math.PI*2));
+    const dur = 3000;
+    const t0 = performance.now();
+    (function frame(t){
+      const p = Math.min(1,(t-t0)/dur);
+      const ease = 1-Math.pow(1-p,3);
+      rotation = start+(total-start)*ease;
       drawWheel();
-      // draw ball (small circle) slightly ahead of pointer for realism using current eased position
-      drawBallAtPointer(eased, chosenIndex);
-      // play ticks for extra feel
-      if(p < 1){
-        requestAnimationFrame(frame);
-      } else {
-        spinning = false;
-        // ensure final mouse is stable
-        drawWheel();
-        drawBallAtPointer(1, chosenIndex);
-        setTimeout(()=> {
-          callback(chosenIndex);
-        }, 420);
+      if(p<1) requestAnimationFrame(frame); else {
+        spinning=false;
+        callback(chosen%2? "black":"red");
       }
-    }
-    requestAnimationFrame(frame);
+    })(t0);
   }
 
-  function drawBallAtPointer(easedProgress, chosenIndex){
-    // ball angle: near pointer (top). We'll compute actual angle where pointer is (top) minus a small offset to simulate ball landing.
-    const segIndex = chosenIndex;
-    const anglePer = (Math.PI*2) / segCount;
-    const segmentCenterAngle = rotation + segIndex * anglePer + anglePer/2;
-    // pointer angle is -PI/2 (top). We want the ball to appear at that angle.
-    const ballAngle = (Math.PI/2) - (segmentCenterAngle - rotation); // simplified
-    // Place ball at radius - 22
-    const r = radius - 22;
-    const bx = cx + r * Math.cos(-Math.PI/2); // top pointer x
-    const by = cy + r * Math.sin(-Math.PI/2);
-    // Instead of calculating messy geometry, just draw ball near top pointer.
-    // Clear center overlay then draw
-    // We'll draw ball as a small white circle with shadow on wheel overlay
-    ctx.beginPath();
-    // small highlight circle near top pointer slightly offset to give landing feel
-    const ballX = cx + (r * Math.cos(-Math.PI/2 + 0.001));
-    const ballY = cy + (r * Math.sin(-Math.PI/2 + 0.001));
-    ctx.fillStyle = '#f2f2f2';
-    ctx.beginPath();
-    ctx.arc(ballX, ballY, 8, 0, Math.PI*2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.stroke();
+  betRed.onclick = ()=>{ selected="red"; highlight(); setMessage("Selected RED"); };
+  betBlack.onclick = ()=>{ selected="black"; highlight(); setMessage("Selected BLACK"); };
+
+  function highlight(){
+    betRed.classList.toggle("selected",selected==="red");
+    betBlack.classList.toggle("selected",selected==="black");
   }
 
-  // ---- gameplay handlers ----
-  function playAudio(name){
-    try{
-      const s = audio[name];
-      if(!s) return;
-      s.currentTime = 0;
-      s.play().catch(()=>{});
-    } catch(e){}
-  }
-
-  function startMusicIfNeeded(){
-    if(!musicOn) return;
-    // browsers require user gesture for audio playback; only attempt if user has interacted
-    try{
-      music.play().catch(()=>{ /* ignore */ });
-    } catch(e){}
-  }
-
-  // handle bet placing
-  function placeBet(color){
-    if(spinning) { setMessage('Wheel is spinning — wait.', true); playAudio('click'); return; }
-    bet = Math.max(1, Math.floor(Number(betInput.value) || 1));
-    if(bet > balance){
-      setMessage('Bet exceeds balance.', true);
-      playAudio('click');
-      return;
-    }
-    if(balance <= 0){
-      setMessage('No balance left — reset or set starting balance.', true);
-      playAudio('click');
-      return;
-    }
-    selectedBetColor = color;
-    setMessage(`Betting $${fmt(bet)} on ${color.toUpperCase()}. Press Spin.`, true);
-    playAudio('click');
-    // visually indicate selection briefly
-    // then user should press Spin
-  }
-
-  function resolveSpinResult(segIndex){
-    // segIndex corresponds to segments[segIndex]
-    const resColor = segments[segIndex].color;
-    // If selectedBetColor is null, it's a free spin (no bet) — just show outcome
-    if(!selectedBetColor){
-      setMessage(`Result: ${resColor.toUpperCase()}. (No bet placed)`, true);
-      lastResultEl.textContent = resColor.toUpperCase();
-      return;
-    }
-
-    if(resColor === selectedBetColor){
-      // win 1:1 -> balance +bet (net)
-      balance = +(balance + bet).toFixed(2);
-      playAudio('win');
-      setMessage(`You WON! ${resColor.toUpperCase()} — you gain $${fmt(bet)}.`, false);
-      lastResultEl.textContent = `WIN ${resColor.toUpperCase()}`;
-      // visual flash
-      flashWin();
-    } else {
-      // lose -> subtract bet
-      balance = +(balance - bet).toFixed(2);
-      if(balance < 0) balance = 0;
-      playAudio('lose');
-      setMessage(`You lost $${fmt(bet)}. Result: ${resColor.toUpperCase()}.`, true);
-      lastResultEl.textContent = `LOSE ${resColor.toUpperCase()}`;
-    }
-    saveBalance();
-    refreshUI();
-    // reset selected bet
-    selectedBetColor = null;
-  }
-
-  function flashWin(){
-    // add class to canvas parent for a short glow
-    const parent = wheelCanvas.parentElement;
-    parent.classList.add('win-flash');
-    setTimeout(()=>parent.classList.remove('win-flash'), 900);
-  }
-
-  // ---- UI bindings ----
-  setBalanceBtn.addEventListener('click', ()=>{
-    const val = Math.max(1, Number(startBalanceEl.value) || 1000);
-    balance = +val;
-    saveBalance();
-    refreshUI();
-    setMessage('Balance updated.', true);
-    playAudio('click');
-  });
-
-  halfBtn.addEventListener('click', ()=>{
-    playAudio('click');
-    const half = Math.floor(balance/2) || 1;
-    bet = Math.max(1, half);
-    betInput.value = bet;
-    setMessage(`Bet set to $${fmt(bet)} (half).`, true);
-  });
-
-  doubleBtn.addEventListener('click', ()=>{
-    playAudio('click');
-    const desired = Math.floor((Number(betInput.value) || 1) * 2);
-    bet = Math.min(balance, Math.max(1, desired));
-    betInput.value = bet;
-    setMessage(`Bet set to $${fmt(bet)} (double).`, true);
-  });
-
-  betRedBtn.addEventListener('click', ()=> placeBet('red'));
-  betBlackBtn.addEventListener('click', ()=> placeBet('black'));
-
-  spinBtn.addEventListener('click', ()=> {
-    // allow spin even without selecting a bet (observational)
-    if(spinning) { playAudio('click'); return; }
-    startMusicIfNeeded();
-    // if no bet selected, warn but allow
-    if(!selectedBetColor){
-      setMessage('No bet selected — spin will show outcome only. To bet, press Bet Red or Bet Black first.', true);
-      // still allow spin
-    }
-    spinOnceAnimation((segIndex) => {
-      resolveSpinResult(segIndex);
+  spinBtn.onclick = ()=>{
+    if(spinning) return;
+    if(!selected){ setMessage("Pick Red or Black first"); return; }
+    bet = Math.min(balance, Math.max(1, +betInput.value||1));
+    if(balance<=0){ setMessage("No balance"); return; }
+    balance -= bet;
+    save(); updateUI();
+    spinWheel(result=>{
+      if(result===selected){
+        balance += bet*2;
+        setMessage("You won! Landed "+result.toUpperCase());
+      } else {
+        setMessage("You lost! Landed "+result.toUpperCase());
+      }
+      save(); updateUI();
     });
-  });
-
-  spinBtn2.addEventListener('click', ()=> spinBtn.click());
-  resetBtn.addEventListener('click', ()=>{
-    playAudio('click');
-    balance = 1000;
-    saveBalance();
-    refreshUI();
-    setMessage('Balance reset to $1000.', true);
-  });
-
-  musicSwitch.addEventListener('click', ()=>{
-    musicOn = !musicOn;
-    localStorage.setItem(MUSIC_KEY, musicOn ? '1' : '0');
-    updateMusicUI();
-    playAudio('click');
-    if(musicOn){
-      // try to start music (will start only if user gesture allowed)
-      music.play().catch(()=>{});
-    } else {
-      music.pause();
-      try{ music.currentTime = 0; } catch(e){}
-    }
-  });
-
-  stopAutoBtn.addEventListener('click', ()=>{
-    autoSpin = !autoSpin;
-    stopAutoBtn.textContent = autoSpin ? 'Stop Auto-Spin' : 'Start Auto-Spin';
-    playAudio('click');
-    setMessage(autoSpin ? 'Auto-spin enabled.' : 'Auto-spin disabled.', true);
-  });
-
-  // click anywhere to start music if it's toggled on (one-time gesture)
-  window.addEventListener('pointerdown', function onceStartMusic(){
-    if(musicOn){
-      music.play().catch(()=>{});
-    }
-    // remove after first pointerdown to avoid repetition
-    window.removeEventListener('pointerdown', onceStartMusic);
-  });
-
-  // bet input keyboard enter triggers bet red for convenience (optional)
-  betInput.addEventListener('keydown', (e) => {
-    if(e.key === 'Enter') betRedBtn.focus();
-  });
-
-  // Keep UI in sync if bet input changed
-  betInput.addEventListener('change', ()=>{
-    let v = Math.floor(Number(betInput.value) || 1);
-    if(v < 1) v = 1;
-    if(v > balance) v = Math.floor(balance);
-    betInput.value = v;
-    bet = v;
-  });
-
-  // Persistence on unload
-  window.addEventListener('beforeunload', ()=> {
-    saveBalance();
-    localStorage.setItem(MUSIC_KEY, musicOn ? '1' : '0');
-  });
-
-  // initialize UI values
-  function init(){
-    // restore balance
-    balance = Number(localStorage.getItem(STORAGE_KEY) || balance);
-    // restore music pref
-    musicOn = localStorage.getItem(MUSIC_KEY) !== '0';
-    updateMusicUI();
-    refreshUI();
-  }
-  init();
-
-  // ensure canvas redraw on resize
-  window.addEventListener('resize', ()=>{
-    // keep W/H constant to avoid complex scaling logic in this demo
-    drawWheel();
-  });
-
-  // initial draw (ball drawn inside spin animation only)
-  drawWheel();
-
-  // Expose small debug API
-  window.rouletteRB = {
-    getBalance: ()=>balance,
-    setBalance: (v)=>{ balance = v; saveBalance(); refreshUI(); },
-    spinNow: ()=> { if(!spinning) spinBtn.click(); }
   };
 
+  halfBtn.onclick = ()=>{
+    bet = Math.max(1, Math.floor(bet/2));
+    betInput.value = bet;
+    setMessage("Bet halved to "+bet);
+  };
+  doubleBtn.onclick = ()=>{
+    bet = Math.min(balance, Math.floor(bet*2));
+    betInput.value = bet;
+    setMessage("Bet doubled to "+bet);
+  };
+  setBalanceBtn.onclick = ()=>{
+    balance = Math.max(1, +startBalanceEl.value||1000);
+    save(); updateUI();
+    setMessage("Balance set to "+balance);
+  };
+  resetBtn.onclick = ()=>{
+    balance=1000; save(); updateUI();
+    setMessage("Balance reset");
+  };
+
+  musicBtn.onclick=()=>{
+    musicOn=!musicOn;
+    localStorage.setItem('rb_music', musicOn?'1':'0');
+    updateUI();
+    if(musicOn) music.play().catch(()=>{}); else music.pause();
+  };
+
+  window.addEventListener('pointerdown',()=>{
+    if(musicOn) music.play().catch(()=>{});
+  },{once:true});
+
+  drawWheel();
+  updateUI();
 })();
 </script>
 </body>
