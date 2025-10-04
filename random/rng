@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blackjack + Spin Wheel</title>
+<style>
+  :root{
+    --bg:#0f1724;
+    --card:#e6eef8;
+    --accent:#ffbf00;
+    --panel:#0b1220;
+    --muted:#9fb0c8;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  body{background:linear-gradient(180deg,#071225 0%, #0e2333 100%);color:var(--card);display:flex;align-items:center;justify-content:center;padding:20px;}
+  .container{max-width:1100px;width:100%;display:grid;grid-template-columns:1fr 360px;gap:20px;}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+  h1{margin:0;font-size:20px;color:var(--accent);}
+  .left, .right{background:rgba(255,255,255,0.03);border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,0.6);}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+  label{font-size:13px;color:var(--muted);}
+  input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:var(--card);width:120px;}
+  button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#06121b;font-weight:600;cursor:pointer;}
+  button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--card);}
+  .status{display:flex;gap:12px;align-items:center;margin-bottom:12px;}
+  .balance{font-size:18px;font-weight:700;color:#cfeaff;}
+  .bet-area{display:flex;gap:8px;align-items:center;}
+  .table{display:flex;flex-direction:column;gap:14px;padding:8px;}
+  .hand{background:rgba(0,0,0,0.15);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}
+  .cards-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .card{width:56px;height:80px;border-radius:8px;background:white;color:#0b1220;display:flex;flex-direction:column;justify-content:space-between;padding:6px;font-weight:700;box-shadow:0 6px 12px rgba(0,0,0,0.5);}
+  .card.red{color:#d33;}
+  .card.back{background:linear-gradient(180deg,#1e3a5a,#16324c);color:transparent;position:relative;}
+  .card.back::after{content:"";position:absolute;inset:6px;border-radius:6px;background:repeating-linear-gradient(45deg,rgba(255,255,255,0.04) 0 6px,transparent 6px 12px);}
+  .row{display:flex;gap:8px;align-items:center;}
+  .actions{display:flex;gap:8px;}
+  .message{padding:8px;border-radius:8px;background:rgba(255,255,255,0.03);color:var(--card);font-weight:600;}
+  .right h3{margin:0 0 8px 0;color:var(--accent);}
+  canvas#wheel{width:100%;height:260px;border-radius:10px;background:linear-gradient(180deg,#071a2a,#0a2a3b);display:block;}
+  .wheel-controls{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px;}
+  .multiplier-badge{background:rgba(255,255,255,0.04);padding:8px;border-radius:8px;text-align:center;}
+  footer{grid-column:1/-1;text-align:center;color:var(--muted);font-size:12px;margin-top:6px;}
+  @media(max-width:980px){
+    .container{grid-template-columns:1fr; padding-bottom:50px;}
+    canvas#wheel{height:200px;}
+  }
+</style>
+</head>
+<body>
+  <div class="container" id="app">
+    <header>
+      <h1>Blackjack + Spin Wheel</h1>
+      <div style="margin-left:12px;color:var(--muted);font-size:13px;">Set starting bankroll, place bets, spin wheel for multipliers, play rounds.</div>
+    </header>
+
+    <div class="left">
+      <div class="controls">
+        <div>
+          <label>Starting Bankroll</label><br>
+          <input id="startCash" type="number" min="1" value="1000" />
+        </div>
+        <div style="display:flex;flex-direction:column;justify-content:center">
+          <button id="setBank" title="Set starting balance">Set</button>
+        </div>
+
+        <div style="margin-left:auto">
+          <div class="balance">Balance: $<span id="balance">1000</span></div>
+        </div>
+      </div>
+
+      <div class="status">
+        <div class="bet-area">
+          <label style="margin-right:6px">Bet</label>
+          <input id="betInput" type="number" min="1" value="10" />
+          <button id="halfBet" class="ghost">Half Bet</button>
+          <button id="doubleBet" class="ghost">Double Bet</button>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <div class="multiplier-badge">Wheel × <span id="currentMultiplier">1.0</span></div>
+          <div style="font-size:13px;color:var(--muted)">Last result: <span id="lastResult">—</span></div>
+        </div>
+      </div>
+
+      <div class="table">
+        <div class="hand" id="dealerHand">
+          <div style="font-weight:700;color:var(--muted)">Dealer (<span id="dealerValue">0</span>)</div>
+          <div class="cards-row" id="dealerCards"></div>
+        </div>
+
+        <div class="hand" id="playerHand">
+          <div style="font-weight:700;color:var(--muted)">You (<span id="playerValue">0</span>)</div>
+          <div class="cards-row" id="playerCards"></div>
+        </div>
+
+        <div class="row">
+          <div class="actions">
+            <button id="dealBtn">Deal</button>
+            <button id="hitBtn" class="ghost" disabled>Hit</button>
+            <button id="standBtn" class="ghost" disabled>Stand</button>
+            <button id="newRoundBtn" class="ghost" disabled>New Round</button>
+          </div>
+          <div style="margin-left:auto">
+            <div class="message" id="message">Place a bet and press Deal.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="right">
+      <h3>Spin Wheel (optional)</h3>
+      <canvas id="wheel" width="320" height="260"></canvas>
+      <div class="wheel-controls">
+        <button id="spinBtn">Spin Wheel</button>
+        <button id="resetMultiplier" class="ghost">Reset ×1</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;justify-content:space-between">
+        <div style="font-size:14px;color:var(--muted)">Spin result:</div>
+        <div style="font-weight:800;color:#dff3ff;font-size:18px">×<span id="spinResult">1.0</span></div>
+      </div>
+
+      <hr style="border:none;height:1px;background:rgba(255,255,255,0.03);margin:12px 0">
+
+      <div style="font-size:13px;color:var(--muted)">
+        Rules: Dealer hits until 17. Blackjack pays 1.5×. Wheel multiplier multiplies your round payout (optional). You cannot bet more than your balance.
+      </div>
+    </aside>
+
+    <footer>Made for demo/play only — no real money. Enjoy responsibly.</footer>
+  </div>
+
+<script>
+/*
+  Blackjack + Wheel
+  - Basic blackjack: deal, hit, stand
+  - Dealer stands on soft 17 or hard 17 (standard)
+  - Payouts: blackjack 1.5x, win 1x, push 0, lose -1x
+  - Wheel gives multiplier to final payout (0.5,1,1.5,2,3)
+*/
+
+(() => {
+  // DOM
+  const balanceEl = document.getElementById('balance');
+  const startCashInput = document.getElementById('startCash');
+  const setBankBtn = document.getElementById('setBank');
+  const betInput = document.getElementById('betInput');
+  const halfBetBtn = document.getElementById('halfBet');
+  const doubleBetBtn = document.getElementById('doubleBet');
+  const dealBtn = document.getElementById('dealBtn');
+  const hitBtn = document.getElementById('hitBtn');
+  const standBtn = document.getElementById('standBtn');
+  const newRoundBtn = document.getElementById('newRoundBtn');
+  const dealerCardsEl = document.getElementById('dealerCards');
+  const playerCardsEl = document.getElementById('playerCards');
+  const playerValueEl = document.getElementById('playerValue');
+  const dealerValueEl = document.getElementById('dealerValue');
+  const messageEl = document.getElementById('message');
+  const currentMultiplierEl = document.getElementById('currentMultiplier');
+  const spinResultEl = document.getElementById('spinResult');
+  const lastResultEl = document.getElementById('lastResult');
+
+  // Wheel canvas and controls
+  const wheelCanvas = document.getElementById('wheel');
+  const spinBtn = document.getElementById('spinBtn');
+  const resetMultiplierBtn = document.getElementById('resetMultiplier');
+  const ctx = wheelCanvas.getContext('2d');
+
+  // Game state
+  let balance = Number(startCashInput.value) || 1000;
+  let bet = Number(betInput.value) || 10;
+  let deck = [];
+  let player = [];
+  let dealer = [];
+  let inRound = false;
+  let wheelMultiplier = 1.0;
+  let lastRoundResultText = '—';
+
+  // Wheel segments (multiplier, color)
+  const wheelSegments = [
+    {label:'0.5×', value:0.5, color:'#c13b3b'},
+    {label:'1×', value:1.0, color:'#2e9bff'},
+    {label:'1.5×', value:1.5, color:'#00b894'},
+    {label:'2×', value:2.0, color:'#ffb72b'},
+    {label:'3×', value:3.0, color:'#8e44ad'}
+  ];
+
+  // Helpers for cards
+  const suits = ['♠','♥','♦','♣'];
+  const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+  function createDeck(){
+    const d = [];
+    for(const s of suits){
+      for(const r of ranks){
+        d.push({rank:r, suit:s});
+      }
+    }
+    return d;
+  }
+  function shuffle(array){
+    for(let i=array.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [array[i],array[j]] = [array[j],array[i]];
+    }
+  }
+  function draw(){
+    if(deck.length === 0){
+      deck = createDeck();
+      deck = deck.concat(createDeck()); // use 2 decks to reduce frequent reshuffle
+      shuffle(deck);
+    }
+    return deck.pop();
+  }
+  function cardValue(card){
+    const r = card.rank;
+    if(r === 'A') return 11;
+    if(['J','Q','K'].includes(r)) return 10;
+    return Number(r);
+  }
+  function handValue(cards){
+    let total = 0;
+    let aces = 0;
+    for(const c of cards){
+      const v = cardValue(c);
+      total += v;
+      if(c.rank === 'A') aces++;
+    }
+    while(total > 21 && aces > 0){
+      total -= 10; // count an ace as 1 instead of 11
+      aces--;
+    }
+    return total;
+  }
+  function isBlackjack(cards){
+    return cards.length === 2 && handValue(cards) === 21;
+  }
+
+  // UI rendering
+  function renderCard(card){
+    const el = document.createElement('div');
+    el.className = 'card' + ((card.suit === '♥' || card.suit === '♦') ? ' red' : '');
+    el.innerHTML = `<div style="font-size:12px">${card.rank}</div><div style="text-align:center;font-size:20px">${card.suit}</div><div style="font-size:12px;text-align:right">${card.rank}</div>`;
+    return el;
+  }
+  function renderBackCard(){
+    const el = document.createElement('div');
+    el.className = 'card back';
+    el.style.width='56px';
+    el.style.height='80px';
+    return el;
+  }
+  function updateUI(){
+    balanceEl.textContent = balance.toFixed(2).replace(/\.00$/,'');
+    betInput.value = bet.toFixed(2).replace(/\.00$/,'');
+    currentMultiplierEl.textContent = wheelMultiplier.toFixed(2);
+    spinResultEl.textContent = wheelMultiplier.toFixed(2);
+    lastResultEl.textContent = lastRoundResultText;
+  }
+  function renderHands(revealDealerHole=false){
+    dealerCardsEl.innerHTML = '';
+    playerCardsEl.innerHTML = '';
+
+    // dealer
+    dealer.forEach((c, idx) => {
+      if(idx === 1 && !revealDealerHole && inRound){
+        dealerCardsEl.appendChild(renderBackCard());
+      } else {
+        dealerCardsEl.appendChild(renderCard(c));
+      }
+    });
+
+    // player
+    player.forEach(c => playerCardsEl.appendChild(renderCard(c)));
+
+    playerValueEl.textContent = handValue(player);
+    dealerValueEl.textContent = revealDealerHole ? handValue(dealer) : (inRound && dealer.length>0 ? (cardValue(dealer[0]) === 11 ? (cardValue(dealer[0]) + 0) : cardValue(dealer[0])) : 0);
+  }
+
+  // Game flow
+  function canAfford(b){
+    return b > 0 && b <= balance + 0.0001;
+  }
+
+  function startDeal(){
+    bet = Math.max(1, Math.floor(Number(betInput.value) || 0));
+    if(!canAfford(bet)){
+      messageEl.textContent = 'Bet invalid or exceeds balance.';
+      return;
+    }
+    // begin round
+    deck = deck.length ? deck : createDeck().concat(createDeck()); shuffle(deck);
+    player = [draw(), draw()];
+    dealer = [draw(), draw()];
+    inRound = true;
+    // temporarily hold bet (we deduct at round resolution)
+    messageEl.textContent = 'Round in progress — choose Hit or Stand.';
+    hitBtn.disabled = false;
+    standBtn.disabled = false;
+    dealBtn.disabled = true;
+    newRoundBtn.disabled = true;
+    renderHands(false);
+    updateUI();
+
+    // immediate blackjack checks
+    const playerBJ = isBlackjack(player);
+    const dealerBJ = isBlackjack(dealer);
+    if(playerBJ || dealerBJ){
+      // resolve immediately after slight pause to show cards
+      setTimeout(() => resolveRound(true), 700);
+    }
+  }
+
+  function hit(){
+    if(!inRound) return;
+    player.push(draw());
+    renderHands(false);
+    const val = handValue(player);
+    if(val > 21){
+      // player bust
+      setTimeout(() => resolveRound(), 400);
+    }
+  }
+
+  function stand(){
+    if(!inRound) return;
+    // reveal dealer hole and play dealer
+    playDealer();
+  }
+
+  function playDealer(){
+    renderHands(true);
+    // dealer hits until 17 or greater; treat soft 17 as stand (common rule)
+    let dv = handValue(dealer);
+    function dealerStep(){
+      dv = handValue(dealer);
+      if(dv < 17){
+        dealer.push(draw());
+        renderHands(true);
+        setTimeout(dealerStep, 600);
+      } else {
+        setTimeout(() => resolveRound(), 400);
+      }
+    }
+    dealerStep();
+  }
+
+  function resolveRound(revealImmediately=false){
+    // reveal dealer hole
+    renderHands(true);
+    hitBtn.disabled = true;
+    standBtn.disabled = true;
+    dealBtn.disabled = false;
+    newRoundBtn.disabled = false;
+
+    const pv = handValue(player);
+    const dv = handValue(dealer);
+    let resultText = '';
+    let payout = 0; // positive means player wins this much (net)
+    // if player busted
+    if(pv > 21){
+      resultText = `BUST! You lose $${bet.toFixed(2)}.`;
+      payout = -bet;
+    } else {
+      const playerBJ = isBlackjack(player);
+      const dealerBJ = isBlackjack(dealer);
+      if(playerBJ && !dealerBJ){
+        // blackjack payout 3:2
+        payout = bet * 1.5;
+        resultText = `BLACKJACK! You win $${(payout).toFixed(2)}.`;
+      } else if(dealerBJ && !playerBJ){
+        payout = -bet;
+        resultText = `Dealer has Blackjack. You lose $${bet.toFixed(2)}.`;
+      } else if(dv > 21){
+        payout = bet;
+        resultText = `Dealer busts. You win $${bet.toFixed(2)}.`;
+      } else if(pv > dv){
+        payout = bet;
+        resultText = `You win $${bet.toFixed(2)}.`;
+      } else if(pv === dv){
+        payout = 0;
+        resultText = `Push. Bet returned.`;
+      } else {
+        payout = -bet;
+        resultText = `You lose $${bet.toFixed(2)}.`;
+      }
+    }
+
+    // apply wheel multiplier (only to positive payouts)
+    if(payout > 0){
+      const original = payout;
+      payout = payout * wheelMultiplier;
+      resultText += ` (×${wheelMultiplier.toFixed(2)} applied → $${payout.toFixed(2)}).`;
+    }
+
+    // apply payout to balance
+    balance = +(balance + payout).toFixed(2);
+
+    // if push, payout=0 so no change. If negative, subtract; if positive add.
+
+    lastRoundResultText = resultText;
+    messageEl.textContent = resultText;
+    inRound = false;
+
+    // After round, reset wheel multiplier to 1 (you can keep it if you want — here we keep it so user chooses)
+    updateUI();
+  }
+
+  // Buttons
+  setBankBtn.addEventListener('click', () => {
+    const val = Number(startCashInput.value) || 0;
+    if(val <= 0){ alert('Enter a positive amount'); return; }
+    balance = +val;
+    updateUI();
+    messageEl.textContent = 'Bankroll set. Place a bet and press Deal.';
+  });
+
+  halfBetBtn.addEventListener('click', () => {
+    const half = Math.floor(balance/2);
+    bet = Math.max(1, half);
+    betInput.value = bet;
+    updateUI();
+  });
+
+  doubleBetBtn.addEventListener('click', () => {
+    const desired = Math.floor((Number(betInput.value) || 1) * 2);
+    bet = Math.min(balance, Math.max(1, desired));
+    betInput.value = bet;
+    updateUI();
+  });
+
+  dealBtn.addEventListener('click', () => {
+    if(inRound){
+      messageEl.textContent = 'Round already in progress.';
+      return;
+    }
+    bet = Math.max(1, Math.floor(Number(betInput.value) || 0));
+    if(!canAfford(bet)){
+      messageEl.textContent = 'Bet invalid or exceeds balance.';
+      return;
+    }
+    // allow round only if balance > 0
+    if(balance <= 0){
+      messageEl.textContent = 'No balance left. Reset bankroll to play again.';
+      return;
+    }
+    startDeal();
+  });
+
+  hitBtn.addEventListener('click', () => {
+    hit();
+  });
+
+  standBtn.addEventListener('click', () => {
+    stand();
+  });
+
+  newRoundBtn.addEventListener('click', () => {
+    // clear hands and reset UI to bet stage
+    player = [];
+    dealer = [];
+    inRound = false;
+    dealBtn.disabled = false;
+    hitBtn.disabled = true;
+    standBtn.disabled = true;
+    newRoundBtn.disabled = true;
+    messageEl.textContent = 'Place a bet and press Deal.';
+    renderHands(false);
+    updateUI();
+  });
+
+  // --- Wheel drawing and spin logic ---
+  const cx = wheelCanvas.width/2;
+  const cy = wheelCanvas.height/2;
+  const radius = Math.min(cx,cy) - 12;
+  let rotation = 0;
+
+  function drawWheel(){
+    ctx.clearRect(0,0,wheelCanvas.width,wheelCanvas.height);
+    const seg = wheelSegments.length;
+    const anglePer = (Math.PI * 2) / seg;
+
+    // draw segments
+    for(let i=0;i<seg;i++){
+      const start = rotation + i*anglePer;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,radius,start,start+anglePer);
+      ctx.closePath();
+      ctx.fillStyle = wheelSegments[i].color;
+      ctx.fill();
+
+      // text
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.rotate(start + anglePer/2);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.font = '14px system-ui,Arial';
+      ctx.fillText(wheelSegments[i].label, radius-8, 6);
+      ctx.restore();
+    }
+
+    // center circle
+    ctx.beginPath();
+    ctx.arc(cx,cy,36,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.fill();
+    ctx.fillStyle='white';
+    ctx.font='14px system-ui,Arial';
+    ctx.textAlign='center';
+    ctx.fillText('SPIN', cx, cy+5);
+
+    // pointer
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - radius - 4);
+    ctx.lineTo(cx-10, cy - radius + 18);
+    ctx.lineTo(cx+10, cy - radius + 18);
+    ctx.closePath();
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  }
+
+  drawWheel();
+
+  // spin animation
+  let spinning=false;
+  spinBtn.addEventListener('click', () => {
+    if(spinning) return;
+    spinning = true;
+    spinBtn.disabled = true;
+    // random choose a segment index biased equally
+    const chosenIndex = Math.floor(Math.random()*wheelSegments.length);
+    // rotate so chosenIndex lands at pointer (pointer at top = angle -Math.PI/2)
+    const segCount = wheelSegments.length;
+    const fullRotations = 4 + Math.floor(Math.random()*3); // randomness in rotations
+    const targetRotation = fullRotations * Math.PI * 2 + (Math.PI/2) - (chosenIndex * (2*Math.PI/segCount) + (Math.PI/segCount));
+    const startRotation = rotation;
+    const duration = 2400 + Math.random()*800;
+    const startTime = performance.now();
+
+    function animate(t){
+      const elapsed = t - startTime;
+      const p = Math.min(1, elapsed/duration);
+      // ease out cubic
+      const eased = 1 - Math.pow(1-p,3);
+      rotation = startRotation + (targetRotation - startRotation) * eased;
+      drawWheel();
+      if(p < 1){
+        requestAnimationFrame(animate);
+      } else {
+        spinning = false;
+        spinBtn.disabled = false;
+        // set multiplier to chosen segment value
+        wheelMultiplier = wheelSegments[chosenIndex].value;
+        spinResultEl.textContent = wheelMultiplier.toFixed(2);
+        currentMultiplierEl.textContent = wheelMultiplier.toFixed(2);
+        lastRoundResultText = `Spun ${wheelSegments[chosenIndex].label}`;
+        updateUI();
+        messageEl.textContent = `Wheel set to ×${wheelMultiplier.toFixed(2)} for next rounds (optional).`;
+      }
+    }
+    requestAnimationFrame(animate);
+  });
+
+  resetMultiplierBtn.addEventListener('click', () => {
+    wheelMultiplier = 1.0;
+    spinResultEl.textContent = '1.00';
+    currentMultiplierEl.textContent = '1.00';
+    lastRoundResultText = 'Multiplier reset';
+    updateUI();
+    messageEl.textContent = 'Multiplier reset to ×1.';
+  });
+
+  // initial update
+  updateUI();
+  renderHands(false);
+
+  // small UX: make bet input constrained to balance
+  betInput.addEventListener('change', () => {
+    let v = Math.floor(Number(betInput.value) || 0);
+    if(v < 1) v = 1;
+    if(v > balance) v = Math.floor(balance);
+    betInput.value = v;
+    bet = v;
+  });
+
+})();
+</script>
+</body>
+</html>
