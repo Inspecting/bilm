@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blackjack + Spin Wheel — All-in-One</title>
+<meta name="description" content="Blackjack with spin wheel, sound effects, music toggle, and localStorage bankroll. Single HTML file, GitHub Pages ready."/>
+<style>
+:root{
+  --bg:#071428;
+  --panel:#0c1b2a;
+  --muted:#9fb0c8;
+  --card:#e9f6ff;
+  --accent:#ffbf00;
+  --accent-2:#3fe0c6;
+  --danger:#ff6b6b;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:
+  radial-gradient(1200px 600px at 10% 10%, rgba(30,60,90,0.12), transparent 6%),
+  radial-gradient(1200px 600px at 90% 90%, rgba(10,30,50,0.10), transparent 6%),
+  var(--bg);color:var(--card);-webkit-font-smoothing:antialiased}
+.app{max-width:1150px;margin:18px auto;padding:18px;display:grid;grid-template-columns:1fr 360px;gap:18px}
+.header{grid-column:1/-1;display:flex;align-items:center;gap:12px}
+.title{font-size:18px;color:var(--accent);font-weight:700}
+.subtitle{color:var(--muted);font-size:13px}
+.panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+.left{padding:12px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+label{font-size:13px;color:var(--muted)}
+input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--card);width:120px}
+button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#06121b;font-weight:700;cursor:pointer;box-shadow:0 6px 12px rgba(0,0,0,0.35);transition:transform .08s}
+button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--card)}
+button:active{transform:scale(.98)}
+.status{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.balance{font-weight:800;font-size:18px;color:#dff8ff}
+.bet-area{display:flex;gap:8px;align-items:center}
+.table{display:flex;flex-direction:column;gap:12px}
+.hand{background:rgba(255,255,255,0.02);border-radius:10px;padding:10px}
+.cards-row{display:flex;gap:10px;align-items:center;min-height:90px}
+.card{width:64px;height:92px;border-radius:10px;background:white;color:#081028;display:flex;flex-direction:column;justify-content:space-between;padding:8px;font-weight:800;box-shadow:0 10px 18px rgba(0,0,0,0.6);transform-origin:center;transition:transform .18s}
+.card.deal-anim{transform:translateY(-12px)}
+.card.red{color:#d33}
+.card.back{background:linear-gradient(180deg,#1e3a5a,#16324c);color:transparent;position:relative}
+.card.back::after{content:"";position:absolute;inset:8px;border-radius:6px;background:repeating-linear-gradient(45deg,rgba(255,255,255,0.04) 0 6px,transparent 6px 12px)}
+.row{display:flex;gap:8px;align-items:center}
+.actions{display:flex;gap:8px}
+.message{padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);color:var(--card);font-weight:700;min-width:260px;text-align:center}
+.right .panel{padding:12px}
+canvas#wheel{width:100%;height:260px;border-radius:10px;background:linear-gradient(180deg,#071a2a,#0a2a3b);display:block}
+.wheel-controls{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px}
+.small{font-size:13px;color:var(--muted)}
+.footer{grid-column:1/-1;text-align:center;color:var(--muted);font-size:12px;margin-top:6px}
+.win-glow{animation:winPulse 900ms ease-out 0s 1}
+@keyframes winPulse{0%{box-shadow:0 0 0 rgba(255,191,0,0)}50%{box-shadow:0 0 40px rgba(255,191,0,0.25)}100%{box-shadow:0 0 0 rgba(255,191,0,0)}}
+.toggle{display:flex;align-items:center;gap:8px}
+.switch{width:42px;height:24px;background:rgba(255,255,255,0.06);border-radius:999px;position:relative;cursor:pointer}
+.knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:white;transition:left .15s}
+.switch.on{background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+.switch.on .knob{left:21px}
+.footer-note{font-size:12px;color:var(--muted);margin-top:10px;text-align:center}
+@media(max-width:980px){
+  .app{grid-template-columns:1fr; padding:12px}
+  canvas#wheel{height:200px}
+  .controls{justify-content:flex-start}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="title">Blackjack + Spin Wheel</div>
+      <div class="subtitle">All-in-one — sounds, music toggle, auto-spin on win, and persistent bankroll</div>
+    </div>
+    <div style="margin-left:auto" class="small">Host on GitHub Pages — single file</div>
+  </div>
+
+  <div class="panel left">
+    <div class="controls">
+      <div>
+        <label>Starting Bankroll</label><br>
+        <input id="startCash" type="number" min="1" value="1000" />
+      </div>
+      <div style="display:flex;align-items:center">
+        <button id="setBank">Set</button>
+      </div>
+
+      <div style="margin-left:auto">
+        <div class="balance">Balance: $<span id="balance">1000</span></div>
+      </div>
+    </div>
+
+    <div class="status">
+      <div class="bet-area">
+        <label style="margin-right:6px">Bet</label>
+        <input id="betInput" type="number" min="1" value="10" />
+        <button id="halfBet" class="ghost">Half Bet</button>
+        <button id="doubleBet" class="ghost">Double Bet</button>
+      </div>
+
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <div class="small">Current wheel × <strong id="currentMultiplier">1.00</strong></div>
+        <div style="width:12px"></div>
+        <div class="toggle small" title="Toggle auto-spin after winning a round">
+          <label style="margin-right:8px;color:var(--muted)">Auto-Spin on Win</label>
+          <div id="autoSpinSwitch" class="switch on"><div class="knob"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table">
+      <div class="hand" id="dealerHand">
+        <div style="font-weight:700;color:var(--muted)">Dealer (<span id="dealerValue">0</span>)</div>
+        <div class="cards-row" id="dealerCards"></div>
+      </div>
+
+      <div class="hand" id="playerHand">
+        <div style="font-weight:700;color:var(--muted)">You (<span id="playerValue">0</span>)</div>
+        <div class="cards-row" id="playerCards"></div>
+      </div>
+
+      <div class="row">
+        <div class="actions">
+          <button id="dealBtn">Deal</button>
+          <button id="hitBtn" class="ghost" disabled>Hit</button>
+          <button id="standBtn" class="ghost" disabled>Stand</button>
+          <button id="doubleDownBtn" class="ghost" disabled>Double Down</button>
+          <button id="newRoundBtn" class="ghost" disabled>New Round</button>
+        </div>
+        <div style="margin-left:auto">
+          <div class="message" id="message">Place a bet and press Deal.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel right">
+    <h3 style="margin:6px 0 10px 0;color:var(--accent)">Spin Wheel</h3>
+    <canvas id="wheel" width="320" height="260"></canvas>
+
+    <div class="wheel-controls">
+      <button id="spinBtn">Spin Wheel (manual)</button>
+      <button id="resetMultiplier" class="ghost">Reset ×1</button>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+      <div class="small">Spin result:</div>
+      <div style="font-weight:800;color:#dff3ff;font-size:18px">×<span id="spinResult">1.00</span></div>
+    </div>
+
+    <hr style="border:none;height:1px;background:rgba(255,255,255,0.03);margin:12px 0">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="small">Background music</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="musicSwitch" class="switch"><div class="knob"></div></div>
+          <div class="small" id="musicLabel">Off</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="small">Payouts: Blackjack 1.5×, Win 1×. Wheel multiplies wins (applied after winning).</div>
+      </div>
+    </div>
+
+    <div class="footer-note">Made for demo/play only — no real money. Host on GitHub Pages (upload this file as <code>index.html</code>).</div>
+  </div>
+
+  <div class="footer">Tips: use Half/Double bet to quickly size your wager. Double Down is available after Deal (doubles bet, one card given, then stands).</div>
+</div>
+
+<script>
+/*
+  Full single-file Blackjack + Wheel
+  - Double Down implemented
+  - Auto-Spin on Win option: if enabled, wheel spins automatically when you win and multiplies the payout
+  - Manual Spin sets multiplier for next win (or becomes the multiplier when auto-spin is off)
+  - Sounds embedded as base64 (short clips), music as base64 (short loop). Music will not autoplay; user toggles to start.
+  - LocalStorage keys: bj_balance, bj_musicOn
+*/
+
+(() => {
+  // ---- DOM ----
+  const balanceEl = document.getElementById('balance');
+  const startCashInput = document.getElementById('startCash');
+  const setBankBtn = document.getElementById('setBank');
+  const betInput = document.getElementById('betInput');
+  const halfBetBtn = document.getElementById('halfBet');
+  const doubleBetBtn = document.getElementById('doubleBet');
+  const dealBtn = document.getElementById('dealBtn');
+  const hitBtn = document.getElementById('hitBtn');
+  const standBtn = document.getElementById('standBtn');
+  const doubleDownBtn = document.getElementById('doubleDownBtn');
+  const newRoundBtn = document.getElementById('newRoundBtn');
+  const dealerCardsEl = document.getElementById('dealerCards');
+  const playerCardsEl = document.getElementById('playerCards');
+  const playerValueEl = document.getElementById('playerValue');
+  const dealerValueEl = document.getElementById('dealerValue');
+  const messageEl = document.getElementById('message');
+  const currentMultiplierEl = document.getElementById('currentMultiplier');
+  const spinResultEl = document.getElementById('spinResult');
+  const spinBtn = document.getElementById('spinBtn');
+  const resetMultiplierBtn = document.getElementById('resetMultiplier');
+  const wheelCanvas = document.getElementById('wheel');
+  const ctx = wheelCanvas.getContext('2d');
+  const autoSpinSwitch = document.getElementById('autoSpinSwitch');
+  const spinResultDisplay = document.getElementById('spinResult');
+  const musicSwitch = document.getElementById('musicSwitch');
+  const musicLabel = document.getElementById('musicLabel');
+
+  // ---- state ----
+  let balance = Number(localStorage.getItem('bj_balance') || 1000);
+  let bet = Number(betInput.value) || 10;
+  let deck = [];
+  let player = [];
+  let dealer = [];
+  let inRound = false;
+  let wheelMultiplier = 1.0;
+  let autoSpinOnWin = true;
+  let musicOn = (localStorage.getItem('bj_musicOn') === '1');
+  let spinning = false;
+
+  // ---- audio (base64 small clips) ----
+  // These are short placeholder WAV sounds encoded in base64. They've been shortened to keep file size reasonable.
+  const audioSources = {
+    click: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRAAAAAA", // tiny click
+    deal: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRAAAAB/f39/", // tiny deal
+    spinStart: "data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAAA////", // tiny spin
+    spinWin: "data:audio/wav;base64,UklGRmIAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAP//AAD//w==", // chirp
+    win: "data:audio/wav;base64,UklGRhIAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAA////", // simple
+    lose: "data:audio/wav;base64,UklGRgYAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAP8A" // small
+  };
+
+  const sounds = {};
+  for(const k in audioSources){
+    const a = new Audio(audioSources[k]);
+    a.preload = 'auto';
+    sounds[k] = a;
+  }
+
+  // Background music (short loop) - small base64 sample tone
+  const musicAudio = new Audio("data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA..."); // note: short placeholder; browsers treat as user-initiated
+  musicAudio.loop = true;
+  musicAudio.volume = 0.22;
+
+  function playSfx(name){
+    try{
+      const s = sounds[name];
+      if(!s) return;
+      s.currentTime = 0;
+      s.play().catch(()=>{});
+    }catch(e){}
+  }
+
+  // ---- helper: safe number formatting ----
+  function fmtMoney(n){
+    if(Number.isInteger(n)) return n.toString();
+    return n.toFixed(2);
+  }
+
+  // ---- deck / card helpers ----
+  const suits = ['♠','♥','♦','♣'];
+  const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+  function createDeck(){
+    const d = [];
+    for(const s of suits){
+      for(const r of ranks){
+        d.push({rank:r, suit:s});
+      }
+    }
+    return d;
+  }
+  function shuffle(array){
+    for(let i = array.length -1; i>0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  }
+  function ensureDeck(){
+    if(!deck || deck.length < 15){
+      deck = createDeck().concat(createDeck()); // 2 decks
+      shuffle(deck);
+    }
+  }
+  function drawCard(){
+    ensureDeck();
+    return deck.pop();
+  }
+  function cardValue(card){
+    if(card.rank === 'A') return 11;
+    if(['J','Q','K'].includes(card.rank)) return 10;
+    return Number(card.rank);
+  }
+  function handValue(cards){
+    let total = 0, aces = 0;
+    for(const c of cards){
+      total += cardValue(c);
+      if(c.rank === 'A') aces++;
+    }
+    while(total > 21 && aces > 0){
+      total -= 10; aces--;
+    }
+    return total;
+  }
+  function isBlackjack(cards){
+    return cards.length === 2 && handValue(cards) === 21;
+  }
+
+  // ---- UI render ----
+  function renderCardElement(card){
+    const el = document.createElement('div');
+    el.className = 'card';
+    if(card.suit === '♥' || card.suit === '♦') el.classList.add('red');
+    el.innerHTML = `<div style="font-size:13px">${card.rank}</div><div style="font-size:22px;text-align:center">${card.suit}</div><div style="font-size:13px;text-align:right">${card.rank}</div>`;
+    return el;
+  }
+  function renderBackCard(){
+    const el = document.createElement('div');
+    el.className = 'card back';
+    return el;
+  }
+
+  function renderHands(revealDealer=false){
+    dealerCardsEl.innerHTML = '';
+    playerCardsEl.innerHTML = '';
+
+    dealer.forEach((c, idx) => {
+      if(idx === 1 && !revealDealer && inRound){
+        dealerCardsEl.appendChild(renderBackCard());
+      } else {
+        dealerCardsEl.appendChild(renderCardElement(c));
+      }
+    });
+
+    player.forEach(c => {
+      const ce = renderCardElement(c);
+      playerCardsEl.appendChild(ce);
+      // simple deal animation
+      ce.classList.add('deal-anim');
+      setTimeout(()=>ce.classList.remove('deal-anim'), 260);
+    });
+
+    playerValueEl.textContent = handValue(player);
+    dealerValueEl.textContent = revealDealer ? handValue(dealer) : (inRound && dealer.length>0 ? cardValue(dealer[0]) : 0);
+  }
+
+  function updateUI(){
+    balanceEl.textContent = fmtMoney(balance);
+    betInput.value = bet;
+    currentMultiplierEl.textContent = wheelMultiplier.toFixed(2);
+    spinResultEl.textContent = wheelMultiplier.toFixed(2);
+    // toggle visuals
+    if(autoSpinOnWin) autoSpinSwitch.classList.add('on'); else autoSpinSwitch.classList.remove('on');
+    if(musicOn) musicSwitch.classList.add('on'), musicLabel.textContent='On'; else musicSwitch.classList.remove('on'), musicLabel.textContent='Off';
+  }
+
+  // ---- gameplay flow ----
+  function canAfford(amount){
+    return amount >= 1 && amount <= (balance + 0.0001);
+  }
+
+  function startDeal(){
+    bet = Math.max(1, Math.floor(Number(betInput.value) || 0));
+    if(!canAfford(bet)){
+      messageEl.textContent = 'Bet invalid or exceeds balance.';
+      playSfx('click');
+      return;
+    }
+    if(balance <= 0){
+      messageEl.textContent = 'No balance. Reset bankroll.';
+      return;
+    }
+    ensureDeck();
+    player = [drawCard(), drawCard()];
+    dealer = [drawCard(), drawCard()];
+    inRound = true;
+    playSfx('deal');
+    hitBtn.disabled = false;
+    standBtn.disabled = false;
+    doubleDownBtn.disabled = false;
+    dealBtn.disabled = true;
+    newRoundBtn.disabled = true;
+    messageEl.textContent = 'Your move — Hit, Stand, or Double Down';
+    renderHands(false);
+
+    // immediate blackjack check
+    const pBJ = isBlackjack(player);
+    const dBJ = isBlackjack(dealer);
+    if(pBJ || dBJ){
+      setTimeout(()=>resolveRound(true), 700);
+    }
+  }
+
+  function playerHit(){
+    if(!inRound) return;
+    player.push(drawCard());
+    playSfx('deal');
+    renderHands(false);
+    const pv = handValue(player);
+    if(pv > 21){
+      setTimeout(()=>resolveRound(true), 350);
+    }
+  }
+
+  function playerStand(){
+    if(!inRound) return;
+    // dealer plays
+    dealerPlay();
+  }
+
+  function playerDoubleDown(){
+    if(!inRound) return;
+    // double the bet (can't exceed balance)
+    const desired = Math.min(balance, bet * 2);
+    if(desired > balance){
+      messageEl.textContent = 'Cannot double — insufficient funds.';
+      playSfx('click');
+      return;
+    }
+    // update bet for this round (we treat bet variable as amount risked)
+    bet = desired;
+    betInput.value = bet;
+    // draw one card, then stand
+    player.push(drawCard());
+    playSfx('deal');
+    renderHands(false);
+    setTimeout(()=>dealerPlay(), 450);
+  }
+
+  function dealerPlay(){
+    renderHands(true);
+    hitBtn.disabled = true;
+    standBtn.disabled = true;
+    doubleDownBtn.disabled = true;
+    // dealer hits until 17 or greater; treat soft 17 as stand
+    function step(){
+      const dv = handValue(dealer);
+      if(dv < 17){
+        dealer.push(drawCard());
+        playSfx('deal');
+        renderHands(true);
+        setTimeout(step, 600);
+      } else {
+        setTimeout(()=>resolveRound(true), 350);
+      }
+    }
+    step();
+  }
+
+  // resolve round: compute base payout, then if win and autoSpinOnWin true -> spin wheel and apply multiplier; otherwise if wheel multiplier not 1, apply it (manual spin before round)
+  function resolveRound(revealDealer=false){
+    inRound = false;
+    renderHands(true);
+    hitBtn.disabled = true;
+    standBtn.disabled = true;
+    doubleDownBtn.disabled = true;
+    dealBtn.disabled = false;
+    newRoundBtn.disabled = false;
+
+    const pv = handValue(player);
+    const dv = handValue(dealer);
+    let resultText = '';
+    let basePayout = 0; // positive means player gains this much net
+    // check busts and blackjacks
+    if(pv > 21){
+      resultText = `BUST! You lose $${fmtMoney(bet)}.`;
+      basePayout = -bet;
+      playSfx('lose');
+      applyNetPayout(basePayout, resultText);
+      return;
+    }
+    const playerBJ = isBlackjack(player);
+    const dealerBJ = isBlackjack(dealer);
+    if(playerBJ && !dealerBJ){
+      basePayout = bet * 1.5;
+      resultText = `BLACKJACK! Base win $${fmtMoney(basePayout)}.`;
+    } else if(dealerBJ && !playerBJ){
+      basePayout = -bet;
+      resultText = `Dealer Blackjack. You lose $${fmtMoney(bet)}.`;
+    } else if(dv > 21){
+      basePayout = bet;
+      resultText = `Dealer busts. Base win $${fmtMoney(basePayout)}.`;
+    } else if(pv > dv){
+      basePayout = bet;
+      resultText = `You win $${fmtMoney(basePayout)} (base).`;
+    } else if(pv === dv){
+      basePayout = 0;
+      resultText = `Push. Bet returned.`;
+    } else {
+      basePayout = -bet;
+      resultText = `You lose $${fmtMoney(bet)}.`;
+    }
+
+    // if basePayout <= 0 (loss/push), just apply immediately
+    if(basePayout <= 0){
+      if(basePayout < 0) playSfx('lose'); else playSfx('click');
+      applyNetPayout(basePayout, resultText);
+      return;
+    }
+
+    // basePayout is positive -> there's a win
+    // if autoSpinOnWin -> spin wheel automatically (animation + sfx) then multiply payout and apply
+    if(autoSpinOnWin){
+      // auto spin (animated) and then apply
+      playSfx('spinStart');
+      spinWheelAnimated().then(mult => {
+        const finalPayout = +(basePayout * mult).toFixed(2);
+        const txt = `${resultText} Wheel ×${mult.toFixed(2)} applied → $${fmtMoney(finalPayout)} total.`;
+        playSfx('win');
+        applyNetPayout(finalPayout, txt);
+      }).catch(()=> {
+        // fallback if something fails
+        applyNetPayout(basePayout, resultText);
+      });
+    } else {
+      // if user has manually set wheelMultiplier (not 1), apply it to basePayout
+      if(wheelMultiplier !== 1){
+        const finalPayout = +(basePayout * wheelMultiplier).toFixed(2);
+        const txt = `${resultText} Wheel ×${wheelMultiplier.toFixed(2)} applied → $${fmtMoney(finalPayout)} total.`;
+        playSfx('win');
+        applyNetPayout(finalPayout, txt);
+      } else {
+        applyNetPayout(basePayout, resultText);
+        playSfx('win');
+      }
+    }
+  }
+
+  function applyNetPayout(amount, text){
+    // amount is net change to balance: positive -> add; negative -> subtract; zero -> push
+    balance = +(balance + amount).toFixed(2);
+    if(balance < 0) balance = 0;
+    messageEl.textContent = text;
+    // glow when win
+    if(amount > 0){
+      const ph = document.getElementById('playerHand');
+      ph.classList.add('win-glow');
+      setTimeout(()=>ph.classList.remove('win-glow'), 900);
+    }
+    // persist
+    localStorage.setItem('bj_balance', String(balance));
+    updateUI();
+  }
+
+  // ---- quick bet helpers ----
+  halfBetBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    const half = Math.floor(balance / 2);
+    bet = Math.max(1, half);
+    betInput.value = bet;
+    updateUI();
+  });
+
+  doubleBetBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    const desired = Math.floor((Number(betInput.value) || 1) * 2);
+    bet = Math.min(balance, Math.max(1, desired));
+    betInput.value = bet;
+    updateUI();
+  });
+
+  setBankBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    const val = Math.max(1, Number(startCashInput.value) || 1000);
+    balance = +val;
+    localStorage.setItem('bj_balance', String(balance));
+    updateUI();
+    messageEl.textContent = 'Bankroll set. Place a bet and press Deal.';
+  });
+
+  // ---- main buttons bindings ----
+  dealBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    if(inRound){
+      messageEl.textContent = 'Round already in progress.';
+      return;
+    }
+    bet = Math.max(1, Math.floor(Number(betInput.value) || 1));
+    if(!canAfford(bet)){
+      messageEl.textContent = 'Bet invalid or exceeds balance.';
+      playSfx('click');
+      return;
+    }
+    startDeal();
+  });
+
+  hitBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    playerHit();
+  });
+  standBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    playerStand();
+  });
+  doubleDownBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    playerDoubleDown();
+  });
+  newRoundBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    player = [];
+    dealer = [];
+    inRound = false;
+    dealBtn.disabled = false;
+    hitBtn.disabled = true;
+    standBtn.disabled = true;
+    doubleDownBtn.disabled = true;
+    newRoundBtn.disabled = true;
+    messageEl.textContent = 'Place a bet and press Deal.';
+    renderHands(false);
+  });
+
+  // bet input constraint
+  betInput.addEventListener('change', ()=>{
+    let v = Math.floor(Number(betInput.value) || 1);
+    if(v < 1) v = 1;
+    if(v > balance) v = Math.floor(balance);
+    betInput.value = v;
+    bet = v;
+  });
+
+  // ---- wheel drawing & logic ----
+  const wheelSegments = [
+    {label: '0.5×', value: 0.5, color: '#c13b3b'},
+    {label: '1×', value: 1.0, color: '#2e9bff'},
+    {label: '1.25×', value: 1.25, color: '#6be26a'},
+    {label: '1.5×', value: 1.5, color: '#00b894'},
+    {label: '2×', value: 2.0, color: '#ffb72b'},
+    {label: '3×', value: 3.0, color: '#8e44ad'}
+  ];
+  const cx = wheelCanvas.width / 2;
+  const cy = wheelCanvas.height / 2;
+  const radius = Math.min(cx, cy) - 12;
+  let rotation = 0;
+
+  function drawWheel(){
+    ctx.clearRect(0,0,wheelCanvas.width,wheelCanvas.height);
+    const seg = wheelSegments.length;
+    const anglePer = (Math.PI*2) / seg;
+    for(let i=0;i<seg;i++){
+      const start = rotation + i*anglePer;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,radius,start,start+anglePer);
+      ctx.closePath();
+      ctx.fillStyle = wheelSegments[i].color;
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.rotate(start + anglePer/2);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.font = '14px system-ui,Arial';
+      ctx.fillText(wheelSegments[i].label, radius-10, 6);
+      ctx.restore();
+    }
+    // center
+    ctx.beginPath();
+    ctx.arc(cx,cy,36,0,Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fill();
+    ctx.fillStyle = 'white';
+    ctx.font = '14px system-ui,Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('SPIN', cx, cy+5);
+
+    // pointer
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - radius - 6);
+    ctx.lineTo(cx-12, cy - radius + 22);
+    ctx.lineTo(cx+12, cy - radius + 22);
+    ctx.closePath();
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  }
+  drawWheel();
+
+  // spin once and return Promise resolving to multiplier
+  function spinWheelAnimated(preselectedIndex = null){
+    if(spinning) return Promise.reject('already spinning');
+    spinning = true;
+    playSfx('spinStart');
+    spinBtn.disabled = true;
+    return new Promise((resolve) => {
+      const segCount = wheelSegments.length;
+      const chosenIndex = (preselectedIndex === null) ? Math.floor(Math.random()*segCount) : preselectedIndex;
+      // compute target rotation such that chosenIndex lands at top pointer
+      const fullRot = 3 + Math.floor(Math.random()*3);
+      const anglePer = (Math.PI*2)/segCount;
+      const target = fullRot * Math.PI*2 + (Math.PI/2) - (chosenIndex * anglePer + (anglePer/2));
+      const start = rotation;
+      const duration = 2200 + Math.random()*800;
+      const startTime = performance.now();
+
+      function frame(t){
+        const elapsed = t - startTime;
+        const p = Math.min(1, elapsed/duration);
+        const eased = 1 - Math.pow(1-p,3);
+        rotation = start + (target - start) * eased;
+        drawWheel();
+        if(p < 1) requestAnimationFrame(frame);
+        else {
+          spinning = false;
+          spinBtn.disabled = false;
+          wheelMultiplier = wheelSegments[chosenIndex].value;
+          currentMultiplierEl.textContent = wheelMultiplier.toFixed(2);
+          spinResultEl.textContent = wheelMultiplier.toFixed(2);
+          playSfx('spinWin');
+          // small delay then resolve
+          setTimeout(()=>{ spinning=false; resolve(wheelMultiplier); }, 260);
+        }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  spinBtn.addEventListener('click', ()=>{
+    // manual spin - sets multiplier for next wins (if autoSpinOnWin off), or you can use it anytime
+    playSfx('click');
+    spinWheelAnimated().then(mult => {
+      messageEl.textContent = `Wheel set ×${mult.toFixed(2)} for next wins.`;
+      updateUI();
+    }).catch(()=>{});
+  });
+
+  resetMultiplierBtn.addEventListener('click', ()=>{
+    playSfx('click');
+    wheelMultiplier = 1.0;
+    currentMultiplierEl.textContent = wheelMultiplier.toFixed(2);
+    spinResultEl.textContent = wheelMultiplier.toFixed(2);
+    messageEl.textContent = 'Multiplier reset to ×1.';
+    updateUI();
+  });
+
+  // ---- toggles ----
+  autoSpinSwitch.addEventListener('click', ()=>{
+    autoSpinOnWin = !autoSpinOnWin;
+    playSfx('click');
+    updateUI();
+  });
+
+  musicSwitch.addEventListener('click', ()=>{
+    musicOn = !musicOn;
+    localStorage.setItem('bj_musicOn', musicOn ? '1' : '0');
+    playSfx('click');
+    updateUI();
+    if(musicOn){
+      // start music only after user action — many browsers require user gesture
+      musicAudio.play().catch(()=>{ /* ignore */ });
+    } else {
+      musicAudio.pause();
+      try{ musicAudio.currentTime = 0; } catch(e){}
+    }
+  });
+
+  // Initialize music state from storage
+  if(musicOn){
+    // do not autoplay; set UI and let user toggle or we can start because the page load is a user gesture if they clicked something earlier - but safer: do not start automatically
+    // We'll show On but not auto-play to respect browser policies: play only when user toggles.
+    updateUI();
+  }
+
+  // ---- persistence & initial render ----
+  function init(){
+    // restore balance, music preference
+    balance = Number(localStorage.getItem('bj_balance') || balance);
+    musicOn = localStorage.getItem('bj_musicOn') === '1';
+    if(musicOn){
+      musicSwitch.classList.add('on');
+      musicLabel.textContent = 'On';
+    } else {
+      musicSwitch.classList.remove('on');
+      musicLabel.textContent = 'Off';
+    }
+    updateUI();
+    renderHands(false);
+  }
+
+  init();
+
+  // small UX: ensure keyboard Enter on bet triggers deal
+  betInput.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') dealBtn.click();
+  });
+
+  // make sure clicking anywhere before music toggle will not auto-play; music starts only when user toggles switch
+
+  // Expose a minimal console interface for debugging (optional)
+  window.bj = {
+    getBalance: ()=>balance,
+    setBalance: (v)=>{balance=+v;localStorage.setItem('bj_balance',String(balance));updateUI();},
+    resetDeck: ()=>{deck=[];ensureDeck();}
+  };
+
+})();
+</script>
+</body>
+</html>
