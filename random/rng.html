@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Roulette — Red / Black (Final Fixed)</title>
+<title>Roulette — Red / Black (Practice Mode)</title>
 <style>
   :root{
     --bg:#061226;
@@ -38,6 +38,14 @@
     <section class="panel">
       <h1>Roulette — Red / Black</h1>
       <div class="subtitle">Color is chosen before spin. Wheel lands centered on that color.</div>
+      
+      <!-- Practice Balance Setter -->
+      <div style="margin-top:10px;">
+        <label>Set Balance for Practice: <input id="practiceBalanceInput" type="number" min="1" value="1000"></label>
+        <button id="applyBalanceBtn" class="ghost">Apply</button>
+      </div>
+
+      <!-- Current Balance Display -->
       <div style="margin-top:10px;">
         Balance: $<span id="balanceDisplay">1000</span><br>
         <label>Bet: <input id="betInput" type="number" value="10"></label>
@@ -73,6 +81,10 @@
   const lastOutcomeEl = document.getElementById('lastOutcome');
   const balanceDisplay = document.getElementById('balanceDisplay');
 
+  // New practice balance elements
+  const practiceBalanceInput = document.getElementById('practiceBalanceInput');
+  const applyBalanceBtn = document.getElementById('applyBalanceBtn');
+
   let balance = Number(localStorage.getItem('balance') || 1000);
   let bet = 10;
   let selectedColor = null;
@@ -100,6 +112,7 @@
       ctx.fillStyle = segments[i].color === 'red' ? '#e24b4b' : '#111';
       ctx.fill();
     }
+    // pointer
     ctx.beginPath();
     ctx.moveTo(cx,cy-radius-10);
     ctx.lineTo(cx-10,cy-radius+15);
@@ -114,6 +127,7 @@
     betInput.value = bet;
     betRedBtn.classList.toggle('selected', selectedColor==='red');
     betBlackBtn.classList.toggle('selected', selectedColor==='black');
+    practiceBalanceInput.value = balance;
   }
 
   function setMessage(t){ messageEl.textContent = t; }
@@ -161,14 +175,14 @@
     if(!selectedColor){setMessage('Select a color first!');return;}
     bet=Math.max(1,Number(betInput.value)||1);
     if(bet>balance){setMessage('Bet too high!');return;}
-    balance-=bet; // deduct
+    balance-=bet;
     localStorage.setItem('balance',balance);
     updateUI();
     setMessage('Spinning...');
     const winColor = pickWinningColor();
     spinToColor(winColor,()=>{
       if(selectedColor===winColor){
-        balance += bet*2; // ✅ FIXED payout
+        balance += bet*2; // double payout
         localStorage.setItem('balance',balance);
         setMessage(`You WON — ${winColor.toUpperCase()}! +$${bet}`);
       }else{
@@ -179,12 +193,22 @@
     });
   }
 
+  // Event bindings
   spinBtn.onclick=spin;
   betRedBtn.onclick=()=>{selectedColor='red';updateUI();setMessage('Betting on RED');};
   betBlackBtn.onclick=()=>{selectedColor='black';updateUI();setMessage('Betting on BLACK');};
   halfBtn.onclick=()=>{bet=Math.max(1,Math.floor(bet/2));updateUI();};
   doubleBtn.onclick=()=>{bet=Math.min(balance,Math.floor(bet*2));updateUI();};
   resetBtn.onclick=()=>{balance=1000;localStorage.setItem('balance',balance);updateUI();setMessage('Balance reset.');};
+
+  // Practice balance setter
+  applyBalanceBtn.onclick = ()=>{
+    const val = Math.max(1, Number(practiceBalanceInput.value) || 1000);
+    balance = val;
+    localStorage.setItem('balance',balance);
+    updateUI();
+    setMessage(`Practice balance set to $${balance}`);
+  }
 
   drawWheel();
   updateUI();
