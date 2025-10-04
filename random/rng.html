@@ -1,25 +1,24 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Roulette — Red / Black</title>
 <style>
-  :root{
+  :root {
     --bg:#061226;
     --panel:#0e2433;
     --accent:#ffbf00;
     --muted:#8da6c1;
-    --red:#e85b5b;
+    --red:#e24b4b;
     --black:#111827;
   }
   *{box-sizing:border-box}
   body{
     margin:0;
     font-family:Inter,system-ui,Segoe UI,Roboto,Arial;
-    background:radial-gradient(800px 400px at 10% 10%, rgba(255,255,255,0.02), transparent 6%),linear-gradient(180deg,#04101b 0%, #071825 100%);
+    background:radial-gradient(800px 400px at 10% 10%,rgba(255,255,255,0.02),transparent 6%),linear-gradient(180deg,#04101b 0%,#071825 100%);
     color:#eaf6ff;
-    -webkit-font-smoothing:antialiased;
   }
   .wrap{max-width:950px;margin:auto;padding:18px;display:grid;grid-template-columns:1fr 350px;gap:16px}
   header{grid-column:1/-1;margin-bottom:10px}
@@ -45,9 +44,7 @@
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Roulette — Red / Black</h1>
-  </header>
+  <header><h1>Roulette — Red / Black</h1></header>
 
   <section class="panel">
     <div class="controls">
@@ -79,9 +76,7 @@
   </section>
 
   <aside class="panel">
-    <div class="wheel-wrap">
-      <canvas id="wheel" width="400" height="400"></canvas>
-    </div>
+    <div class="wheel-wrap"><canvas id="wheel" width="400" height="400"></canvas></div>
   </aside>
 
   <footer>Roulette — Red or Black | Works on GitHub Pages</footer>
@@ -89,146 +84,120 @@
 
 <script>
 (() => {
-  const betInput = document.getElementById('betInput');
-  const balanceDisplay = document.getElementById('balanceDisplay');
-  const startBalanceEl = document.getElementById('startBalance');
-  const setBalanceBtn = document.getElementById('setBalance');
-  const halfBtn = document.getElementById('halfBtn');
-  const doubleBtn = document.getElementById('doubleBtn');
-  const betRed = document.getElementById('betRed');
-  const betBlack = document.getElementById('betBlack');
-  const spinBtn = document.getElementById('spinBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const messageEl = document.getElementById('message');
-  const musicBtn = document.getElementById('musicBtn');
-  const canvas = document.getElementById('wheel');
-  const ctx = canvas.getContext('2d');
+  const betInput=document.getElementById('betInput'),
+        balanceDisplay=document.getElementById('balanceDisplay'),
+        startBalanceEl=document.getElementById('startBalance'),
+        setBalanceBtn=document.getElementById('setBalance'),
+        halfBtn=document.getElementById('halfBtn'),
+        doubleBtn=document.getElementById('doubleBtn'),
+        betRed=document.getElementById('betRed'),
+        betBlack=document.getElementById('betBlack'),
+        spinBtn=document.getElementById('spinBtn'),
+        resetBtn=document.getElementById('resetBtn'),
+        messageEl=document.getElementById('message'),
+        musicBtn=document.getElementById('musicBtn'),
+        canvas=document.getElementById('wheel'),
+        ctx=canvas.getContext('2d');
 
-  let balance = +localStorage.getItem('rb_balance') || 1000;
-  let bet = +betInput.value || 10;
-  let selected = null;
-  let spinning = false;
-  let musicOn = localStorage.getItem('rb_music') !== '0';
+  let balance=+localStorage.getItem('rb_balance')||1000;
+  let bet=+betInput.value||10;
+  let selected=null;
+  let spinning=false;
+  let musicOn=localStorage.getItem('rb_music')!=='0';
+  const segCount=36;
+  const cx=canvas.width/2,cy=canvas.height/2,r=180;
+  let rotation=0;
+  let winnerIndex=null;
 
-  const music = new Audio("data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA...");
-  music.loop = true;
-  music.volume = 0.2;
-
-  const segCount = 36;
-  const cx = canvas.width/2, cy = canvas.height/2, r = 180;
-  let rotation = 0;
+  const music=new Audio("data:audio/mpeg;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA...");
+  music.loop=true; music.volume=0.2;
 
   function drawWheel(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    const ang = (Math.PI*2)/segCount;
+    const ang=(Math.PI*2)/segCount;
     for(let i=0;i<segCount;i++){
       ctx.beginPath();
       ctx.moveTo(cx,cy);
       ctx.arc(cx,cy,r,i*ang+rotation,(i+1)*ang+rotation);
       ctx.closePath();
-      ctx.fillStyle = i%2? "#111":"#e24b4b";
+      ctx.fillStyle=i%2?"#111":"#e24b4b";
       ctx.fill();
+      if(winnerIndex===i){
+        ctx.lineWidth=5;
+        ctx.strokeStyle="yellow";
+        ctx.stroke();
+      }
     }
     ctx.beginPath();
     ctx.arc(cx,cy,30,0,Math.PI*2);
-    ctx.fillStyle="#000";ctx.fill();
+    ctx.fillStyle="#000"; ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(cx,cy-r-4);ctx.lineTo(cx-12,cy-r+20);ctx.lineTo(cx+12,cy-r+20);ctx.closePath();
-    ctx.fillStyle="#fff";ctx.fill();
+    ctx.moveTo(cx,cy-r-4);ctx.lineTo(cx-12,cy-r+20);ctx.lineTo(cx+12,cy-r+20);
+    ctx.closePath(); ctx.fillStyle="#fff";ctx.fill();
   }
 
   function updateUI(){
-    balanceDisplay.textContent = balance;
-    betInput.value = bet;
-    musicBtn.textContent = musicOn?"On":"Off";
+    balanceDisplay.textContent=balance;
+    betInput.value=bet;
+    musicBtn.textContent=musicOn?"On":"Off";
   }
-
-  function setMessage(msg){ messageEl.textContent = msg; }
-
-  function save(){ localStorage.setItem('rb_balance',balance); }
-
-  function spinWheel(callback){
-    if(spinning) return;
-    spinning = true;
-    const chosen = Math.floor(Math.random()*segCount);
-    const spins = 5 + Math.random()*3;
-    const angPer = (Math.PI*2)/segCount;
-    const target = (Math.PI/2)-(chosen*angPer+angPer/2);
-    const start = rotation;
-    const total = start + spins*Math.PI*2 + (target - start%(Math.PI*2));
-    const dur = 3000;
-    const t0 = performance.now();
-    (function frame(t){
-      const p = Math.min(1,(t-t0)/dur);
-      const ease = 1-Math.pow(1-p,3);
-      rotation = start+(total-start)*ease;
-      drawWheel();
-      if(p<1) requestAnimationFrame(frame); else {
-        spinning=false;
-        callback(chosen%2? "black":"red");
-      }
-    })(t0);
-  }
-
-  betRed.onclick = ()=>{ selected="red"; highlight(); setMessage("Selected RED"); };
-  betBlack.onclick = ()=>{ selected="black"; highlight(); setMessage("Selected BLACK"); };
-
+  function setMessage(m){messageEl.textContent=m;}
+  function save(){localStorage.setItem('rb_balance',balance);}
   function highlight(){
     betRed.classList.toggle("selected",selected==="red");
     betBlack.classList.toggle("selected",selected==="black");
   }
 
-  spinBtn.onclick = ()=>{
-    if(spinning) return;
-    if(!selected){ setMessage("Pick Red or Black first"); return; }
-    bet = Math.min(balance, Math.max(1, +betInput.value||1));
-    if(balance<=0){ setMessage("No balance"); return; }
-    balance -= bet;
-    save(); updateUI();
-    spinWheel(result=>{
-      if(result===selected){
-        balance += bet*2;
-        setMessage("You won! Landed "+result.toUpperCase());
-      } else {
-        setMessage("You lost! Landed "+result.toUpperCase());
-      }
-      save(); updateUI();
+  function spinWheel(winningColor,callback){
+    if(spinning)return;
+    spinning=true;
+    winnerIndex=null;
+    const angPer=(Math.PI*2)/segCount;
+    // choose a segment that matches color
+    const possible=[];
+    for(let i=0;i<segCount;i++){if((i%2?"black":"red")===winningColor)possible.push(i);}
+    const chosen=possible[Math.floor(Math.random()*possible.length)];
+    const spins=5+Math.random()*2;
+    const targetAngle=(Math.PI/2)-(chosen*angPer+angPer/2);
+    const start=rotation;
+    const total=start+spins*Math.PI*2+(targetAngle-start%(Math.PI*2));
+    const dur=3000;
+    const t0=performance.now();
+    (function frame(t){
+      const p=Math.min(1,(t-t0)/dur);
+      const ease=1-Math.pow(1-p,3);
+      rotation=start+(total-start)*ease;
+      drawWheel();
+      if(p<1)requestAnimationFrame(frame);
+      else{spinning=false;winnerIndex=chosen;drawWheel();callback(winningColor);}
+    })(t0);
+  }
+
+  betRed.onclick=()=>{selected="red";highlight();setMessage("Selected RED");};
+  betBlack.onclick=()=>{selected="black";highlight();setMessage("Selected BLACK");};
+
+  spinBtn.onclick=()=>{
+    if(spinning)return;
+    if(!selected){setMessage("Pick Red or Black first");return;}
+    bet=Math.min(balance,Math.max(1,+betInput.value||1));
+    if(balance<=0){setMessage("No balance");return;}
+    balance-=bet;save();updateUI();
+    const winningColor=Math.random()<0.5?"red":"black";
+    spinWheel(winningColor,(result)=>{
+      if(result===selected){balance+=bet*2;setMessage("You won! Landed "+result.toUpperCase());}
+      else{setMessage("You lost! Landed "+result.toUpperCase());}
+      save();updateUI();
     });
   };
 
-  halfBtn.onclick = ()=>{
-    bet = Math.max(1, Math.floor(bet/2));
-    betInput.value = bet;
-    setMessage("Bet halved to "+bet);
-  };
-  doubleBtn.onclick = ()=>{
-    bet = Math.min(balance, Math.floor(bet*2));
-    betInput.value = bet;
-    setMessage("Bet doubled to "+bet);
-  };
-  setBalanceBtn.onclick = ()=>{
-    balance = Math.max(1, +startBalanceEl.value||1000);
-    save(); updateUI();
-    setMessage("Balance set to "+balance);
-  };
-  resetBtn.onclick = ()=>{
-    balance=1000; save(); updateUI();
-    setMessage("Balance reset");
-  };
+  halfBtn.onclick=()=>{bet=Math.max(1,Math.floor(bet/2));betInput.value=bet;setMessage("Bet halved to "+bet);};
+  doubleBtn.onclick=()=>{bet=Math.min(balance,Math.floor(bet*2));betInput.value=bet;setMessage("Bet doubled to "+bet);};
+  setBalanceBtn.onclick=()=>{balance=Math.max(1,+startBalanceEl.value||1000);save();updateUI();setMessage("Balance set to "+balance);};
+  resetBtn.onclick=()=>{balance=1000;save();updateUI();setMessage("Balance reset");};
+  musicBtn.onclick=()=>{musicOn=!musicOn;localStorage.setItem('rb_music',musicOn?'1':'0');updateUI();if(musicOn)music.play().catch(()=>{});else music.pause();};
+  window.addEventListener('pointerdown',()=>{if(musicOn)music.play().catch(()=>{});},{once:true});
 
-  musicBtn.onclick=()=>{
-    musicOn=!musicOn;
-    localStorage.setItem('rb_music', musicOn?'1':'0');
-    updateUI();
-    if(musicOn) music.play().catch(()=>{}); else music.pause();
-  };
-
-  window.addEventListener('pointerdown',()=>{
-    if(musicOn) music.play().catch(()=>{});
-  },{once:true});
-
-  drawWheel();
-  updateUI();
+  drawWheel();updateUI();
 })();
 </script>
 </body>
