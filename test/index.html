@@ -501,23 +501,25 @@
       return;
     }
 
-    if (currentServer === 'vidsrc1') {
-      iframe.src = `https://vsrc.su/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
-    } else if (currentServer === 'vidsrc2') {
-      iframe.src = `https://vidsrcme.ru/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
-    } else if (currentServer === 'vidsrc3') {
-      iframe.src = `https://vidsrcme.su/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
-    } else if (currentServer === 'vidsrc4') {
-      iframe.src = `https://vidsrc-me.ru/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
-    } else if (currentServer === 'vidsrc5') {
-      iframe.src = `https://vidsrc-me.su/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
-    } else if (currentServer === 'vidsrc6') {
-      iframe.src = `https://vidsrc-embed.ru/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
-    } else if (currentServer === 'vidsrc7') {
-      iframe.src = `https://vidsrc-embed.su/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
-    } else if (currentServer === 'vidplay') {
-      iframe.src = `https://vidplay.to/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
-    }
+if (currentServer === 'vidsrc1') {
+  // This one uses the old style embed
+  iframe.src = `https://vsrc.su/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
+} else if (currentServer === 'vidsrc2') {
+  iframe.src = `https://vidsrcme.ru/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
+} else if (currentServer === 'vidsrc3') {
+  iframe.src = `https://vidsrcme.su/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
+} else if (currentServer === 'vidsrc4') {
+  iframe.src = `https://vidsrc-me.ru/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
+} else if (currentServer === 'vidsrc5') {
+  iframe.src = `https://vidsrc-me.su/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
+} else if (currentServer === 'vidsrc6') {
+  iframe.src = `https://vidsrc-embed.ru/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
+} else if (currentServer === 'vidsrc7') {
+  iframe.src = `https://vidsrc-embed.su/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
+} else if (currentServer === 'vidplay') {
+  iframe.src = `https://vidplay.to/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
+}
+
   }
 
   function populateSeasons(total) {
