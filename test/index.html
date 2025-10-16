@@ -306,12 +306,13 @@
             <div class="serverDropdownItem active" data-server="vidsrc1" role="menuitem" tabindex="0">VidSrc 1</div>
             <div class="serverDropdownItem" data-server="vidsrc2" role="menuitem" tabindex="0">VidSrc 2</div>
             <div class="serverDropdownItem" data-server="vidsrc3" role="menuitem" tabindex="0">VidSrc 3</div>
-            <div class="serverDropdownItem" data-server="vidsrc4" role="menuitem" tabindex="0">VidSrc 4</div>
+            \<div class="serverDropdownItem" data-server="vidsrc4" role="menuitem" tabindex="0">VidSrc 4</div>
             <div class="serverDropdownItem" data-server="vidsrc5" role="menuitem" tabindex="0">VidSrc 5</div>
             <div class="serverDropdownItem" data-server="vidsrc6" role="menuitem" tabindex="0">VidSrc 6</div>
             <div class="serverDropdownItem" data-server="vidsrc7" role="menuitem" tabindex="0">VidSrc 7</div>
             <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
           </div>
+        
         </button>
         <button id="fullscreenBtn" title="Fullscreen">
           <svg
@@ -503,7 +504,7 @@
     if (currentServer === 'vidsrc1') {
       iframe.src = `https://vsrc.su/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
     } else if (currentServer === 'vidsrc2') {
-      iframe.src = `https://vsrc.su/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
+      iframe.src = `https://vidsrcme.ru/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
     } else if (currentServer === 'vidsrc3') {
       iframe.src = `https://vidsrcme.su/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
     } else if (currentServer === 'vidsrc4') {
