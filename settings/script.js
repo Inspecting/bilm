@@ -87,3 +87,6 @@
 
   window.addEventListener('DOMContentLoaded', syncUI);
   window.addEventListener('bilm:theme-changed', syncUI);
+
+</body>
+</html>
