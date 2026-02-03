@@ -359,6 +359,8 @@
           <div id="serverDropdown" role="menu" aria-label="Server selection">
             <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
             <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
+            <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
+            <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
           </div>
         </button>
         <button id="fullscreenBtn" title="Fullscreen">
@@ -636,6 +638,28 @@
     }
   }
 
+  function buildTvUrl(server) {
+    if (!tmdbId && !imdbId) return '';
+    const season = currentSeason;
+    const episode = currentEpisode;
+    switch (server) {
+      case 'vidsrc':
+        return `https://vsrc.su/embed/${imdbId || tmdbId}/${season}-${episode}`;
+      case 'vidplay':
+        return `https://vidplay.to/tv/${imdbId || tmdbId}/${season}/${episode}`;
+      case 'godrive':
+        return tmdbId
+          ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
+          : '';
+      case 'multiembed':
+        return imdbId
+          ? `https://multiembed.mov/directstream.php?video_id=${imdbId}&s=${season}&e=${episode}`
+          : `https://multiembed.mov/directstream.php?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`;
+      default:
+        return '';
+    }
+  }
+
   function updateIframe() {
     saveProgress();
 
@@ -646,11 +670,12 @@
       return;
     }
 
-    if (currentServer === 'vidsrc') {
-      iframe.src = `https://vsrc.su/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
-    } else if (currentServer === 'vidplay') {
-      iframe.src = `https://vidplay.to/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
+    let url = buildTvUrl(currentServer);
+    if (!url) {
+      setActiveServer('vidsrc');
+      url = buildTvUrl('vidsrc');
     }
+    iframe.src = url;
 
     updateContinueWatching();
   }

@@ -101,6 +101,7 @@
       background: var(--surface-2);
       border: 1px solid transparent;
       transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+      flex-wrap: wrap;
     }
 
     .control-row:hover {
@@ -111,6 +112,11 @@
     .control-row label {
       font-size: 0.95rem;
       color: var(--text-primary);
+    }
+
+    .control-row > div {
+      min-width: 180px;
+      flex: 1 1 auto;
     }
 
     .control-row small {
@@ -140,6 +146,8 @@
       position: relative;
       width: 48px;
       height: 26px;
+      flex: 0 0 auto;
+      margin-left: auto;
     }
 
     .toggle input {
@@ -223,6 +231,13 @@
       box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
     }
 
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
+    }
+
     .btn-outline {
       background: transparent;
       color: var(--text-primary);
@@ -242,6 +257,10 @@
     @media (max-width: 720px) {
       main {
         padding: 20px 16px 80px;
+      }
+
+      .control-row {
+        align-items: flex-start;
       }
     }
   </style>
@@ -325,6 +344,8 @@
         <select id="serverSelect">
           <option value="vidsrc">VidSrc</option>
           <option value="vidplay">VidPlay</option>
+          <option value="godrive">GoDrive Player</option>
+          <option value="multiembed">MultiEmbed</option>
         </select>
       </div>
     </section>
