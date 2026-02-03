@@ -370,6 +370,7 @@ iframe {
   }
 
   function updateFavoriteButton(isFavorite) {
+    if (!favoriteBtn) return;
     favoriteBtn.classList.toggle('is-active', isFavorite);
     favoriteBtn.setAttribute('aria-pressed', isFavorite ? 'true' : 'false');
     favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
@@ -497,10 +498,12 @@ iframe {
     });
   });
 
-  favoriteBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleFavorite();
-  });
+  if (favoriteBtn) {
+    favoriteBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleFavorite();
+    });
+  }
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {

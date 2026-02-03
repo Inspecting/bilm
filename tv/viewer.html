@@ -463,6 +463,7 @@
   }
 
   function updateFavoriteButton(isFavorite) {
+    if (!favoriteBtn) return;
     favoriteBtn.classList.toggle('is-active', isFavorite);
     favoriteBtn.setAttribute('aria-pressed', isFavorite ? 'true' : 'false');
     favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
@@ -888,10 +889,12 @@ nextEpisodeBtn.addEventListener('click', () => {
   });
 
   fetchTMDBData();
-  favoriteBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleFavorite();
-  });
+  if (favoriteBtn) {
+    favoriteBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleFavorite();
+    });
+  }
 
   setTimeout(() => {
     continueWatchingEnabled = true;
