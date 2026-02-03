@@ -1,6 +1,6 @@
 (async () => {
   // Allow script to run ONLY on embed hosts
-  const allowedDomains = ['vidsrc.xyz', 'vidplay.to', 'videocdn.tv'];
+  const allowedDomains = ['vidsrc.xyz', 'videocdn.tv'];
 
   const hostname = location.hostname;
 

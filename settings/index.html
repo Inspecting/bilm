@@ -343,7 +343,6 @@
         </div>
         <select id="serverSelect">
           <option value="vidsrc">VidSrc</option>
-          <option value="vidplay">VidPlay</option>
           <option value="godrive">GoDrive Player</option>
           <option value="multiembed">MultiEmbed</option>
         </select>
@@ -387,6 +386,7 @@
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const presetsContainer = document.getElementById('accentPresets');
+  const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
 
   function applySettings(partial) {
     const current = window.bilmTheme?.getSettings?.() || {};
@@ -399,7 +399,8 @@
     backgroundSelect.value = settings.background || 'deep';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
-    serverSelect.value = settings.defaultServer || 'vidsrc';
+    const preferredServer = settings.defaultServer || 'vidsrc';
+    serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
   }
 
   accentPresets.forEach(color => {
