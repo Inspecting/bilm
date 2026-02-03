@@ -53,12 +53,13 @@
     }
     #playerWithControls {
       width: 100%;
-      border-radius: var(--radius-lg);
+      border-radius: 0;
       box-shadow: var(--shadow-glow);
       overflow: visible;
       display: flex;
       flex-direction: column;
       background: rgba(26, 22, 40, 0.9);
+      background: transparent;
       position: relative;
     }
     #mediaHeader {
@@ -88,6 +89,9 @@
   position: relative;
   background: rgba(26, 22, 40, 0.9);
   border-radius: var(--radius-lg);
+  background: black;
+  border-radius: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   overflow: hidden;         /* Clips iframe edges */
 }
 
@@ -97,6 +101,8 @@ iframe {
   border: none;
   display: block;
   border-radius: var(--radius-lg);
+  border-radius: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
     #clickShield {
       position: absolute;
@@ -117,6 +123,7 @@ iframe {
   position: relative;
   z-index: 10;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: 0;
 }
     #fullscreenBtn {
       background: transparent;
