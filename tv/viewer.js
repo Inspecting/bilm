@@ -534,3 +534,6 @@ nextEpisodeBtn.addEventListener('click', () => {
     updateContinueWatching();
     setInterval(updateContinueWatching, 30000);
   }, 30000);
+
+</body>
+</html>

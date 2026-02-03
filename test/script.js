@@ -199,3 +199,6 @@ closeBtn.addEventListener('click', () => {
 
 // Load TMDB data
 fetchTMDBData();
+
+</body>
+</html>
