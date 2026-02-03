@@ -154,6 +154,27 @@
     #serverBtn:hover {
       background-color: #a855f7;
     }
+    #favoriteBtn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #f0f0f0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border-radius: 6px;
+      transition: background-color 0.3s ease, color 0.3s ease;
+      flex-shrink: 0;
+    }
+    #favoriteBtn:hover {
+      background-color: #a855f7;
+    }
+    #favoriteBtn.is-active {
+      color: #facc15;
+    }
     #serverDropdown {
       position: absolute;
       top: 100%;
@@ -320,6 +341,11 @@
       </div>
 
       <div id="playexBar">
+        <button id="favoriteBtn" title="Add to favorites" aria-label="Add to favorites" aria-pressed="false">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 2.5l2.9 6.05 6.7.97-4.85 4.73 1.15 6.7L12 17.77 6.1 20.95l1.15-6.7L2.4 9.52l6.7-.97L12 2.5z"/>
+          </svg>
+        </button>
         <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
@@ -392,6 +418,7 @@
   const navbarContainer = document.getElementById('navbarContainer');
   const mediaTitle = document.getElementById('mediaTitle');
   const mediaMeta = document.getElementById('mediaMeta');
+  const favoriteBtn = document.getElementById('favoriteBtn');
   const seasonSelect = document.getElementById('seasonSelect');
   const episodeSelect = document.getElementById('episodeSelect');
   const prevSeasonBtn = document.getElementById('prevSeason');
@@ -408,6 +435,10 @@
   let currentServer = 'vidsrc';
   let totalSeasons = 1;
   let episodesPerSeason = {};
+  let continueWatchingEnabled = false;
+  let mediaDetails = null;
+  const CONTINUE_KEY = 'bilm-continue-watching';
+  const FAVORITES_KEY = 'bilm-favorites';
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -417,6 +448,82 @@
   let episodeCooldownTimer = null;
 
   let imdbId = null;
+
+  function loadList(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveList(key, items) {
+    localStorage.setItem(key, JSON.stringify(items));
+  }
+
+  function updateFavoriteButton(isFavorite) {
+    if (!favoriteBtn) return;
+    favoriteBtn.classList.toggle('is-active', isFavorite);
+    favoriteBtn.setAttribute('aria-pressed', isFavorite ? 'true' : 'false');
+    favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+    favoriteBtn.setAttribute('aria-label', favoriteBtn.title);
+  }
+
+  function toggleFavorite() {
+    if (!mediaDetails) return;
+    const items = loadList(FAVORITES_KEY);
+    const key = `tv-${mediaDetails.id}`;
+    const existingIndex = items.findIndex(item => item.key === key);
+    if (existingIndex >= 0) {
+      items.splice(existingIndex, 1);
+      saveList(FAVORITES_KEY, items);
+      updateFavoriteButton(false);
+      return;
+    }
+
+    items.unshift({
+      key,
+      id: mediaDetails.id,
+      type: 'tv',
+      title: mediaDetails.title,
+      date: mediaDetails.firstAirDate,
+      year: mediaDetails.year,
+      poster: mediaDetails.poster,
+      link: mediaDetails.link,
+      updatedAt: Date.now(),
+      season: currentSeason,
+      episode: currentEpisode
+    });
+    saveList(FAVORITES_KEY, items);
+    updateFavoriteButton(true);
+  }
+
+  function updateContinueWatching() {
+    if (!continueWatchingEnabled || !mediaDetails) return;
+    const items = loadList(CONTINUE_KEY);
+    const key = `tv-${mediaDetails.id}`;
+    const existingIndex = items.findIndex(item => item.key === key);
+    const payload = {
+      key,
+      id: mediaDetails.id,
+      type: 'tv',
+      title: mediaDetails.title,
+      date: mediaDetails.firstAirDate,
+      year: mediaDetails.year,
+      poster: mediaDetails.poster,
+      link: mediaDetails.link,
+      updatedAt: Date.now(),
+      season: currentSeason,
+      episode: currentEpisode
+    };
+
+    if (existingIndex >= 0) {
+      items.splice(existingIndex, 1);
+    }
+    items.unshift(payload);
+    saveList(CONTINUE_KEY, items);
+  }
 
   fullscreenBtn.onclick = () => {
     if (!isMobile) {
@@ -526,6 +633,8 @@
     } else if (currentServer === 'vidplay') {
       iframe.src = `https://vidplay.to/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
     }
+
+    updateContinueWatching();
   }
 
   function populateSeasons(total) {
@@ -690,7 +799,7 @@ nextEpisodeBtn.addEventListener('click', () => {
   }
 });
 
-episodeSelect.addEventListener('change', () => {
+  episodeSelect.addEventListener('change', () => {
   if (episodeCooldownActive) return;
   currentEpisode = parseInt(episodeSelect.value);
   updateIframe();
@@ -733,6 +842,23 @@ episodeSelect.addEventListener('change', () => {
       const displayDate = firstAirDate
         ? new Date(firstAirDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
         : 'Release date unavailable';
+      const year = firstAirDate ? firstAirDate.slice(0, 4) : 'N/A';
+      const poster = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image';
+      mediaTitle.textContent = showTitle;
+      mediaMeta.textContent = displayDate;
+      document.title = `Bilm 💜 - ${showTitle}`;
+
+      mediaDetails = {
+        id: tmdbId,
+        title: showTitle,
+        firstAirDate,
+        year,
+        poster,
+        link: `/bilm/tv/viewer.html?id=${tmdbId}`
+      };
+
+      const favorites = loadList(FAVORITES_KEY);
+      updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
       mediaTitle.textContent = showTitle;
       mediaMeta.textContent = displayDate;
       document.title = `Bilm 💜 - ${showTitle}`;
@@ -766,6 +892,17 @@ episodeSelect.addEventListener('change', () => {
   });
 
   fetchTMDBData();
+  if (favoriteBtn) {
+    favoriteBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleFavorite();
+    });
+  }
+
+  setTimeout(() => {
+    continueWatchingEnabled = true;
+    updateContinueWatching();
+  }, 30000);
 </script>
 
 </body>

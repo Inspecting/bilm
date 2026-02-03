@@ -133,6 +133,24 @@ button.search-btn:hover {
   color: #c084fc;
 }
 
+.subsection {
+  margin-bottom: 18px;
+}
+
+.subsection-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #e9d5ff;
+}
+
+.empty-state {
+  color: #888;
+  font-size: 14px;
+  padding: 8px 0;
+  text-align: left;
+}
+
 /* Horizontal scroll row */
 .scroll-row {
   display: flex;
