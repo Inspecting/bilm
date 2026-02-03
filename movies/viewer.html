@@ -53,13 +53,12 @@
     }
     #playerWithControls {
       width: 100%;
-      border-radius: 0;
+      border-radius: var(--radius-lg);
       box-shadow: var(--shadow-glow);
       overflow: visible;
       display: flex;
       flex-direction: column;
-      background: rgba(26, 22, 40, 0.9);
-      background: transparent;
+      background: rgba(0, 0, 0, 0.9);
       position: relative;
     }
     #mediaHeader {
@@ -87,11 +86,8 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   position: relative;
-  background: rgba(26, 22, 40, 0.9);
-  border-radius: var(--radius-lg);
   background: black;
-  border-radius: 0;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: var(--radius-lg);      /* Rounded corners */
   overflow: hidden;         /* Clips iframe edges */
 }
 
@@ -100,9 +96,7 @@ iframe {
   height: 100%;
   border: none;
   display: block;
-  border-radius: var(--radius-lg);
-  border-radius: 0;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  border-radius: var(--radius-lg);      /* Rounded corners (for safety) */
 }
     #clickShield {
       position: absolute;
@@ -122,8 +116,7 @@ iframe {
   user-select: none;
   position: relative;
   z-index: 10;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  border-radius: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);  /* Rounded bottom corners */
 }
     #fullscreenBtn {
       background: transparent;
@@ -310,7 +303,6 @@ iframe {
       </div>
     </div>
   </div>
-  <button id="closeBtn" aria-label="Close Player">✕</button>
 </main>
 
 <script>
@@ -336,7 +328,6 @@ iframe {
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const playerContainer = document.getElementById('playerContainer');
   const navbarContainer = document.getElementById('navbarContainer');
-  const closeBtn = document.getElementById('closeBtn');
   const mediaTitle = document.getElementById('mediaTitle');
   const mediaMeta = document.getElementById('mediaMeta');
   const favoriteBtn = document.getElementById('favoriteBtn');
@@ -574,28 +565,16 @@ iframe {
     } else {
       playerContainer.classList.add('simulated-fullscreen');
     }
-    if (closeBtn) {
-      closeBtn.style.display = 'block';
+    if (document.getElementById('closeBtn')) {
+      document.getElementById('closeBtn').style.display = 'block';
     }
     navbarContainer.classList.add('hide-navbar');
   };
 
-  if (closeBtn) {
-    closeBtn.onclick = () => {
-      if (isMobile) {
-        playerContainer.classList.remove('simulated-fullscreen');
-      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
-        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-      }
-      closeBtn.style.display = 'none';
-      navbarContainer.classList.remove('hide-navbar');
-    };
-  }
-
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) {
-      if (closeBtn) {
-        closeBtn.style.display = 'none';
+      if (document.getElementById('closeBtn')) {
+        document.getElementById('closeBtn').style.display = 'none';
       }
       navbarContainer.classList.remove('hide-navbar');
     }
