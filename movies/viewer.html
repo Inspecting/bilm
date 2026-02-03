@@ -565,17 +565,25 @@ iframe {
     } else {
       playerContainer.classList.add('simulated-fullscreen');
     }
-    if (document.getElementById('closeBtn')) {
-      document.getElementById('closeBtn').style.display = 'block';
-    }
+    if (closeBtn) closeBtn.style.display = 'block';
     navbarContainer.classList.add('hide-navbar');
   };
 
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      if (isMobile) {
+        playerContainer.classList.remove('simulated-fullscreen');
+      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      }
+      closeBtn.style.display = 'none';
+      navbarContainer.classList.remove('hide-navbar');
+    };
+  }
+
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) {
-      if (document.getElementById('closeBtn')) {
-        document.getElementById('closeBtn').style.display = 'none';
-      }
+      if (closeBtn) closeBtn.style.display = 'none';
       navbarContainer.classList.remove('hide-navbar');
     }
   });
