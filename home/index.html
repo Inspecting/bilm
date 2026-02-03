@@ -40,6 +40,30 @@
         <button class="search-btn" id="searchBtn">Search</button>
       </div>
     </div>
+
+    <section class="section" id="continueWatchingSection">
+      <h2 class="section-title">Continue Watching</h2>
+      <div class="subsection">
+        <h3 class="subsection-title">Movies</h3>
+        <div class="scroll-row" id="continueMovies"></div>
+      </div>
+      <div class="subsection">
+        <h3 class="subsection-title">TV Shows</h3>
+        <div class="scroll-row" id="continueTv"></div>
+      </div>
+    </section>
+
+    <section class="section" id="favoritesSection">
+      <h2 class="section-title">Favorites</h2>
+      <div class="subsection">
+        <h3 class="subsection-title">Movies</h3>
+        <div class="scroll-row" id="favoriteMovies"></div>
+      </div>
+      <div class="subsection">
+        <h3 class="subsection-title">TV Shows</h3>
+        <div class="scroll-row" id="favoriteTv"></div>
+      </div>
+    </section>
   </main>
 
   <!-- Load shared navbar HTML + CSS + JS dynamically like search.html -->
@@ -62,25 +86,7 @@
       });
   </script>
 
-  <!-- Search logic -->
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const searchInput = document.getElementById('searchInput');
-      const searchBtn = document.getElementById('searchBtn');
-
-      document.querySelector('main').classList.add('visible');
-
-      searchBtn.onclick = () => {
-        const query = searchInput.value.trim();
-        if (!query) return alert('Please enter a search term');
-        window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
-      };
-
-      searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') searchBtn.click();
-      });
-    });
-  </script>
+  <script src="/bilm/home/script.js"></script>
 
   <!-- Particle effect -->
   <script>
