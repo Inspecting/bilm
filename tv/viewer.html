@@ -859,6 +859,9 @@ nextEpisodeBtn.addEventListener('click', () => {
 
       const favorites = loadList(FAVORITES_KEY);
       updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
+      mediaTitle.textContent = showTitle;
+      mediaMeta.textContent = displayDate;
+      document.title = `Bilm 💜 - ${showTitle}`;
 
       episodesPerSeason = {};
       details.seasons.forEach(season => {
