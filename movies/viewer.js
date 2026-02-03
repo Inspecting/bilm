@@ -58,6 +58,10 @@
       setActiveServer(fallbackServer);
       url = buildMovieUrl(fallbackServer);
     }
+    if (url) {
+      iframe.src = url;
+      updateContinueWatching();
+    }
     iframe.src = url;
     updateContinueWatching();
   }

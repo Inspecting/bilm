@@ -520,6 +520,7 @@ nextEpisodeBtn.addEventListener('click', () => {
     }
   });
 
+  updateIframe();
   fetchTMDBData();
   if (favoriteBtn) {
     favoriteBtn.addEventListener('click', (event) => {
