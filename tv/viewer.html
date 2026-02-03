@@ -358,6 +358,7 @@
           </svg>
           <div id="serverDropdown" role="menu" aria-label="Server selection">
             <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
+            <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
             <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
             <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
           </div>
@@ -439,6 +440,7 @@
   const initialSettings = window.bilmTheme?.getSettings?.();
   let currentServer = initialSettings?.defaultServerPrimary || 'vidsrc';
   let backupServer = initialSettings?.defaultServerBackup || 'multiembed';
+  let currentServer = initialSettings?.defaultServer || 'vidsrc';
   let totalSeasons = 1;
   let episodesPerSeason = {};
   let continueWatchingEnabled = false;
@@ -615,6 +617,11 @@
       setActiveServer(newPrimary);
     }
     updateIframe();
+    const newServer = event.detail?.defaultServer;
+    if (newServer && newServer !== currentServer) {
+      setActiveServer(newServer);
+      updateIframe();
+    }
   });
 
   function saveProgress() {
@@ -647,6 +654,8 @@
     switch (server) {
       case 'vidsrc':
         return `https://vsrc.su/embed/${imdbId || tmdbId}/${season}-${episode}`;
+      case 'vidplay':
+        return `https://vidplay.to/tv/${imdbId || tmdbId}/${season}/${episode}`;
       case 'godrive':
         return tmdbId
           ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
@@ -699,6 +708,10 @@
     if (!url) {
       setActiveServer(available[0]);
       url = buildTvUrl(available[0]);
+    let url = buildTvUrl(currentServer);
+    if (!url) {
+      setActiveServer('vidsrc');
+      url = buildTvUrl('vidsrc');
     }
     iframe.src = url;
 

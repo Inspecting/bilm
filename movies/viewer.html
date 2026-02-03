@@ -281,6 +281,7 @@ iframe {
           </svg>
           <div id="serverDropdown" role="menu" aria-label="Server selection">
             <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
+            <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
             <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
             <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
           </div>
@@ -339,6 +340,7 @@ iframe {
   const initialSettings = window.bilmTheme?.getSettings?.();
   let currentServer = initialSettings?.defaultServerPrimary || 'vidsrc';
   let backupServer = initialSettings?.defaultServerBackup || 'multiembed';
+  let currentServer = initialSettings?.defaultServer || 'vidsrc';
   let continueWatchingEnabled = false;
   let mediaDetails = null;
   let imdbId = null;
@@ -352,6 +354,8 @@ iframe {
     switch (server) {
       case 'vidsrc':
         return `https://vidsrc.me/embed/${contentId}`;
+      case 'vidplay':
+        return `https://vidplay.to/movie/${contentId}`;
       case 'godrive':
         return imdbId ? `https://godriveplayer.com/player.php?imdb=${imdbId}` : '';
       case 'multiembed':
@@ -398,6 +402,10 @@ iframe {
     if (!url) {
       setActiveServer(available[0]);
       url = buildMovieUrl(available[0]);
+    let url = buildMovieUrl(currentServer);
+    if (!url) {
+      setActiveServer('vidsrc');
+      url = buildMovieUrl('vidsrc');
     }
     iframe.src = url;
     updateContinueWatching();
@@ -567,6 +575,11 @@ iframe {
       setActiveServer(newPrimary);
     }
     updateIframe();
+    const newServer = event.detail?.defaultServer;
+    if (newServer && newServer !== currentServer) {
+      setActiveServer(newServer);
+      updateIframe();
+    }
   });
 
   if (favoriteBtn) {

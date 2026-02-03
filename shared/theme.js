@@ -7,6 +7,7 @@
     particles: true,
     defaultServerPrimary: 'vidsrc',
     defaultServerBackup: 'multiembed'
+    defaultServer: 'vidsrc'
   };
 
   const backgroundColors = {

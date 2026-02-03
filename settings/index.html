@@ -231,11 +231,29 @@
       box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
     }
 
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
+    }
+
     .btn-outline {
       background: transparent;
       color: var(--text-primary);
       border: 1px solid var(--border);
       box-shadow: none;
+    }
+
+    .btn-outline:hover {
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
+    }
+
     }
 
     .btn-outline:hover {
@@ -349,6 +367,11 @@
           <option value="multiembed">MultiEmbed (Backup)</option>
           <option value="vidsrc">VidSrc</option>
           <option value="godrive">GoDrive Player</option>
+        <select id="serverSelect">
+          <option value="vidsrc">VidSrc</option>
+          <option value="vidplay">VidPlay</option>
+          <option value="godrive">GoDrive Player</option>
+          <option value="multiembed">MultiEmbed</option>
         </select>
       </div>
     </section>
@@ -388,6 +411,7 @@
   const particleToggle = document.getElementById('particleToggle');
   const serverSelectPrimary = document.getElementById('serverSelectPrimary');
   const serverSelectBackup = document.getElementById('serverSelectBackup');
+  const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const presetsContainer = document.getElementById('accentPresets');
@@ -405,6 +429,7 @@
     particleToggle.checked = settings.particles !== false;
     serverSelectPrimary.value = settings.defaultServerPrimary || 'vidsrc';
     serverSelectBackup.value = settings.defaultServerBackup || 'multiembed';
+    serverSelect.value = settings.defaultServer || 'vidsrc';
   }
 
   accentPresets.forEach(color => {
@@ -419,6 +444,11 @@
     });
     presetsContainer.appendChild(btn);
   });
+
+  accentPicker.addEventListener('input', (event) => {
+    applySettings({ accent: event.target.value });
+  });
+
 
   accentPicker.addEventListener('input', (event) => {
     applySettings({ accent: event.target.value });
@@ -442,6 +472,8 @@
 
   serverSelectBackup.addEventListener('change', (event) => {
     applySettings({ defaultServerBackup: event.target.value });
+  serverSelect.addEventListener('change', (event) => {
+    applySettings({ defaultServer: event.target.value });
   });
 
   resetThemeBtn.addEventListener('click', () => {
