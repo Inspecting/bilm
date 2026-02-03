@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - Settings</title>
+
+  <!-- PWA + iOS fullscreen support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <!-- PWA Manifest and Icon -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    main {
+      flex: 1;
+      padding: 28px 22px 80px;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 20px 0 26px;
+    }
+
+    .page-header h1 {
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      color: var(--text-primary);
+    }
+
+    .page-header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    .settings-card {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .settings-card h2 {
+      font-size: 1.1rem;
+      color: var(--text-primary);
+    }
+
+    .settings-card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+      flex-wrap: wrap;
+    }
+
+    .control-row:hover {
+      border-color: var(--accent-soft);
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .control-row label {
+      font-size: 0.95rem;
+      color: var(--text-primary);
+    }
+
+    .control-row > div {
+      min-width: 180px;
+      flex: 1 1 auto;
+    }
+
+    .control-row small {
+      display: block;
+      color: var(--text-subtle);
+      font-size: 0.75rem;
+    }
+
+    select,
+    input[type="color"] {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-family: inherit;
+    }
+
+    select:focus,
+    input[type="color"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 10px var(--accent-soft);
+    }
+
+    .toggle {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      flex: 0 0 auto;
+      margin-left: auto;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle span {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      transition: background var(--transition-fast);
+      cursor: pointer;
+    }
+
+    .toggle span::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--text-primary);
+      transition: transform var(--transition-fast);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .toggle input:checked + span {
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .toggle input:checked + span::after {
+      transform: translateX(20px);
+    }
+
+    .preset-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+      transition: transform var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .preset-btn:hover {
+      transform: scale(1.08);
+      border-color: var(--text-primary);
+    }
+
+    .actions-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      box-shadow: 0 10px 20px rgba(124, 58, 237, 0.35);
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
+    }
+
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+
+    .btn-outline:hover {
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 20px 16px 80px;
+      }
+
+      .control-row {
+        align-items: flex-start;
+      }
+    }
+  </style>
+
+  <script src="/bilm/shared/theme.js"></script>
+</head>
+<body>
+
+<div id="navbarContainer"></div>
+
+<main>
+  <div class="page-header">
+    <h1>Settings</h1>
+    <p>Personalize the Bilm experience with your preferred theme, motion, and playback defaults.</p>
+  </div>
+
+  <div class="settings-grid">
+    <section class="settings-card">
+      <h2>Theme & Accent</h2>
+      <p>Fine tune your accent glow and choose your background mode.</p>
+
+      <div class="control-row">
+        <div>
+          <label for="accentPicker">Accent Color</label>
+          <small>Pick a custom glow color.</small>
+        </div>
+        <input id="accentPicker" type="color" />
+      </div>
+
+      <div class="preset-row" id="accentPresets" aria-label="Accent color presets"></div>
+
+      <div class="control-row">
+        <div>
+          <label for="backgroundSelect">Background Mode</label>
+          <small>Deep, Midnight, or Velvet.</small>
+        </div>
+        <select id="backgroundSelect">
+          <option value="deep">Deep</option>
+          <option value="midnight">Midnight</option>
+          <option value="velvet">Velvet</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2>Motion & Effects</h2>
+      <p>Control animation and particle effects for performance and comfort.</p>
+
+      <div class="control-row">
+        <div>
+          <label>Motion</label>
+          <small>Reduce transitions and motion.</small>
+        </div>
+        <label class="toggle">
+          <input id="motionToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Particles</label>
+          <small>Background particle shimmer on home.</small>
+        </div>
+        <label class="toggle">
+          <input id="particleToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2>Playback Defaults</h2>
+      <p>Choose the default server for your viewer pages.</p>
+
+      <div class="control-row">
+        <div>
+          <label for="serverSelect">Default Server</label>
+          <small>Used for movies and TV viewers.</small>
+        </div>
+        <select id="serverSelect">
+          <option value="vidsrc">VidSrc</option>
+          <option value="godrive">GoDrive Player</option>
+          <option value="multiembed">MultiEmbed</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="settings-card">
+      <h2>Reset & Maintenance</h2>
+      <p>Restore defaults or clear all local data.</p>
+
+      <div class="actions-row">
+        <button class="btn btn-outline" id="resetThemeBtn">Reset Theme</button>
+        <button class="btn btn-danger" id="resetDataBtn">Reset Data</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+  fetch('/bilm/shared/navbar.html')
+    .then(res => res.text())
+    .then(html => {
+      document.getElementById('navbarContainer').innerHTML = html;
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = '/bilm/shared/navbar.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = '/bilm/shared/navbar.js';
+      document.body.appendChild(js);
+    });
+</script>
+
+<script>
+  const accentPresets = ['#a855f7', '#c084fc', '#7c3aed', '#ec4899', '#38bdf8'];
+  const accentPicker = document.getElementById('accentPicker');
+  const backgroundSelect = document.getElementById('backgroundSelect');
+  const motionToggle = document.getElementById('motionToggle');
+  const particleToggle = document.getElementById('particleToggle');
+  const serverSelect = document.getElementById('serverSelect');
+  const resetThemeBtn = document.getElementById('resetThemeBtn');
+  const resetDataBtn = document.getElementById('resetDataBtn');
+  const presetsContainer = document.getElementById('accentPresets');
+  const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+
+  function applySettings(partial) {
+    const current = window.bilmTheme?.getSettings?.() || {};
+    window.bilmTheme?.setSettings?.({ ...current, ...partial });
+  }
+
+  function syncUI() {
+    const settings = window.bilmTheme?.getSettings?.() || {};
+    accentPicker.value = settings.accent || '#a855f7';
+    backgroundSelect.value = settings.background || 'deep';
+    motionToggle.checked = settings.motion !== false;
+    particleToggle.checked = settings.particles !== false;
+    const preferredServer = settings.defaultServer || 'vidsrc';
+    serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
+  }
+
+  accentPresets.forEach(color => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset-btn';
+    btn.style.background = color;
+    btn.setAttribute('aria-label', `Set accent to ${color}`);
+    btn.addEventListener('click', () => {
+      accentPicker.value = color;
+      applySettings({ accent: color });
+    });
+    presetsContainer.appendChild(btn);
+  });
+
+  accentPicker.addEventListener('input', (event) => {
+    applySettings({ accent: event.target.value });
+  });
+
+  backgroundSelect.addEventListener('change', (event) => {
+    applySettings({ background: event.target.value });
+  });
+
+  motionToggle.addEventListener('change', (event) => {
+    applySettings({ motion: event.target.checked });
+  });
+
+  particleToggle.addEventListener('change', (event) => {
+    applySettings({ particles: event.target.checked });
+  });
+
+  serverSelect.addEventListener('change', (event) => {
+    applySettings({ defaultServer: event.target.value });
+  });
+
+  resetThemeBtn.addEventListener('click', () => {
+    if (!confirm('Reset theme to the default purple style?')) return;
+    window.bilmTheme?.resetTheme?.();
+    syncUI();
+  });
+
+  resetDataBtn.addEventListener('click', () => {
+    const confirmReset = confirm('⚠️ This will erase all saved site data on your device. Continue?');
+    if (!confirmReset) return;
+
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+
+      document.cookie.split(';').forEach(cookie => {
+        const eqPos = cookie.indexOf('=');
+        const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      });
+
+      alert('✅ Site data cleared. Reloading fresh.');
+      location.reload();
+    } catch (err) {
+      console.error('Error clearing data:', err);
+      alert('❌ Something went wrong while clearing data.');
+    }
+  });
+
+  window.addEventListener('DOMContentLoaded', syncUI);
+  window.addEventListener('bilm:theme-changed', syncUI);
+</script>
+
+</body>
+</html>

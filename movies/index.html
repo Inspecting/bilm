@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - Movies</title>
+
+  <!-- PWA & iOS fullscreen support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <!-- Manifest & App Icon -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <!-- Fonts & Styles -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="/bilm/shared/theme.js"></script>
+</head>
+<body>
+
+<!-- Navbar placeholder -->
+<div id="navbarContainer"></div>
+
+<!-- Movie sections rendered here -->
+<main>
+  <div id="movieSections"></div>
+</main>
+
+<!-- Load shared navbar -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    fetch('/bilm/shared/navbar.html')
+      .then(res => res.text())
+      .then(html => {
+        document.getElementById('navbarContainer').innerHTML = html;
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = '/bilm/shared/navbar.css';
+        document.head.appendChild(css);
+        const js = document.createElement('script');
+        js.src = '/bilm/shared/navbar.js';
+        document.body.appendChild(js);
+      });
+  });
+</script>
+
+<!-- Load movies logic -->
+<script src="./script.js"></script>
+
+</body>
+</html>

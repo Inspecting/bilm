@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - Search Results</title>
+
+  <!-- PWA & iOS fullscreen meta tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <!-- Manifest & Apple Touch Icon -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+
+  <!-- Navbar CSS -->
+  <link rel="stylesheet" href="/bilm/shared/navbar.css" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+
+  <script src="/bilm/shared/theme.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      padding-top: 60px;
+    }
+    h1 {
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: 700;
+    }
+    section {
+      margin-bottom: 30px;
+    }
+    section h2 {
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 14px;
+    }
+    .results-row {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .results-row::-webkit-scrollbar {
+      height: 8px;
+    }
+    .results-row::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .results-row::-webkit-scrollbar-thumb {
+      background-color: var(--accent);
+      border-radius: 10px;
+    }
+    .card {
+      flex: 0 0 auto;
+      width: 140px;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background-color: var(--surface-2);
+      box-shadow: var(--shadow-md);
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+      border: 1px solid transparent;
+      display: flex;
+      flex-direction: column;
+    }
+    .card:hover {
+      transform: translateY(-4px) scale(1.04);
+      box-shadow: 0 0 18px var(--accent-glow);
+      border-color: var(--accent-soft);
+    }
+    .card img {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+      border-radius: 12px 12px 0 0;
+    }
+    .card p {
+      padding: 6px 8px;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .no-results {
+      text-align: center;
+      color: var(--text-subtle);
+      font-size: 16px;
+      margin-top: 40px;
+      background: var(--surface-2);
+      border: 1px dashed var(--border);
+      padding: 16px;
+      border-radius: var(--radius-md);
+    }
+  </style>
+</head>
+<body>
+  <!-- Shared navbar -->
+  <div id="navbar-placeholder"></div>
+
+  <main>
+    <h1 id="resultsTitle">Search Results for ""</h1>
+
+    <section id="moviesSection">
+      <h2>Movies</h2>
+      <div class="results-row" id="moviesResults"></div>
+    </section>
+
+    <section id="tvSection">
+      <h2>TV Shows</h2>
+      <div class="results-row" id="tvResults"></div>
+    </section>
+  </main>
+
+  <script>
+    fetch('/bilm/shared/navbar.html')
+      .then(res => res.text())
+      .then(html => {
+        document.getElementById('navbar-placeholder').innerHTML = html;
+        const script = document.createElement('script');
+        script.src = '/bilm/shared/navbar.js';
+        script.onload = () => {
+          if (typeof initNavbar === 'function') initNavbar();
+        };
+        document.body.appendChild(script);
+      });
+  </script>
+
+  <script>
+    const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
+    const OMDB_API_KEY = '9bf8cd26';
+    const BASE_URL = 'https://inspecting.github.io/bilm';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentQuery = urlParams.get('q') || '';
+
+    const resultsTitle = document.getElementById('resultsTitle');
+    const moviesSection = document.getElementById('moviesSection');
+    const tvSection = document.getElementById('tvSection');
+    const moviesResults = document.getElementById('moviesResults');
+    const tvResults = document.getElementById('tvResults');
+
+    resultsTitle.textContent = `Search Results for "${currentQuery}"`;
+
+    function fetchImdbMovies(query) {
+      if (!query) return Promise.resolve([]);
+      const firstChar = query[0].toLowerCase();
+      const url = `https://v2.sg.media-imdb.com/suggestion/${firstChar}/${encodeURIComponent(query)}.json`;
+      return fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.d) return [];
+          return data.d.filter(item => item.qid === 'movie').map(item => ({
+            title: item.l,
+            year: item.y || 'N/A',
+            img: item.i?.[0] || 'https://via.placeholder.com/140x210?text=No+Image',
+            link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
+            source: 'IMDb-v2'
+          }));
+        })
+        .catch(() => []);
+    }
+
+    function fetchTvmazeShows(query) {
+      if (!query) return Promise.resolve([]);
+      const url = `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`;
+      return fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          if (!Array.isArray(data)) return [];
+          return data.map(item => {
+            const show = item.show;
+            return {
+              title: show.name,
+              year: show.premiered ? show.premiered.slice(0,4) : 'N/A',
+              img: show.image?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
+              link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
+              source: 'TVmaze'
+            };
+          });
+        })
+        .catch(() => []);
+    }
+
+    if (currentQuery) {
+      Promise.all([
+        fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(currentQuery)}`).then(r => r.json()),
+        fetch(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(currentQuery)}`).then(r => r.json()),
+        fetch(`https://www.omdbapi.com/?s=${encodeURIComponent(currentQuery)}&apikey=${OMDB_API_KEY}&type=movie`).then(r => r.json()),
+        fetchImdbMovies(currentQuery),
+        fetchTvmazeShows(currentQuery)
+      ])
+      .then(([tmdbMovies, tmdbTV, omdbMovies, imdbMovies, tvmazeShows]) => {
+        const movieMap = new Map();
+        const tvMap = new Map();
+
+        (tmdbMovies.results || []).forEach(item => {
+          const key = `${item.title.toLowerCase()}-${item.release_date?.slice(0, 4)}`;
+          if (!movieMap.has(key)) {
+            movieMap.set(key, {
+              title: item.title,
+              year: item.release_date?.slice(0, 4) || 'N/A',
+              img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
+              link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
+              source: 'TMDB'
+            });
+          }
+        });
+
+        (omdbMovies.Search || []).forEach(item => {
+          const key = `${item.Title.toLowerCase()}-${item.Year}`;
+          if (!movieMap.has(key)) {
+            movieMap.set(key, {
+              title: item.Title,
+              year: item.Year,
+              img: item.Poster !== 'N/A' ? item.Poster : 'https://via.placeholder.com/140x210?text=No+Image',
+              link: `${BASE_URL}/movies/viewer.html?id=${item.imdbID}`,
+              source: 'OMDB'
+            });
+          }
+        });
+
+        imdbMovies.forEach(item => {
+          const key = `${item.title.toLowerCase()}-${item.year}`;
+          if (!movieMap.has(key)) {
+            movieMap.set(key, item);
+          }
+        });
+
+        (tmdbTV.results || []).forEach(item => {
+          const key = `${item.name.toLowerCase()}-${item.first_air_date?.slice(0, 4)}`;
+          if (!tvMap.has(key)) {
+            tvMap.set(key, {
+              title: item.name,
+              year: item.first_air_date?.slice(0, 4) || 'N/A',
+              img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
+              link: `${BASE_URL}/tv/viewer.html?id=${item.id}`,
+              source: 'TMDB'
+            });
+          }
+        });
+
+        tvmazeShows.forEach(item => {
+          const key = `${item.title.toLowerCase()}-${item.year}`;
+          if (!tvMap.has(key)) {
+            tvMap.set(key, item);
+          }
+        });
+
+        if (movieMap.size > 0) {
+          renderResults(moviesResults, Array.from(movieMap.values()));
+          moviesSection.style.display = 'block';
+        } else {
+          moviesSection.style.display = 'none';
+        }
+
+        if (tvMap.size > 0) {
+          renderResults(tvResults, Array.from(tvMap.values()));
+          tvSection.style.display = 'block';
+        } else {
+          tvSection.style.display = 'none';
+        }
+      })
+      .catch(err => {
+        console.error('Search failed', err);
+        moviesSection.innerHTML = '<p class="no-results">Failed to load results.</p>';
+        tvSection.innerHTML = '';
+      });
+    } else {
+      moviesSection.innerHTML = '<p class="no-results">Please enter a search term.</p>';
+      tvSection.innerHTML = '';
+    }
+
+    function renderResults(container, items) {
+      container.innerHTML = '';
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const img = document.createElement('img');
+        img.src = item.img;
+        img.alt = item.title;
+        img.onerror = () => {
+          img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+        };
+
+        const title = document.createElement('p');
+        title.textContent = `${item.title} (${item.year})`;
+
+        card.appendChild(img);
+        card.appendChild(title);
+
+        card.dataset.source = item.source;
+
+        card.onclick = () => {
+          console.log(`🟣 Clicked on "${item.title}" from API: ${item.source}`);
+          window.location.href = item.link;
+        };
+
+        container.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>

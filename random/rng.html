@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Roulette — Red / Black (Practice Mode)</title>
+<style>
+  :root{
+    --bg:#061226;
+    --panel:#0e2433;
+    --accent:#ffbf00;
+    --muted:#8da6c1;
+    --red:#e24b4b;
+    --black:#111827;
+    --glass: rgba(255,255,255,0.03);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:
+    radial-gradient(800px 400px at 10% 10%, rgba(255,255,255,0.02), transparent 6%),
+    linear-gradient(180deg,#04101b 0%, #071825 100%);color:#eaf6ff;}
+  .wrap{max-width:980px;margin:18px auto;padding:18px;display:grid;grid-template-columns:1fr 360px;gap:18px}
+  h1{margin:0;color:var(--accent);font-size:20px}
+  .subtitle{color:var(--muted);font-size:13px}
+  .panel{background:var(--glass);border-radius:12px;padding:14px;box-shadow:0 12px 30px rgba(0,0,0,0.6)}
+  button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#06121b;font-weight:700;cursor:pointer;box-shadow:0 8px 18px rgba(0,0,0,0.45);transition:transform .08s}
+  button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:inherit}
+  button:active{transform:scale(.98)}
+  .selected{outline:3px solid rgba(255,191,0,0.18)!important;box-shadow:0 0 18px rgba(255,191,0,0.08)!important;transform:scale(1.02)!important}
+  .balance{font-weight:800;font-size:18px;color:#dff8ff}
+  input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;width:110px}
+  .message{padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);font-weight:700;text-align:center}
+  canvas#wheel{width:100%;height:100%;max-height:420px;border-radius:999px;background:radial-gradient(circle at 50% 50%, rgba(255,255,255,0.02), transparent 20%)}
+  @media(max-width:920px){.wrap{grid-template-columns:1fr;padding:12px}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="panel">
+      <h1>Roulette — Red / Black</h1>
+      <div class="subtitle">Color is chosen before spin. Wheel lands centered on that color.</div>
+      
+      <!-- Practice Balance Setter -->
+      <div style="margin-top:10px;">
+        <label>Set Balance for Practice: <input id="practiceBalanceInput" type="number" min="1" value="1000"></label>
+        <button id="applyBalanceBtn" class="ghost">Apply</button>
+      </div>
+
+      <!-- Current Balance Display -->
+      <div style="margin-top:10px;">
+        Balance: $<span id="balanceDisplay">1000</span><br>
+        <label>Bet: <input id="betInput" type="number" value="10"></label>
+        <button id="halfBtn" class="ghost">Half</button>
+        <button id="doubleBtn" class="ghost">Double</button><br><br>
+        <button id="betRed" style="background:var(--red);color:#fff">Bet Red</button>
+        <button id="betBlack" style="background:var(--black);color:#fff">Bet Black</button>
+        <button id="spinBtn" class="ghost">Spin</button>
+        <button id="resetBtn" class="ghost">Reset</button>
+      </div>
+      <p class="message" id="message">Pick a color, set your bet, and spin!</p>
+    </section>
+    <section class="panel">
+      <canvas id="wheel" width="500" height="500"></canvas>
+      <div style="text-align:center;margin-top:10px;">
+        Last outcome: <strong id="lastOutcome">—</strong>
+      </div>
+    </section>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('wheel');
+  const ctx = canvas.getContext('2d');
+  const betInput = document.getElementById('betInput');
+  const halfBtn = document.getElementById('halfBtn');
+  const doubleBtn = document.getElementById('doubleBtn');
+  const betRedBtn = document.getElementById('betRed');
+  const betBlackBtn = document.getElementById('betBlack');
+  const spinBtn = document.getElementById('spinBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const messageEl = document.getElementById('message');
+  const lastOutcomeEl = document.getElementById('lastOutcome');
+  const balanceDisplay = document.getElementById('balanceDisplay');
+
+  // New practice balance elements
+  const practiceBalanceInput = document.getElementById('practiceBalanceInput');
+  const applyBalanceBtn = document.getElementById('applyBalanceBtn');
+
+  let balance = Number(localStorage.getItem('balance') || 1000);
+  let bet = 10;
+  let selectedColor = null;
+  let spinning = false;
+  let rotation = 0;
+  const segCount = 36;
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const radius = 240;
+
+  const segments = Array.from({length: segCount}, (_, i) => ({
+    color: i % 2 === 0 ? 'red' : 'black',
+    index: i
+  }));
+
+  function drawWheel(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const anglePer = (Math.PI*2)/segCount;
+    for(let i=0;i<segCount;i++){
+      const start = rotation + i*anglePer;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,radius,start,start+anglePer);
+      ctx.closePath();
+      ctx.fillStyle = segments[i].color === 'red' ? '#e24b4b' : '#111';
+      ctx.fill();
+    }
+    // pointer
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-radius-10);
+    ctx.lineTo(cx-10,cy-radius+15);
+    ctx.lineTo(cx+10,cy-radius+15);
+    ctx.closePath();
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  }
+
+  function updateUI(){
+    balanceDisplay.textContent = balance.toFixed(2);
+    betInput.value = bet;
+    betRedBtn.classList.toggle('selected', selectedColor==='red');
+    betBlackBtn.classList.toggle('selected', selectedColor==='black');
+    practiceBalanceInput.value = balance;
+  }
+
+  function setMessage(t){ messageEl.textContent = t; }
+
+  function pickWinningColor(){ return Math.random()<0.5?'red':'black'; }
+
+  function pickIndexForColor(c){
+    const matches = segments.filter(s=>s.color===c);
+    return matches[Math.floor(Math.random()*matches.length)].index;
+  }
+
+  function computeTargetRotation(index){
+    const anglePer = (Math.PI*2)/segCount;
+    const segCenter = index*anglePer + anglePer/2;
+    return -Math.PI/2 - segCenter;
+  }
+
+  function spinToColor(winningColor,onDone){
+    spinning = true;
+    const chosenIndex = pickIndexForColor(winningColor);
+    const baseTarget = computeTargetRotation(chosenIndex);
+    const extraRot = (4+Math.floor(Math.random()*4))*Math.PI*2;
+    const target = baseTarget + extraRot;
+    const start = rotation;
+    const startTime = performance.now();
+    const duration = 2500 + Math.random()*1500;
+    function ease(t){return 1-Math.pow(1-t,3);}
+    function frame(now){
+      const p=Math.min(1,(now-startTime)/duration);
+      rotation=start+(target-start)*ease(p);
+      drawWheel();
+      if(p<1)requestAnimationFrame(frame);
+      else{
+        rotation=target;
+        drawWheel();
+        spinning=false;
+        onDone();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function spin(){
+    if(spinning)return;
+    if(!selectedColor){setMessage('Select a color first!');return;}
+    bet=Math.max(1,Number(betInput.value)||1);
+    if(bet>balance){setMessage('Bet too high!');return;}
+    balance-=bet;
+    localStorage.setItem('balance',balance);
+    updateUI();
+    setMessage('Spinning...');
+    const winColor = pickWinningColor();
+    spinToColor(winColor,()=>{
+      if(selectedColor===winColor){
+        balance += bet*2; // double payout
+        localStorage.setItem('balance',balance);
+        setMessage(`You WON — ${winColor.toUpperCase()}! +$${bet}`);
+      }else{
+        setMessage(`You lost — ${winColor.toUpperCase()}.`);
+      }
+      lastOutcomeEl.textContent = winColor.toUpperCase();
+      updateUI();
+    });
+  }
+
+  // Event bindings
+  spinBtn.onclick=spin;
+  betRedBtn.onclick=()=>{selectedColor='red';updateUI();setMessage('Betting on RED');};
+  betBlackBtn.onclick=()=>{selectedColor='black';updateUI();setMessage('Betting on BLACK');};
+  halfBtn.onclick=()=>{bet=Math.max(1,Math.floor(bet/2));updateUI();};
+  doubleBtn.onclick=()=>{bet=Math.min(balance,Math.floor(bet*2));updateUI();};
+  resetBtn.onclick=()=>{balance=1000;localStorage.setItem('balance',balance);updateUI();setMessage('Balance reset.');};
+
+  // Practice balance setter
+  applyBalanceBtn.onclick = ()=>{
+    const val = Math.max(1, Number(practiceBalanceInput.value) || 1000);
+    balance = val;
+    localStorage.setItem('balance',balance);
+    updateUI();
+    setMessage(`Practice balance set to $${balance}`);
+  }
+
+  drawWheel();
+  updateUI();
+})();
+</script>
+</body>
+</html>
