@@ -58,6 +58,27 @@
       background: black;
       position: relative;
     }
+    #mediaHeader {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 14px 20px 10px;
+      background: linear-gradient(90deg, rgba(26, 22, 40, 0.98), rgba(32, 20, 48, 0.95));
+      border-radius: 12px 12px 0 0;
+      border-bottom: 1px solid rgba(161, 78, 255, 0.25);
+    }
+    #mediaTitle {
+      font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+      font-weight: 600;
+      color: #f5f3ff;
+      text-align: left;
+    }
+    #mediaMeta {
+      font-size: 0.95rem;
+      color: #c4b5fd;
+      text-align: left;
+      letter-spacing: 0.02em;
+    }
     #playerContainer {
       width: 100%;
       aspect-ratio: 16 / 9;
@@ -282,6 +303,10 @@
 <main>
   <div id="playerWrapper">
     <div id="playerWithControls">
+      <div id="mediaHeader" aria-live="polite">
+        <div id="mediaTitle">Loading title…</div>
+        <div id="mediaMeta">Loading date…</div>
+      </div>
       <div id="playerContainer">
         <iframe
           id="videoPlayer"
@@ -365,6 +390,8 @@
   const closeBtn = document.getElementById('closeBtn');
   const playerContainer = document.getElementById('playerContainer');
   const navbarContainer = document.getElementById('navbarContainer');
+  const mediaTitle = document.getElementById('mediaTitle');
+  const mediaMeta = document.getElementById('mediaMeta');
   const seasonSelect = document.getElementById('seasonSelect');
   const episodeSelect = document.getElementById('episodeSelect');
   const prevSeasonBtn = document.getElementById('prevSeason');
@@ -684,7 +711,11 @@ episodeSelect.addEventListener('change', () => {
 
   // Fetch TMDB data for season/episode info
   async function fetchTMDBData() {
-    if (!tmdbId) return;
+    if (!tmdbId) {
+      mediaTitle.textContent = 'Unknown title';
+      mediaMeta.textContent = 'Release date unavailable';
+      return;
+    }
 
     try {
       // First get external IDs (like imdb_id)
@@ -697,6 +728,14 @@ episodeSelect.addEventListener('change', () => {
       const details = await detailsRes.json();
 
       totalSeasons = details.number_of_seasons || 1;
+      const showTitle = details.name || details.original_name || 'Unknown title';
+      const firstAirDate = details.first_air_date || '';
+      const displayDate = firstAirDate
+        ? new Date(firstAirDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+        : 'Release date unavailable';
+      mediaTitle.textContent = showTitle;
+      mediaMeta.textContent = displayDate;
+      document.title = `Bilm 💜 - ${showTitle}`;
 
       episodesPerSeason = {};
       details.seasons.forEach(season => {

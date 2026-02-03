@@ -58,6 +58,27 @@
       background: black;
       position: relative;
     }
+    #mediaHeader {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 14px 20px 10px;
+      background: linear-gradient(90deg, rgba(26, 22, 40, 0.98), rgba(32, 20, 48, 0.95));
+      border-radius: 12px 12px 0 0;
+      border-bottom: 1px solid rgba(161, 78, 255, 0.25);
+    }
+    #mediaTitle {
+      font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+      font-weight: 600;
+      color: #f5f3ff;
+      text-align: left;
+    }
+    #mediaMeta {
+      font-size: 0.95rem;
+      color: #c4b5fd;
+      text-align: left;
+      letter-spacing: 0.02em;
+    }
 #playerContainer {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -205,6 +226,10 @@ iframe {
 <main>
   <div id="playerWrapper">
     <div id="playerWithControls">
+      <div id="mediaHeader" aria-live="polite">
+        <div id="mediaTitle">Loading title…</div>
+        <div id="mediaMeta">Loading date…</div>
+      </div>
       <div id="playerContainer">
         <iframe
           id="videoPlayer"
@@ -265,6 +290,7 @@ iframe {
       document.body.appendChild(script);
     });
 
+  const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const params = new URLSearchParams(window.location.search);
   const contentId = params.get('id'); // movie or TV id
 
@@ -272,6 +298,8 @@ iframe {
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const playerContainer = document.getElementById('playerContainer');
   const navbarContainer = document.getElementById('navbarContainer');
+  const mediaTitle = document.getElementById('mediaTitle');
+  const mediaMeta = document.getElementById('mediaMeta');
 
   const serverBtn = document.getElementById('serverBtn');
   const serverDropdown = document.getElementById('serverDropdown');
@@ -295,6 +323,33 @@ iframe {
       url = `https://vidplay.to/movie/${contentId}`;
     }
     iframe.src = url;
+  }
+
+  async function loadMovieDetails() {
+    if (!contentId) {
+      mediaTitle.textContent = 'Unknown title';
+      mediaMeta.textContent = 'Release date unavailable';
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://api.themoviedb.org/3/movie/${contentId}?api_key=${TMDB_API_KEY}`);
+      if (!response.ok) {
+        throw new Error('Failed to load movie details');
+      }
+      const details = await response.json();
+      const title = details.title || details.original_title || 'Unknown title';
+      const releaseDate = details.release_date || '';
+      const displayDate = releaseDate ? new Date(releaseDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Release date unavailable';
+
+      mediaTitle.textContent = title;
+      mediaMeta.textContent = displayDate;
+      document.title = `Bilm 💜 - ${title}`;
+    } catch (error) {
+      console.error('Error fetching movie details:', error);
+      mediaTitle.textContent = 'Unknown title';
+      mediaMeta.textContent = 'Release date unavailable';
+    }
   }
 
   serverBtn.addEventListener('click', (e) => {
@@ -355,6 +410,7 @@ iframe {
 
   // Initial load
   updateIframe();
+  loadMovieDetails();
 </script>
 
 <script src="/bilm/shared/adblock/adblock.js"></script>
