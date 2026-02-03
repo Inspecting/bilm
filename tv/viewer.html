@@ -14,6 +14,9 @@
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icon.png" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+
+  <script src="/bilm/shared/theme.js"></script>
 
   <style>
     /* Your CSS here, unchanged */
@@ -23,8 +26,8 @@
     html, body {
       height: 100%;
       font-family: 'Poppins', sans-serif;
-      background-color: #121212;
-      color: #f0f0f0;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
     }
     body {
       display: flex;
@@ -50,12 +53,12 @@
     }
     #playerWithControls {
       width: 100%;
-      border-radius: 12px;
-      box-shadow: 0 0 20px #a14effcc;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-glow);
       overflow: visible;
       display: flex;
       flex-direction: column;
-      background: black;
+      background: rgba(0, 0, 0, 0.9);
       position: relative;
     }
     #mediaHeader {
@@ -64,18 +67,18 @@
       gap: 4px;
       padding: 14px 20px 10px;
       background: linear-gradient(90deg, rgba(26, 22, 40, 0.98), rgba(32, 20, 48, 0.95));
-      border-radius: 12px 12px 0 0;
-      border-bottom: 1px solid rgba(161, 78, 255, 0.25);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      border-bottom: 1px solid var(--border);
     }
     #mediaTitle {
       font-size: clamp(1.1rem, 2.4vw, 1.6rem);
       font-weight: 600;
-      color: #f5f3ff;
+      color: var(--text-primary);
       text-align: left;
     }
     #mediaMeta {
       font-size: 0.95rem;
-      color: #c4b5fd;
+      color: var(--text-muted);
       text-align: left;
       letter-spacing: 0.02em;
     }
@@ -84,7 +87,7 @@
       aspect-ratio: 16 / 9;
       position: relative;
       background: black;
-      border-radius: 12px;      /* Rounded corners */
+      border-radius: var(--radius-lg);      /* Rounded corners */
       overflow: hidden;         /* Clips iframe edges */
     }
 
@@ -93,7 +96,7 @@
       height: 100%;
       border: none;
       display: block;
-      border-radius: 12px;      /* Rounded corners (for safety) */
+      border-radius: var(--radius-lg);      /* Rounded corners (for safety) */
     }
     #clickShield {
       position: absolute;
@@ -115,13 +118,13 @@
       user-select: none;
       position: relative;
       z-index: 10;
-      border-radius: 0 0 12px 12px;  /* Rounded bottom corners */
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);  /* Rounded bottom corners */
     }
     #fullscreenBtn {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #f0f0f0;
+      color: var(--text-primary);
       width: 36px;
       height: 36px;
       display: flex;
@@ -133,13 +136,13 @@
       flex-shrink: 0;
     }
     #fullscreenBtn:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     #serverBtn {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #f0f0f0;
+      color: var(--text-primary);
       width: 36px;
       height: 36px;
       display: flex;
@@ -152,13 +155,13 @@
       flex-shrink: 0;
     }
     #serverBtn:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     #favoriteBtn {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #f0f0f0;
+      color: var(--text-primary);
       width: 36px;
       height: 36px;
       display: flex;
@@ -170,7 +173,7 @@
       flex-shrink: 0;
     }
     #favoriteBtn:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     #favoriteBtn.is-active {
       color: #facc15;
@@ -180,9 +183,9 @@
       top: 100%;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(26, 22, 40, 0.97);
-      border-radius: 12px;
-      box-shadow: 0 0 16px #a14effcc;
+      background: var(--surface-2);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-glow);
       padding: 8px 0;
       width: 160px;
       display: none;
@@ -196,7 +199,7 @@
     }
     .serverDropdownItem {
       padding: 10px 20px;
-      color: #f0f0f0;
+      color: var(--text-primary);
       cursor: pointer;
       font-weight: 600;
       font-size: 15px;
@@ -204,10 +207,10 @@
       user-select: none;
     }
     .serverDropdownItem:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     .serverDropdownItem.active {
-      background-color: #a14eff;
+      background-color: var(--accent);
       cursor: default;
     }
     #controlsCompact {
@@ -219,8 +222,8 @@
       align-items: center;
       background: rgba(26, 22, 40, 0.9);
       padding: 12px 30px;
-      border-radius: 16px;
-      box-shadow: 0 0 15px #a14eff88;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
       min-height: 54px;
       flex-wrap: nowrap;
     }
@@ -235,7 +238,7 @@
       -moz-appearance: none;
       background: transparent;
       border: none;
-      color: #fff;
+      color: var(--text-primary);
       padding: 6px 14px;
       font-weight: 700;
       border-radius: 8px;
@@ -247,13 +250,13 @@
       transition: background-color 0.3s ease;
     }
     .group select:hover, .group select:focus {
-      background: rgba(161, 78, 255, 0.2);
+      background: var(--accent-soft);
       outline: none;
     }
     .smallBtn {
       background: transparent;
       border: 1px solid rgba(255,255,255,0.06);
-      color: #fff;
+      color: var(--text-primary);
       padding: 8px 12px;
       border-radius: 8px;
       cursor: pointer;
@@ -355,7 +358,8 @@
           </svg>
           <div id="serverDropdown" role="menu" aria-label="Server selection">
             <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
-            <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
+            <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
+            <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
           </div>
         </button>
         <button id="fullscreenBtn" title="Fullscreen">
@@ -432,7 +436,9 @@
 
   let currentSeason = 1;
   let currentEpisode = 1;
-  let currentServer = 'vidsrc';
+  const initialSettings = window.bilmTheme?.getSettings?.();
+  let currentServer = initialSettings?.defaultServerPrimary || 'vidsrc';
+  let backupServer = initialSettings?.defaultServerBackup || 'multiembed';
   let totalSeasons = 1;
   let episodesPerSeason = {};
   let continueWatchingEnabled = false;
@@ -579,20 +585,36 @@
     serverBtn.setAttribute('aria-expanded', 'false');
   });
 
+  function setActiveServer(server) {
+    serverItems.forEach(i => i.classList.toggle('active', i.getAttribute('data-server') === server));
+    currentServer = server;
+  }
+
   // Server selection
   serverItems.forEach(item => {
     item.addEventListener('click', () => {
       if (item.classList.contains('active')) return;
 
-      serverItems.forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-
-      currentServer = item.getAttribute('data-server');
+      setActiveServer(item.getAttribute('data-server'));
       updateIframe();
 
       serverDropdown.style.display = 'none';
       serverBtn.setAttribute('aria-expanded', 'false');
     });
+  });
+
+  if (currentServer) {
+    setActiveServer(currentServer);
+  }
+
+  window.addEventListener('bilm:theme-changed', (event) => {
+    const newPrimary = event.detail?.defaultServerPrimary;
+    const newBackup = event.detail?.defaultServerBackup;
+    if (newBackup) backupServer = newBackup;
+    if (newPrimary && newPrimary !== currentServer) {
+      setActiveServer(newPrimary);
+    }
+    updateIframe();
   });
 
   function saveProgress() {
@@ -618,6 +640,43 @@
     }
   }
 
+  function buildTvUrl(server) {
+    if (!tmdbId && !imdbId) return '';
+    const season = currentSeason;
+    const episode = currentEpisode;
+    switch (server) {
+      case 'vidsrc':
+        return `https://vsrc.su/embed/${imdbId || tmdbId}/${season}-${episode}`;
+      case 'godrive':
+        return tmdbId
+          ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
+          : '';
+      case 'multiembed':
+        return imdbId
+          ? `https://multiembed.mov/directstream.php?video_id=${imdbId}&s=${season}&e=${episode}`
+          : `https://multiembed.mov/directstream.php?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`;
+      default:
+        return '';
+    }
+  }
+
+  function getAvailableServers() {
+    const servers = ['vidsrc', 'godrive', 'multiembed'];
+    if (!tmdbId) {
+      return servers.filter(server => server !== 'godrive');
+    }
+    return servers;
+  }
+
+  function renderServerDropdown() {
+    const available = getAvailableServers();
+    serverItems.forEach(item => {
+      const server = item.getAttribute('data-server');
+      item.style.display = available.includes(server) ? '' : 'none';
+    });
+    return available;
+  }
+
   function updateIframe() {
     saveProgress();
 
@@ -628,11 +687,20 @@
       return;
     }
 
-    if (currentServer === 'vidsrc') {
-      iframe.src = `https://vsrc.su/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
-    } else if (currentServer === 'vidplay') {
-      iframe.src = `https://vidplay.to/tv/${idToUse}/${currentSeason}/${currentEpisode}`;
+    const available = renderServerDropdown();
+    if (!available.includes(currentServer)) {
+      currentServer = available[0];
     }
+    let url = buildTvUrl(currentServer);
+    if (!url && backupServer && available.includes(backupServer)) {
+      setActiveServer(backupServer);
+      url = buildTvUrl(backupServer);
+    }
+    if (!url) {
+      setActiveServer(available[0]);
+      url = buildTvUrl(available[0]);
+    }
+    iframe.src = url;
 
     updateContinueWatching();
   }
@@ -859,6 +927,7 @@ nextEpisodeBtn.addEventListener('click', () => {
 
       const favorites = loadList(FAVORITES_KEY);
       updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
+      renderServerDropdown();
       mediaTitle.textContent = showTitle;
       mediaMeta.textContent = displayDate;
       document.title = `Bilm 💜 - ${showTitle}`;
@@ -902,6 +971,7 @@ nextEpisodeBtn.addEventListener('click', () => {
   setTimeout(() => {
     continueWatchingEnabled = true;
     updateContinueWatching();
+    setInterval(updateContinueWatching, 30000);
   }, 30000);
 </script>
 

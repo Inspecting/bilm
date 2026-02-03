@@ -55,6 +55,9 @@ function createMovieCard(movie) {
   const img = document.createElement('img');
   img.src = movie.img || 'https://via.placeholder.com/140x210?text=No+Image';
   img.alt = movie.title;
+  img.onerror = () => {
+    img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+  };
 
   const p = document.createElement('p');
   p.textContent = `${movie.title} (${movie.year || 'N/A'})`;

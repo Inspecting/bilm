@@ -7,8 +7,8 @@
 html, body {
   height: 100%;
   font-family: 'Poppins', sans-serif;
-  background-color: #121212;
-  color: #f0f0f0;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
 }
 
 body {
@@ -20,8 +20,7 @@ main {
   flex: 1;
   overflow-y: auto;
   width: 100vw;
-  height: calc(100vh - 60px);
-  padding: 20px 10px;
+  padding: 24px 18px 80px;
   box-sizing: border-box;
 }
 
@@ -30,10 +29,11 @@ main {
 }
 
 .section-title {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
-  margin-bottom: 12px;
-  color: #c084fc;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
 }
 
 .scroll-row {
@@ -50,11 +50,11 @@ main {
 }
 
 .scroll-row::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .scroll-row::-webkit-scrollbar-thumb {
-  background-color: #a14eff;
+  background-color: var(--accent);
   border-radius: 10px;
 }
 
@@ -62,19 +62,22 @@ main {
   flex: 0 0 auto;
   width: 140px;
   height: auto;
-  background-color: #2a2a2a;
-  border-radius: 12px;
-  box-shadow: 0 0 8px #a14eff66;
+  background-color: var(--surface-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   user-select: none;
-  transition: transform 0.2s ease;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  border: 1px solid transparent;
 }
 
 .movie-card:hover {
-  transform: scale(1.05);
+  transform: translateY(-4px) scale(1.04);
+  box-shadow: 0 0 18px var(--accent-glow);
+  border-color: var(--accent-soft);
 }
 
 .movie-card img {
@@ -82,13 +85,14 @@ main {
   height: 180px;
   object-fit: cover;
   border-radius: 12px 12px 0 0;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .movie-card p {
   padding: 6px 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #eee;
+  color: var(--text-primary);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;

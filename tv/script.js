@@ -55,6 +55,9 @@ function createShowCard(show) {
   const img = document.createElement('img');
   img.src = show.img || 'https://via.placeholder.com/140x210?text=No+Image';
   img.alt = show.title;
+  img.onerror = () => {
+    img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+  };
 
   const p = document.createElement('p');
   p.textContent = `${show.title} (${show.year || 'N/A'})`;
