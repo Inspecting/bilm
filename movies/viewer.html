@@ -303,6 +303,7 @@ iframe {
       </div>
     </div>
   </div>
+  <button id="closeBtn" aria-label="Close Player">✕</button>
 </main>
 
 <script>
@@ -328,6 +329,7 @@ iframe {
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const playerContainer = document.getElementById('playerContainer');
   const navbarContainer = document.getElementById('navbarContainer');
+  const closeBtn = document.getElementById('closeBtn');
   const mediaTitle = document.getElementById('mediaTitle');
   const mediaMeta = document.getElementById('mediaMeta');
   const favoriteBtn = document.getElementById('favoriteBtn');
@@ -565,7 +567,9 @@ iframe {
     } else {
       playerContainer.classList.add('simulated-fullscreen');
     }
-    if (closeBtn) closeBtn.style.display = 'block';
+    if (closeBtn) {
+      closeBtn.style.display = 'block';
+    }
     navbarContainer.classList.add('hide-navbar');
   };
 
@@ -583,7 +587,9 @@ iframe {
 
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) {
-      if (closeBtn) closeBtn.style.display = 'none';
+      if (closeBtn) {
+        closeBtn.style.display = 'none';
+      }
       navbarContainer.classList.remove('hide-navbar');
     }
   });
