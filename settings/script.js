@@ -1,3 +1,7 @@
+let settingsInitialized = false;
+
+const initSettings = () => {
+  if (settingsInitialized) return;
 const initSettings = () => {
   const themeApi = window.bilmTheme;
   if (!themeApi) {
@@ -17,6 +21,7 @@ const initSettings = () => {
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
 
   if (!accentPicker || !backgroundSelect || !motionToggle || !particleToggle || !serverSelect || !resetThemeBtn || !resetDataBtn || !presetsContainer) {
+    window.setTimeout(initSettings, 50);
     return;
   }
 
@@ -108,6 +113,7 @@ const initSettings = () => {
     }
   });
 
+  settingsInitialized = true;
   syncUI();
   window.addEventListener('bilm:theme-changed', syncUI);
 };
