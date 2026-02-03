@@ -14,6 +14,9 @@
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icon.png" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+
+  <script src="/bilm/shared/theme.js"></script>
 
   <style>
     * {
@@ -22,8 +25,8 @@
     html, body {
       height: 100%;
       font-family: 'Poppins', sans-serif;
-      background-color: #121212;
-      color: #f0f0f0;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
       overflow-x: hidden;
     }
     body {
@@ -50,12 +53,12 @@
     }
     #playerWithControls {
       width: 100%;
-      border-radius: 12px;
-      box-shadow: 0 0 20px #a14effcc;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-glow);
       overflow: visible;
       display: flex;
       flex-direction: column;
-      background: black;
+      background: rgba(0, 0, 0, 0.9);
       position: relative;
     }
     #mediaHeader {
@@ -64,18 +67,18 @@
       gap: 4px;
       padding: 14px 20px 10px;
       background: linear-gradient(90deg, rgba(26, 22, 40, 0.98), rgba(32, 20, 48, 0.95));
-      border-radius: 12px 12px 0 0;
-      border-bottom: 1px solid rgba(161, 78, 255, 0.25);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      border-bottom: 1px solid var(--border);
     }
     #mediaTitle {
       font-size: clamp(1.1rem, 2.4vw, 1.6rem);
       font-weight: 600;
-      color: #f5f3ff;
+      color: var(--text-primary);
       text-align: left;
     }
     #mediaMeta {
       font-size: 0.95rem;
-      color: #c4b5fd;
+      color: var(--text-muted);
       text-align: left;
       letter-spacing: 0.02em;
     }
@@ -84,7 +87,7 @@
   aspect-ratio: 16 / 9;
   position: relative;
   background: black;
-  border-radius: 12px;      /* Rounded corners */
+  border-radius: var(--radius-lg);      /* Rounded corners */
   overflow: hidden;         /* Clips iframe edges */
 }
 
@@ -93,7 +96,7 @@ iframe {
   height: 100%;
   border: none;
   display: block;
-  border-radius: 12px;      /* Rounded corners (for safety) */
+  border-radius: var(--radius-lg);      /* Rounded corners (for safety) */
 }
     #clickShield {
       position: absolute;
@@ -113,13 +116,13 @@ iframe {
   user-select: none;
   position: relative;
   z-index: 10;
-  border-radius: 0 0 12px 12px;  /* Rounded bottom corners */
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);  /* Rounded bottom corners */
 }
     #fullscreenBtn {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #f0f0f0;
+      color: var(--text-primary);
       width: 36px;
       height: 36px;
       display: flex;
@@ -131,13 +134,13 @@ iframe {
       flex-shrink: 0;
     }
     #fullscreenBtn:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     #serverBtn {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #f0f0f0;
+      color: var(--text-primary);
       width: 36px;
       height: 36px;
       display: flex;
@@ -150,13 +153,13 @@ iframe {
       flex-shrink: 0;
     }
     #serverBtn:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     #favoriteBtn {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #f0f0f0;
+      color: var(--text-primary);
       width: 36px;
       height: 36px;
       display: flex;
@@ -168,7 +171,7 @@ iframe {
       flex-shrink: 0;
     }
     #favoriteBtn:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     #favoriteBtn.is-active {
       color: #facc15;
@@ -178,9 +181,9 @@ iframe {
       top: 100%;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(26, 22, 40, 0.97);
-      border-radius: 12px;
-      box-shadow: 0 0 16px #a14effcc;
+      background: var(--surface-2);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-glow);
       padding: 8px 0;
       width: 160px;
       display: none;
@@ -194,7 +197,7 @@ iframe {
     }
     .serverDropdownItem {
       padding: 10px 20px;
-      color: #f0f0f0;
+      color: var(--text-primary);
       cursor: pointer;
       font-weight: 600;
       font-size: 15px;
@@ -202,10 +205,10 @@ iframe {
       user-select: none;
     }
     .serverDropdownItem:hover {
-      background-color: #a855f7;
+      background-color: var(--accent);
     }
     .serverDropdownItem.active {
-      background-color: #a14eff;
+      background-color: var(--accent);
       cursor: default;
     }
     #closeBtn {
@@ -332,7 +335,8 @@ iframe {
   const serverDropdown = document.getElementById('serverDropdown');
   const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 
-  let currentServer = 'vidsrc';
+  const initialSettings = window.bilmTheme?.getSettings?.();
+  let currentServer = initialSettings?.defaultServer || 'vidsrc';
   let continueWatchingEnabled = false;
   let mediaDetails = null;
   const CONTINUE_KEY = 'bilm-continue-watching';
@@ -354,6 +358,7 @@ iframe {
       url = `https://vidplay.to/movie/${contentId}`;
     }
     iframe.src = url;
+    updateContinueWatching();
   }
 
   function loadList(key) {
@@ -486,16 +491,31 @@ iframe {
     serverBtn.setAttribute('aria-expanded', 'false');
   });
 
+  function setActiveServer(server) {
+    serverItems.forEach(i => i.classList.toggle('active', i.getAttribute('data-server') === server));
+    currentServer = server;
+  }
+
   serverItems.forEach(item => {
     item.addEventListener('click', () => {
       if (item.classList.contains('active')) return;
-      serverItems.forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-      currentServer = item.getAttribute('data-server');
+      setActiveServer(item.getAttribute('data-server'));
       updateIframe();
       serverDropdown.style.display = 'none';
       serverBtn.setAttribute('aria-expanded', 'false');
     });
+  });
+
+  if (currentServer) {
+    setActiveServer(currentServer);
+  }
+
+  window.addEventListener('bilm:theme-changed', (event) => {
+    const newServer = event.detail?.defaultServer;
+    if (newServer && newServer !== currentServer) {
+      setActiveServer(newServer);
+      updateIframe();
+    }
   });
 
   if (favoriteBtn) {
@@ -538,6 +558,7 @@ iframe {
   setTimeout(() => {
     continueWatchingEnabled = true;
     updateContinueWatching();
+    setInterval(updateContinueWatching, 30000);
   }, 30000);
 </script>
 

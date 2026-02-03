@@ -40,12 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return parsed.getFullYear();
   }
 
-  function renderRow(container, items) {
+  function renderRow(container, items, emptyMessage) {
     container.innerHTML = '';
     if (!items.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'Nothing here yet.';
+      empty.textContent = emptyMessage || 'Nothing here yet.';
       container.appendChild(empty);
       return;
     }
@@ -90,13 +90,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const continueItems = sortByRecent(loadList(CONTINUE_KEY));
     const favoriteItems = sortByRecent(loadList(FAVORITES_KEY));
 
-    renderRow(continueMoviesRow, filterByType(continueItems, 'movie'));
-    renderRow(continueTvRow, filterByType(continueItems, 'tv'));
-    renderRow(favoriteMoviesRow, filterByType(favoriteItems, 'movie'));
-    renderRow(favoriteTvRow, filterByType(favoriteItems, 'tv'));
-
-    continueWatchingSection.style.display = continueItems.length ? 'block' : 'none';
-    favoritesSection.style.display = favoriteItems.length ? 'block' : 'none';
+    renderRow(continueMoviesRow, filterByType(continueItems, 'movie'), 'Start a movie to see it here.');
+    renderRow(continueTvRow, filterByType(continueItems, 'tv'), 'Start a show to keep your place.');
+    renderRow(favoriteMoviesRow, filterByType(favoriteItems, 'movie'), 'Save movies you love for quick access.');
+    renderRow(favoriteTvRow, filterByType(favoriteItems, 'tv'), 'Favorite TV shows appear here.');
   }
 
   renderSections();

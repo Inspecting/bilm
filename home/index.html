@@ -18,8 +18,13 @@
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
 
+  <!-- Theme styles -->
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+
   <!-- Your existing home page styles -->
   <link rel="stylesheet" href="/bilm/home/style.css" />
+
+  <script src="/bilm/shared/theme.js"></script>
 </head>
 <body>
 
@@ -94,6 +99,9 @@
     const ctx = canvas.getContext('2d');
     const dotCount = 80;
     let dots = [];
+    let animationId = null;
+    let particlesEnabled = true;
+    let motionEnabled = true;
 
     function resize() {
       canvas.width = window.innerWidth;
@@ -113,9 +121,9 @@
       }
     }
 
-    function animate() {
+    function renderFrame(shouldMove = true) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.shadowColor = '#c084fc';
+      ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c084fc';
       ctx.shadowBlur = 8;
 
       for (let dot of dots) {
@@ -124,26 +132,65 @@
         ctx.fillStyle = 'rgba(193, 132, 252, 0.9)';
         ctx.fill();
 
-        dot.x += dot.dx;
-        dot.y += dot.dy;
+        if (shouldMove) {
+          dot.x += dot.dx;
+          dot.y += dot.dy;
 
-        if (dot.x < 0 || dot.x > canvas.width) dot.dx *= -1;
-        if (dot.y < 0 || dot.y > canvas.height) dot.dy *= -1;
+          if (dot.x < 0 || dot.x > canvas.width) dot.dx *= -1;
+          if (dot.y < 0 || dot.y > canvas.height) dot.dy *= -1;
+        }
       }
 
       ctx.shadowBlur = 0;
-      requestAnimationFrame(animate);
+    }
+
+    function animate() {
+      renderFrame(true);
+      animationId = requestAnimationFrame(animate);
+    }
+
+    function stopAnimation() {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+    }
+
+    function applyParticleSettings(settings) {
+      particlesEnabled = settings?.particles !== false;
+      motionEnabled = settings?.motion !== false;
+      canvas.style.display = particlesEnabled ? 'block' : 'none';
+
+      stopAnimation();
+      if (!particlesEnabled) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
+      resize();
+      initDots();
+
+      if (motionEnabled) {
+        animate();
+      } else {
+        renderFrame(false);
+      }
     }
 
     window.addEventListener('resize', () => {
+      if (!particlesEnabled) return;
       resize();
       initDots();
+      if (!motionEnabled) renderFrame(false);
+    });
+
+    window.addEventListener('bilm:theme-changed', (event) => {
+      applyParticleSettings(event.detail);
     });
 
     window.addEventListener('DOMContentLoaded', () => {
-      resize();
-      initDots();
-      animate();
+      const settings = window.bilmTheme?.getSettings?.();
+      applyParticleSettings(settings);
     });
   </script>
 
