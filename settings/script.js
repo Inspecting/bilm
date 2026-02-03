@@ -1,3 +1,10 @@
+const initSettings = () => {
+  const themeApi = window.bilmTheme;
+  if (!themeApi) {
+    window.setTimeout(initSettings, 50);
+    return;
+  }
+
   const accentPresets = ['#a855f7', '#c084fc', '#7c3aed', '#ec4899', '#38bdf8'];
   const accentPicker = document.getElementById('accentPicker');
   const backgroundSelect = document.getElementById('backgroundSelect');
@@ -9,6 +16,17 @@
   const presetsContainer = document.getElementById('accentPresets');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
 
+  if (!accentPicker || !backgroundSelect || !motionToggle || !particleToggle || !serverSelect || !resetThemeBtn || !resetDataBtn || !presetsContainer) {
+    return;
+  }
+
+  const applySettings = (partial) => {
+    const current = themeApi.getSettings?.() || {};
+    themeApi.setSettings?.({ ...current, ...partial });
+  };
+
+  const syncUI = () => {
+    const settings = themeApi.getSettings?.() || {};
   function applySettings(partial) {
     const current = window.bilmTheme?.getSettings?.() || {};
     window.bilmTheme?.setSettings?.({ ...current, ...partial });
@@ -22,6 +40,9 @@
     particleToggle.checked = settings.particles !== false;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
+  };
+
+  presetsContainer.innerHTML = '';
   }
 
   accentPresets.forEach(color => {
@@ -59,6 +80,7 @@
 
   resetThemeBtn.addEventListener('click', () => {
     if (!confirm('Reset theme to the default purple style?')) return;
+    themeApi.resetTheme?.();
     window.bilmTheme?.resetTheme?.();
     syncUI();
   });
@@ -74,6 +96,7 @@
       document.cookie.split(';').forEach(cookie => {
         const eqPos = cookie.indexOf('=');
         const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+        if (!name) return;
         document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
       });
 
@@ -85,6 +108,15 @@
     }
   });
 
+  syncUI();
+  window.addEventListener('bilm:theme-changed', syncUI);
+};
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initSettings);
+} else {
+  initSettings();
+}
   window.addEventListener('DOMContentLoaded', syncUI);
   window.addEventListener('bilm:theme-changed', syncUI);
 
