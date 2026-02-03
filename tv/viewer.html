@@ -358,7 +358,6 @@
           </svg>
           <div id="serverDropdown" role="menu" aria-label="Server selection">
             <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
-            <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
             <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
             <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
           </div>
@@ -438,7 +437,9 @@
   let currentSeason = 1;
   let currentEpisode = 1;
   const initialSettings = window.bilmTheme?.getSettings?.();
-  let currentServer = initialSettings?.defaultServer || 'vidsrc';
+  const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+  const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
+  let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
   let totalSeasons = 1;
   let episodesPerSeason = {};
   let continueWatchingEnabled = false;
@@ -604,11 +605,11 @@
   });
 
   if (currentServer) {
-    setActiveServer(currentServer);
+    setActiveServer(normalizeServer(currentServer));
   }
 
   window.addEventListener('bilm:theme-changed', (event) => {
-    const newServer = event.detail?.defaultServer;
+    const newServer = normalizeServer(event.detail?.defaultServer);
     if (newServer && newServer !== currentServer) {
       setActiveServer(newServer);
       updateIframe();
@@ -645,8 +646,6 @@
     switch (server) {
       case 'vidsrc':
         return `https://vsrc.su/embed/${imdbId || tmdbId}/${season}-${episode}`;
-      case 'vidplay':
-        return `https://vidplay.to/tv/${imdbId || tmdbId}/${season}/${episode}`;
       case 'godrive':
         return tmdbId
           ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`

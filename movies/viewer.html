@@ -281,7 +281,6 @@ iframe {
           </svg>
           <div id="serverDropdown" role="menu" aria-label="Server selection">
             <div class="serverDropdownItem active" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
-            <div class="serverDropdownItem" data-server="vidplay" role="menuitem" tabindex="0">VidPlay</div>
             <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
             <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
           </div>
@@ -304,6 +303,7 @@ iframe {
       </div>
     </div>
   </div>
+  <button id="closeBtn" aria-label="Close Player">✕</button>
 </main>
 
 <script>
@@ -329,6 +329,7 @@ iframe {
   const fullscreenBtn = document.getElementById('fullscreenBtn');
   const playerContainer = document.getElementById('playerContainer');
   const navbarContainer = document.getElementById('navbarContainer');
+  const closeBtn = document.getElementById('closeBtn');
   const mediaTitle = document.getElementById('mediaTitle');
   const mediaMeta = document.getElementById('mediaMeta');
   const favoriteBtn = document.getElementById('favoriteBtn');
@@ -338,7 +339,9 @@ iframe {
   const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 
   const initialSettings = window.bilmTheme?.getSettings?.();
-  let currentServer = initialSettings?.defaultServer || 'vidsrc';
+  const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+  const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
+  let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
   let continueWatchingEnabled = false;
   let mediaDetails = null;
   let imdbId = null;
@@ -352,8 +355,6 @@ iframe {
     switch (server) {
       case 'vidsrc':
         return `https://vidsrc.me/embed/${contentId}`;
-      case 'vidplay':
-        return `https://vidplay.to/movie/${contentId}`;
       case 'godrive':
         return imdbId ? `https://godriveplayer.com/player.php?imdb=${imdbId}` : '';
       case 'multiembed':
@@ -373,8 +374,12 @@ iframe {
     }
     let url = buildMovieUrl(currentServer);
     if (!url) {
-      setActiveServer('vidsrc');
-      url = buildMovieUrl('vidsrc');
+      if (currentServer === 'godrive' && !imdbId) {
+        return;
+      }
+      const fallbackServer = normalizeServer('vidsrc');
+      setActiveServer(fallbackServer);
+      url = buildMovieUrl(fallbackServer);
     }
     iframe.src = url;
     updateContinueWatching();
@@ -532,11 +537,11 @@ iframe {
   });
 
   if (currentServer) {
-    setActiveServer(currentServer);
+    setActiveServer(normalizeServer(currentServer));
   }
 
   window.addEventListener('bilm:theme-changed', (event) => {
-    const newServer = event.detail?.defaultServer;
+    const newServer = normalizeServer(event.detail?.defaultServer);
     if (newServer && newServer !== currentServer) {
       setActiveServer(newServer);
       updateIframe();
@@ -562,16 +567,28 @@ iframe {
     } else {
       playerContainer.classList.add('simulated-fullscreen');
     }
-    if (document.getElementById('closeBtn')) {
-      document.getElementById('closeBtn').style.display = 'block';
+    if (closeBtn) {
+      closeBtn.style.display = 'block';
     }
     navbarContainer.classList.add('hide-navbar');
   };
 
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      if (isMobile) {
+        playerContainer.classList.remove('simulated-fullscreen');
+      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      }
+      closeBtn.style.display = 'none';
+      navbarContainer.classList.remove('hide-navbar');
+    };
+  }
+
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) {
-      if (document.getElementById('closeBtn')) {
-        document.getElementById('closeBtn').style.display = 'none';
+      if (closeBtn) {
+        closeBtn.style.display = 'none';
       }
       navbarContainer.classList.remove('hide-navbar');
     }

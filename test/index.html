@@ -75,7 +75,6 @@
             <div class="serverDropdownItem" data-server="vidsrc5">VidSrc 5</div>
             <div class="serverDropdownItem" data-server="vidsrc6">VidSrc 6</div>
             <div class="serverDropdownItem" data-server="vidsrc7">VidSrc 7</div>
-            <div class="serverDropdownItem" data-server="vidplay">VidPlay</div>
           </div>
         </button>
         <button id="fullscreenBtn" title="Fullscreen">
@@ -232,8 +231,6 @@ function updateIframe() {
     iframe.src = `https://vidstream.pro/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
   } else if (currentServer === 'vidsrc7') {
     iframe.src = `https://vidcloud.co/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidplay') {
-    iframe.src = `https://vidplay.to/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
   }
 }
 
