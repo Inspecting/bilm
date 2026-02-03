@@ -51,6 +51,9 @@
     }
     let url = buildMovieUrl(currentServer);
     if (!url) {
+      if (currentServer === 'godrive' && !imdbId) {
+        return;
+      }
       const fallbackServer = normalizeServer('vidsrc');
       setActiveServer(fallbackServer);
       url = buildMovieUrl(fallbackServer);
@@ -59,6 +62,8 @@
       iframe.src = url;
       updateContinueWatching();
     }
+    iframe.src = url;
+    updateContinueWatching();
   }
 
   function loadList(key) {

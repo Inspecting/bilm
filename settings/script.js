@@ -27,6 +27,13 @@ const initSettings = () => {
 
   const syncUI = () => {
     const settings = themeApi.getSettings?.() || {};
+  function applySettings(partial) {
+    const current = window.bilmTheme?.getSettings?.() || {};
+    window.bilmTheme?.setSettings?.({ ...current, ...partial });
+  }
+
+  function syncUI() {
+    const settings = window.bilmTheme?.getSettings?.() || {};
     accentPicker.value = settings.accent || '#a855f7';
     backgroundSelect.value = settings.background || 'deep';
     motionToggle.checked = settings.motion !== false;
@@ -36,6 +43,8 @@ const initSettings = () => {
   };
 
   presetsContainer.innerHTML = '';
+  }
+
   accentPresets.forEach(color => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -72,6 +81,7 @@ const initSettings = () => {
   resetThemeBtn.addEventListener('click', () => {
     if (!confirm('Reset theme to the default purple style?')) return;
     themeApi.resetTheme?.();
+    window.bilmTheme?.resetTheme?.();
     syncUI();
   });
 
@@ -107,3 +117,8 @@ if (document.readyState === 'loading') {
 } else {
   initSettings();
 }
+  window.addEventListener('DOMContentLoaded', syncUI);
+  window.addEventListener('bilm:theme-changed', syncUI);
+
+</body>
+</html>
