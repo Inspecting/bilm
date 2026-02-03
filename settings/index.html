@@ -254,17 +254,6 @@
       box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
     }
 
-    }
-
-    .btn-outline:hover {
-      box-shadow: 0 0 12px var(--accent-soft);
-    }
-
-    .btn-danger {
-      background: linear-gradient(135deg, #ef4444, #b91c1c);
-      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
-    }
-
     @media (max-width: 720px) {
       main {
         padding: 20px 16px 80px;
@@ -352,21 +341,6 @@
           <label for="serverSelect">Default Server</label>
           <small>Used for movies and TV viewers.</small>
         </div>
-        <select id="serverSelectPrimary">
-          <option value="vidsrc">VidSrc (Default)</option>
-          <option value="godrive">GoDrive Player</option>
-          <option value="multiembed">MultiEmbed</option>
-        </select>
-      </div>
-      <div class="control-row">
-        <div>
-          <label for="serverSelectBackup">Default Server 2</label>
-          <small>Backup if Default 1 is unavailable.</small>
-        </div>
-        <select id="serverSelectBackup">
-          <option value="multiembed">MultiEmbed (Backup)</option>
-          <option value="vidsrc">VidSrc</option>
-          <option value="godrive">GoDrive Player</option>
         <select id="serverSelect">
           <option value="vidsrc">VidSrc</option>
           <option value="vidplay">VidPlay</option>
@@ -409,8 +383,6 @@
   const backgroundSelect = document.getElementById('backgroundSelect');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
-  const serverSelectPrimary = document.getElementById('serverSelectPrimary');
-  const serverSelectBackup = document.getElementById('serverSelectBackup');
   const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
@@ -427,8 +399,6 @@
     backgroundSelect.value = settings.background || 'deep';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
-    serverSelectPrimary.value = settings.defaultServerPrimary || 'vidsrc';
-    serverSelectBackup.value = settings.defaultServerBackup || 'multiembed';
     serverSelect.value = settings.defaultServer || 'vidsrc';
   }
 
@@ -449,11 +419,6 @@
     applySettings({ accent: event.target.value });
   });
 
-
-  accentPicker.addEventListener('input', (event) => {
-    applySettings({ accent: event.target.value });
-  });
-
   backgroundSelect.addEventListener('change', (event) => {
     applySettings({ background: event.target.value });
   });
@@ -466,12 +431,6 @@
     applySettings({ particles: event.target.checked });
   });
 
-  serverSelectPrimary.addEventListener('change', (event) => {
-    applySettings({ defaultServerPrimary: event.target.value });
-  });
-
-  serverSelectBackup.addEventListener('change', (event) => {
-    applySettings({ defaultServerBackup: event.target.value });
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
   });
