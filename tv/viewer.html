@@ -438,8 +438,6 @@
   let currentSeason = 1;
   let currentEpisode = 1;
   const initialSettings = window.bilmTheme?.getSettings?.();
-  let currentServer = initialSettings?.defaultServerPrimary || 'vidsrc';
-  let backupServer = initialSettings?.defaultServerBackup || 'multiembed';
   let currentServer = initialSettings?.defaultServer || 'vidsrc';
   let totalSeasons = 1;
   let episodesPerSeason = {};
@@ -610,13 +608,6 @@
   }
 
   window.addEventListener('bilm:theme-changed', (event) => {
-    const newPrimary = event.detail?.defaultServerPrimary;
-    const newBackup = event.detail?.defaultServerBackup;
-    if (newBackup) backupServer = newBackup;
-    if (newPrimary && newPrimary !== currentServer) {
-      setActiveServer(newPrimary);
-    }
-    updateIframe();
     const newServer = event.detail?.defaultServer;
     if (newServer && newServer !== currentServer) {
       setActiveServer(newServer);
@@ -669,23 +660,6 @@
     }
   }
 
-  function getAvailableServers() {
-    const servers = ['vidsrc', 'godrive', 'multiembed'];
-    if (!tmdbId) {
-      return servers.filter(server => server !== 'godrive');
-    }
-    return servers;
-  }
-
-  function renderServerDropdown() {
-    const available = getAvailableServers();
-    serverItems.forEach(item => {
-      const server = item.getAttribute('data-server');
-      item.style.display = available.includes(server) ? '' : 'none';
-    });
-    return available;
-  }
-
   function updateIframe() {
     saveProgress();
 
@@ -696,18 +670,6 @@
       return;
     }
 
-    const available = renderServerDropdown();
-    if (!available.includes(currentServer)) {
-      currentServer = available[0];
-    }
-    let url = buildTvUrl(currentServer);
-    if (!url && backupServer && available.includes(backupServer)) {
-      setActiveServer(backupServer);
-      url = buildTvUrl(backupServer);
-    }
-    if (!url) {
-      setActiveServer(available[0]);
-      url = buildTvUrl(available[0]);
     let url = buildTvUrl(currentServer);
     if (!url) {
       setActiveServer('vidsrc');
@@ -940,7 +902,6 @@ nextEpisodeBtn.addEventListener('click', () => {
 
       const favorites = loadList(FAVORITES_KEY);
       updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
-      renderServerDropdown();
       mediaTitle.textContent = showTitle;
       mediaMeta.textContent = displayDate;
       document.title = `Bilm 💜 - ${showTitle}`;

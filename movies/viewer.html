@@ -338,8 +338,6 @@ iframe {
   const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 
   const initialSettings = window.bilmTheme?.getSettings?.();
-  let currentServer = initialSettings?.defaultServerPrimary || 'vidsrc';
-  let backupServer = initialSettings?.defaultServerBackup || 'multiembed';
   let currentServer = initialSettings?.defaultServer || 'vidsrc';
   let continueWatchingEnabled = false;
   let mediaDetails = null;
@@ -367,41 +365,12 @@ iframe {
     }
   }
 
-  function getAvailableServers() {
-    const servers = ['vidsrc', 'godrive', 'multiembed'];
-    if (!imdbId) {
-      return servers.filter(server => server !== 'godrive');
-    }
-    return servers;
-  }
-
-  function renderServerDropdown() {
-    const available = getAvailableServers();
-    serverItems.forEach(item => {
-      const server = item.getAttribute('data-server');
-      item.style.display = available.includes(server) ? '' : 'none';
-    });
-    return available;
-  }
-
   function updateIframe() {
     if (!contentId) {
       console.warn('No id parameter provided.');
       iframe.src = '';
       return;
     }
-    const available = renderServerDropdown();
-    if (!available.includes(currentServer)) {
-      currentServer = available[0];
-    }
-    let url = buildMovieUrl(currentServer);
-    if (!url && backupServer && available.includes(backupServer)) {
-      setActiveServer(backupServer);
-      url = buildMovieUrl(backupServer);
-    }
-    if (!url) {
-      setActiveServer(available[0]);
-      url = buildMovieUrl(available[0]);
     let url = buildMovieUrl(currentServer);
     if (!url) {
       setActiveServer('vidsrc');
@@ -522,7 +491,6 @@ iframe {
 
       const favorites = loadList(FAVORITES_KEY);
       updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
-      renderServerDropdown();
       updateIframe();
     } catch (error) {
       console.error('Error fetching movie details:', error);
@@ -568,13 +536,6 @@ iframe {
   }
 
   window.addEventListener('bilm:theme-changed', (event) => {
-    const newPrimary = event.detail?.defaultServerPrimary;
-    const newBackup = event.detail?.defaultServerBackup;
-    if (newBackup) backupServer = newBackup;
-    if (newPrimary && newPrimary !== currentServer) {
-      setActiveServer(newPrimary);
-    }
-    updateIframe();
     const newServer = event.detail?.defaultServer;
     if (newServer && newServer !== currentServer) {
       setActiveServer(newServer);
