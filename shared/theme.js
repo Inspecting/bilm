@@ -5,6 +5,8 @@
     background: 'deep',
     motion: true,
     particles: true,
+    defaultServerPrimary: 'vidsrc',
+    defaultServerBackup: 'multiembed'
     defaultServer: 'vidsrc'
   };
 
