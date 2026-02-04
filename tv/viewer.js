@@ -43,6 +43,11 @@ let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const CONTINUE_KEY = 'bilm-continue-watching';
 const FAVORITES_KEY = 'bilm-favorites';
+const WATCH_HISTORY_KEY = 'bilm-watch-history';
+const HISTORY_ENABLED_KEY = 'bilm-history-enabled';
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const CONTINUE_WATCHING_DELAY = 30000;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const CONTINUE_WATCHING_DELAY = 15000;
@@ -94,6 +99,10 @@ function loadList(key) {
 
 function saveList(key, items) {
   localStorage.setItem(key, JSON.stringify(items));
+}
+
+function isHistoryEnabled() {
+  return localStorage.getItem(HISTORY_ENABLED_KEY) !== 'false';
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -157,6 +166,32 @@ function updateContinueWatching() {
   }
   items.unshift(payload);
   saveList(CONTINUE_KEY, items);
+}
+
+function updateWatchHistory() {
+  if (!mediaDetails || !isHistoryEnabled()) return;
+  const items = loadList(WATCH_HISTORY_KEY);
+  const key = `tv-${mediaDetails.id}`;
+  const existingIndex = items.findIndex(item => item.key === key);
+  const payload = {
+    key,
+    id: mediaDetails.id,
+    type: 'tv',
+    title: mediaDetails.title,
+    date: mediaDetails.firstAirDate,
+    year: mediaDetails.year,
+    poster: mediaDetails.poster,
+    link: mediaDetails.link,
+    updatedAt: Date.now(),
+    season: currentSeason,
+    episode: currentEpisode
+  };
+
+  if (existingIndex >= 0) {
+    items.splice(existingIndex, 1);
+  }
+  items.unshift(payload);
+  saveList(WATCH_HISTORY_KEY, items);
 }
 
 fullscreenBtn.onclick = () => {
@@ -315,6 +350,7 @@ function updateIframe() {
   if (continueWatchingReady) {
     updateContinueWatching();
   }
+  updateWatchHistory();
 }
 
 function populateSeasons(total) {
@@ -558,6 +594,7 @@ async function fetchTMDBData() {
 
     updateControls();
     updateIframe();
+    updateWatchHistory();
     startContinueWatchingTimer();
   } catch (e) {
     console.error('Error fetching TMDB data:', e);

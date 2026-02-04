@@ -38,6 +38,11 @@ let mediaDetails = null;
 let imdbId = null;
 const CONTINUE_KEY = 'bilm-continue-watching';
 const FAVORITES_KEY = 'bilm-favorites';
+const WATCH_HISTORY_KEY = 'bilm-watch-history';
+const HISTORY_ENABLED_KEY = 'bilm-history-enabled';
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const CONTINUE_WATCHING_DELAY = 30000;
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const CONTINUE_WATCHING_DELAY = 15000;
@@ -121,6 +126,10 @@ function saveList(key, items) {
   localStorage.setItem(key, JSON.stringify(items));
 }
 
+function isHistoryEnabled() {
+  return localStorage.getItem(HISTORY_ENABLED_KEY) !== 'false';
+}
+
 function updateFavoriteButton(isFavorite) {
   if (!favoriteBtn) return;
   favoriteBtn.classList.toggle('is-active', isFavorite);
@@ -180,6 +189,30 @@ function updateContinueWatching() {
   saveList(CONTINUE_KEY, items);
 }
 
+function updateWatchHistory() {
+  if (!mediaDetails || !isHistoryEnabled()) return;
+  const items = loadList(WATCH_HISTORY_KEY);
+  const key = `movie-${mediaDetails.id}`;
+  const existingIndex = items.findIndex(item => item.key === key);
+  const payload = {
+    key,
+    id: mediaDetails.id,
+    type: 'movie',
+    title: mediaDetails.title,
+    date: mediaDetails.releaseDate,
+    year: mediaDetails.year,
+    poster: mediaDetails.poster,
+    link: mediaDetails.link,
+    updatedAt: Date.now()
+  };
+
+  if (existingIndex >= 0) {
+    items.splice(existingIndex, 1);
+  }
+  items.unshift(payload);
+  saveList(WATCH_HISTORY_KEY, items);
+}
+
 async function loadMovieDetails() {
   if (!contentId) {
     mediaTitle.textContent = 'Unknown title';
@@ -220,6 +253,7 @@ async function loadMovieDetails() {
     const favorites = loadList(FAVORITES_KEY);
     updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
     updateIframe();
+    updateWatchHistory();
     startContinueWatchingTimer();
   } catch (error) {
     console.error('Error fetching movie details:', error);
