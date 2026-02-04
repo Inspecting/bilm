@@ -38,6 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
       ].slice(0, 10);
       saveList(SEARCH_HISTORY_KEY, nextHistory);
       saveList(SEARCH_RECENT_KEY, nextRecent);
+      const next = [
+        { query, updatedAt: Date.now() },
+        ...history.filter(item => item.query.toLowerCase() !== query.toLowerCase())
+      ].slice(0, 10);
+      saveList(SEARCH_HISTORY_KEY, next);
     }
     window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
   };

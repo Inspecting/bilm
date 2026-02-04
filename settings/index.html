@@ -449,6 +449,9 @@
       <div class="history-group">
         <h3>Watch History</h3>
         <div class="history-list" id="watchHistoryList"></div>
+      <div class="actions-row">
+        <button class="btn btn-outline" id="clearSearchHistoryBtn">Clear Search History</button>
+        <button class="btn btn-outline" id="clearContinueBtn">Clear Continue Watching</button>
       </div>
     </section>
 
@@ -494,6 +497,8 @@
   const clearWatchHistoryBtn = document.getElementById('clearWatchHistoryBtn');
   const searchHistoryList = document.getElementById('searchHistoryList');
   const watchHistoryList = document.getElementById('watchHistoryList');
+  const clearSearchHistoryBtn = document.getElementById('clearSearchHistoryBtn');
+  const clearContinueBtn = document.getElementById('clearContinueBtn');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const presetsContainer = document.getElementById('accentPresets');

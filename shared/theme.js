@@ -9,6 +9,7 @@
     searchHistory: true,
     continueWatching: true,
     watchHistory: true
+    continueWatching: true
   };
 
   const backgroundColors = {
