@@ -148,6 +148,13 @@ button.search-btn:hover {
   margin-bottom: 16px;
 }
 
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .section-title {
   font-size: 26px;
   font-weight: 700;
@@ -172,6 +179,11 @@ button.search-btn:hover {
   font-weight: 600;
   cursor: pointer;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.section-btn-compact {
+  padding: 6px 12px;
+  font-size: 0.9rem;
 }
 
 .section-btn:hover:not(:disabled) {
