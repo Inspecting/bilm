@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - History</title>
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    main {
+      flex: 1;
+      padding: 28px 22px 80px;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 20px 0 26px;
+    }
+
+    .page-header h1 {
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      color: var(--text-primary);
+    }
+
+    .page-header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .history-card {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+      flex-wrap: wrap;
+    }
+
+    .control-row:hover {
+      border-color: var(--accent-soft);
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .control-row label {
+      font-size: 0.95rem;
+      color: var(--text-primary);
+    }
+
+    .toggle {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      flex: 0 0 auto;
+      margin-left: auto;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle span {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      transition: background var(--transition-fast);
+      cursor: pointer;
+    }
+
+    .toggle span::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--text-primary);
+      transition: transform var(--transition-fast);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .toggle input:checked + span {
+      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .toggle input:checked + span::after {
+      transform: translateX(20px);
+    }
+
+    .tab-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .tab-btn.is-active {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .tab-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .panel {
+      display: none;
+      gap: 16px;
+      flex-direction: column;
+    }
+
+    .panel.is-active {
+      display: flex;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-danger {
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fecaca;
+    }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .list-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .list-item:hover {
+      border-color: var(--accent-soft);
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .list-item.is-selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 16px var(--accent-soft);
+    }
+
+    .list-item img {
+      width: 48px;
+      height: 72px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .list-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .list-meta span {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .list-checkbox {
+      display: none;
+    }
+
+    .list-item.is-editing .list-checkbox {
+      display: inline-flex;
+    }
+
+    .empty-state {
+      color: var(--text-subtle);
+      font-size: 14px;
+      padding: 14px 18px;
+      text-align: left;
+      background: var(--surface-2);
+      border-radius: var(--radius-md);
+      border: 1px dashed var(--border);
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 20px 16px 80px;
+      }
+
+      .list-item {
+        align-items: flex-start;
+      }
+    }
+  </style>
+
+  <script src="/bilm/shared/theme.js"></script>
+</head>
+<body>
+
+<div id="navbarContainer"></div>
+
+<main>
+  <div class="page-header">
+    <h1>History</h1>
+    <p>Review your recent searches and watch history, or clear what you no longer need.</p>
+  </div>
+
+  <section class="history-card">
+    <div class="control-row">
+      <div>
+        <label>History Saving</label>
+        <small>Pause new history entries without deleting your saved data.</small>
+      </div>
+      <label class="toggle">
+        <input id="historyToggle" type="checkbox" />
+        <span></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="history-card">
+    <div class="tab-row">
+      <button class="tab-btn is-active" type="button" data-tab="search">Search History</button>
+      <button class="tab-btn" type="button" data-tab="watch">Watch History</button>
+    </div>
+
+    <div class="panel is-active" id="searchPanel">
+      <div class="tab-row" id="searchSort">
+        <button class="tab-btn is-active" type="button" data-sort="recent">Recent</button>
+        <button class="tab-btn" type="button" data-sort="old">Old</button>
+      </div>
+      <div class="panel-actions">
+        <button class="btn" type="button" id="searchEditBtn">Edit</button>
+        <button class="btn btn-danger" type="button" id="searchRemoveBtn" hidden>Remove Selected</button>
+        <button class="btn" type="button" id="searchClearBtn">Clear All</button>
+      </div>
+      <div class="list" id="searchList"></div>
+    </div>
+
+    <div class="panel" id="watchPanel">
+      <div class="tab-row" id="watchFilter">
+        <button class="tab-btn is-active" type="button" data-filter="all">All</button>
+        <button class="tab-btn" type="button" data-filter="movie">Movies</button>
+        <button class="tab-btn" type="button" data-filter="tv">TV Shows</button>
+      </div>
+      <div class="panel-actions">
+        <button class="btn" type="button" id="watchEditBtn">Edit</button>
+        <button class="btn btn-danger" type="button" id="watchRemoveBtn" hidden>Remove Selected</button>
+        <button class="btn" type="button" id="watchClearBtn">Clear All</button>
+      </div>
+      <div class="list" id="watchList"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  fetch('/bilm/shared/navbar.html')
+    .then(res => res.text())
+    .then(html => {
+      document.getElementById('navbarContainer').innerHTML = html;
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = '/bilm/shared/navbar.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = '/bilm/shared/navbar.js';
+      document.body.appendChild(js);
+    });
+</script>
+
+<script>
+  const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const WATCH_HISTORY_KEY = 'bilm-watch-history';
+  const HISTORY_ENABLED_KEY = 'bilm-history-enabled';
+
+  const historyToggle = document.getElementById('historyToggle');
+  const tabButtons = document.querySelectorAll('.tab-btn[data-tab]');
+  const searchPanel = document.getElementById('searchPanel');
+  const watchPanel = document.getElementById('watchPanel');
+  const searchList = document.getElementById('searchList');
+  const watchList = document.getElementById('watchList');
+  const searchSortButtons = document.querySelectorAll('#searchSort .tab-btn');
+  const watchFilterButtons = document.querySelectorAll('#watchFilter .tab-btn');
+  const searchEditBtn = document.getElementById('searchEditBtn');
+  const searchRemoveBtn = document.getElementById('searchRemoveBtn');
+  const searchClearBtn = document.getElementById('searchClearBtn');
+  const watchEditBtn = document.getElementById('watchEditBtn');
+  const watchRemoveBtn = document.getElementById('watchRemoveBtn');
+  const watchClearBtn = document.getElementById('watchClearBtn');
+
+  const state = {
+    activeTab: 'search',
+    search: {
+      editing: false,
+      selected: new Set(),
+      sort: 'recent'
+    },
+    watch: {
+      editing: false,
+      selected: new Set(),
+      filter: 'all'
+    }
+  };
+
+  function loadList(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveList(key, items) {
+    localStorage.setItem(key, JSON.stringify(items));
+  }
+
+  function isHistoryEnabled() {
+    return localStorage.getItem(HISTORY_ENABLED_KEY) !== 'false';
+  }
+
+  function setHistoryEnabled(enabled) {
+    localStorage.setItem(HISTORY_ENABLED_KEY, enabled ? 'true' : 'false');
+  }
+
+  function setActiveTab(tab) {
+    state.activeTab = tab;
+    tabButtons.forEach(btn => btn.classList.toggle('is-active', btn.dataset.tab === tab));
+    searchPanel.classList.toggle('is-active', tab === 'search');
+    watchPanel.classList.toggle('is-active', tab === 'watch');
+  }
+
+  function updateEditButtons() {
+    searchEditBtn.textContent = state.search.editing ? 'Done' : 'Edit';
+    searchRemoveBtn.hidden = !state.search.editing;
+    searchRemoveBtn.disabled = state.search.selected.size === 0;
+
+    watchEditBtn.textContent = state.watch.editing ? 'Done' : 'Edit';
+    watchRemoveBtn.hidden = !state.watch.editing;
+    watchRemoveBtn.disabled = state.watch.selected.size === 0;
+  }
+
+  function renderSearchList() {
+    const items = loadList(SEARCH_HISTORY_KEY);
+    let sorted = [...items];
+    if (state.search.sort === 'old') {
+      sorted.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+    } else {
+      sorted.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+
+    searchList.innerHTML = '';
+    if (!sorted.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No searches saved yet.';
+      searchList.appendChild(empty);
+      return;
+    }
+
+    sorted.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      if (state.search.editing) row.classList.add('is-editing');
+      if (state.search.selected.has(item.query)) row.classList.add('is-selected');
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'list-checkbox';
+      checkbox.checked = state.search.selected.has(item.query);
+
+      const meta = document.createElement('div');
+      meta.className = 'list-meta';
+      const title = document.createElement('strong');
+      title.textContent = item.query;
+      const time = document.createElement('span');
+      time.textContent = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Unknown time';
+      meta.appendChild(title);
+      meta.appendChild(time);
+
+      row.appendChild(checkbox);
+      row.appendChild(meta);
+
+      row.addEventListener('click', () => {
+        if (state.search.editing) {
+          if (state.search.selected.has(item.query)) {
+            state.search.selected.delete(item.query);
+          } else {
+            state.search.selected.add(item.query);
+          }
+          updateEditButtons();
+          renderSearchList();
+          return;
+        }
+        window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(item.query)}`;
+      });
+
+      searchList.appendChild(row);
+    });
+  }
+
+  function renderWatchList() {
+    const items = loadList(WATCH_HISTORY_KEY);
+    const filtered = items.filter(item => state.watch.filter === 'all' || item.type === state.watch.filter);
+    const sorted = [...filtered].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    watchList.innerHTML = '';
+    if (!sorted.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No watch history yet.';
+      watchList.appendChild(empty);
+      return;
+    }
+
+    sorted.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      if (state.watch.editing) row.classList.add('is-editing');
+      if (state.watch.selected.has(item.key)) row.classList.add('is-selected');
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'list-checkbox';
+      checkbox.checked = state.watch.selected.has(item.key);
+
+      const img = document.createElement('img');
+      img.src = item.poster || 'https://via.placeholder.com/140x210?text=No+Image';
+      img.alt = item.title;
+      img.onerror = () => {
+        img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+      };
+
+      const meta = document.createElement('div');
+      meta.className = 'list-meta';
+      const title = document.createElement('strong');
+      title.textContent = item.title || 'Untitled';
+      const sub = document.createElement('span');
+      const detail = item.type === 'tv'
+        ? `TV • Season ${item.season || 1}, Episode ${item.episode || 1}`
+        : 'Movie';
+      sub.textContent = `${detail} • ${item.year || 'N/A'}`;
+      meta.appendChild(title);
+      meta.appendChild(sub);
+
+      row.appendChild(checkbox);
+      row.appendChild(img);
+      row.appendChild(meta);
+
+      row.addEventListener('click', () => {
+        if (state.watch.editing) {
+          if (state.watch.selected.has(item.key)) {
+            state.watch.selected.delete(item.key);
+          } else {
+            state.watch.selected.add(item.key);
+          }
+          updateEditButtons();
+          renderWatchList();
+          return;
+        }
+        if (item.link) {
+          window.location.href = item.link;
+        }
+      });
+
+      watchList.appendChild(row);
+    });
+  }
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+  });
+
+  searchSortButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.search.sort = btn.dataset.sort;
+      searchSortButtons.forEach(button => button.classList.toggle('is-active', button === btn));
+      renderSearchList();
+    });
+  });
+
+  watchFilterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.watch.filter = btn.dataset.filter;
+      watchFilterButtons.forEach(button => button.classList.toggle('is-active', button === btn));
+      renderWatchList();
+    });
+  });
+
+  searchEditBtn.addEventListener('click', () => {
+    state.search.editing = !state.search.editing;
+    if (!state.search.editing) {
+      state.search.selected.clear();
+    }
+    updateEditButtons();
+    renderSearchList();
+  });
+
+  watchEditBtn.addEventListener('click', () => {
+    state.watch.editing = !state.watch.editing;
+    if (!state.watch.editing) {
+      state.watch.selected.clear();
+    }
+    updateEditButtons();
+    renderWatchList();
+  });
+
+  searchRemoveBtn.addEventListener('click', () => {
+    if (!state.search.selected.size) return;
+    const confirmRemove = confirm('Remove selected searches?');
+    if (!confirmRemove) return;
+    const next = loadList(SEARCH_HISTORY_KEY).filter(item => !state.search.selected.has(item.query));
+    saveList(SEARCH_HISTORY_KEY, next);
+    state.search.selected.clear();
+    updateEditButtons();
+    renderSearchList();
+  });
+
+  watchRemoveBtn.addEventListener('click', () => {
+    if (!state.watch.selected.size) return;
+    const confirmRemove = confirm('Remove selected watch history?');
+    if (!confirmRemove) return;
+    const next = loadList(WATCH_HISTORY_KEY).filter(item => !state.watch.selected.has(item.key));
+    saveList(WATCH_HISTORY_KEY, next);
+    state.watch.selected.clear();
+    updateEditButtons();
+    renderWatchList();
+  });
+
+  searchClearBtn.addEventListener('click', () => {
+    const confirmClear = confirm('Clear all search history?');
+    if (!confirmClear) return;
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
+    state.search.selected.clear();
+    renderSearchList();
+  });
+
+  watchClearBtn.addEventListener('click', () => {
+    const confirmClear = confirm('Clear all watch history?');
+    if (!confirmClear) return;
+    localStorage.removeItem(WATCH_HISTORY_KEY);
+    state.watch.selected.clear();
+    renderWatchList();
+  });
+
+  historyToggle.addEventListener('change', (event) => {
+    setHistoryEnabled(event.target.checked);
+  });
+
+  function init() {
+    historyToggle.checked = isHistoryEnabled();
+    updateEditButtons();
+    renderSearchList();
+    renderWatchList();
+  }
+
+  window.addEventListener('storage', () => {
+    renderSearchList();
+    renderWatchList();
+  });
+
+  window.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
