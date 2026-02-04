@@ -7,8 +7,6 @@
     particles: true,
     defaultServer: 'vidsrc',
     searchHistory: true,
-    continueWatching: true,
-    watchHistory: true
     continueWatching: true
   };
 
