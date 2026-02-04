@@ -43,6 +43,9 @@ const HISTORY_ENABLED_KEY = 'bilm-history-enabled';
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const CONTINUE_WATCHING_DELAY = 30000;
+
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const CONTINUE_WATCHING_DELAY = 15000;
 let continueWatchingReady = false;
 let continueWatchingTimer = null;
 let continueWatchingInterval = null;

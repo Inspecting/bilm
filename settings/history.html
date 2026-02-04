@@ -308,6 +308,8 @@
       <div class="tab-row" id="searchSort">
         <button class="tab-btn is-active" type="button" data-sort="recent">Recent</button>
         <button class="tab-btn" type="button" data-sort="old">Old</button>
+        <button class="tab-btn" type="button" data-sort="az">A–Z</button>
+        <button class="tab-btn" type="button" data-sort="za">Z–A</button>
       </div>
       <div class="panel-actions">
         <button class="btn" type="button" id="searchEditBtn">Edit</button>
@@ -425,6 +427,10 @@
     let sorted = [...items];
     if (state.search.sort === 'old') {
       sorted.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+    if (state.search.sort === 'az') {
+      sorted.sort((a, b) => a.query.localeCompare(b.query));
+    } else if (state.search.sort === 'za') {
+      sorted.sort((a, b) => b.query.localeCompare(a.query));
     } else {
       sorted.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
