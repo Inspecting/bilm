@@ -343,10 +343,12 @@ iframe {
   const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
   let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
   let continueWatchingEnabled = initialSettings?.continueWatching !== false;
+  let continueWatchingReady = false;
   let mediaDetails = null;
   let imdbId = null;
   const CONTINUE_KEY = 'bilm-continue-watching';
   const FAVORITES_KEY = 'bilm-favorites';
+  const WATCH_HISTORY_KEY = 'bilm-watch-history';
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -382,7 +384,9 @@ iframe {
       url = buildMovieUrl(fallbackServer);
     }
     iframe.src = url;
-    updateContinueWatching();
+    if (continueWatchingReady) {
+      updateContinueWatching();
+    }
   }
 
   function loadList(key) {
@@ -396,6 +400,31 @@ iframe {
 
   function saveList(key, items) {
     localStorage.setItem(key, JSON.stringify(items));
+  }
+
+  function addToWatchHistory() {
+    if (!mediaDetails) return;
+    const settings = window.bilmTheme?.getSettings?.() || {};
+    if (settings.watchHistory === false) return;
+    const items = loadList(WATCH_HISTORY_KEY);
+    const key = `movie-${mediaDetails.id}`;
+    const payload = {
+      key,
+      id: mediaDetails.id,
+      type: 'movie',
+      title: mediaDetails.title,
+      date: mediaDetails.releaseDate,
+      year: mediaDetails.year,
+      poster: mediaDetails.poster,
+      link: mediaDetails.link,
+      updatedAt: Date.now()
+    };
+    const existingIndex = items.findIndex(item => item.key === key);
+    if (existingIndex >= 0) {
+      items.splice(existingIndex, 1);
+    }
+    items.unshift(payload);
+    saveList(WATCH_HISTORY_KEY, items);
   }
 
   function updateFavoriteButton(isFavorite) {
@@ -493,6 +522,7 @@ iframe {
         poster,
         link: `/bilm/movies/viewer.html?id=${contentId}`
       };
+      addToWatchHistory();
 
       const favorites = loadList(FAVORITES_KEY);
       updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
@@ -599,11 +629,12 @@ iframe {
   updateIframe();
   loadMovieDetails();
   setTimeout(() => {
+    continueWatchingReady = true;
     if (continueWatchingEnabled) {
       updateContinueWatching();
     }
     setInterval(updateContinueWatching, 30000);
-  }, 30000);
+  }, 15000);
 </script>
 
 <script src="/bilm/shared/adblock/adblock.js"></script>

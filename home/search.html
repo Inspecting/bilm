@@ -123,6 +123,50 @@
       padding: 16px;
       border-radius: var(--radius-md);
     }
+    .recent-searches {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .recent-searches h2 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .recent-searches ul {
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .recent-search-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+    }
+    .recent-search-item button {
+      border: none;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .recent-search-item .remove-search {
+      color: #fca5a5;
+      font-size: 14px;
+    }
+    .recent-search-empty {
+      color: var(--text-subtle);
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -131,6 +175,12 @@
 
   <main>
     <h1 id="resultsTitle">Search Results for ""</h1>
+
+    <section class="recent-searches" id="recentSearchesSection">
+      <h2>Recent Searches</h2>
+      <ul id="recentSearchesList"></ul>
+      <div class="recent-search-empty" id="recentSearchesEmpty">No recent searches yet.</div>
+    </section>
 
     <section id="moviesSection">
       <h2>Movies</h2>
@@ -161,6 +211,8 @@
     const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
     const OMDB_API_KEY = '9bf8cd26';
     const BASE_URL = 'https://inspecting.github.io/bilm';
+    const SEARCH_HISTORY_KEY = 'bilm-search-history';
+    const SEARCH_RECENT_KEY = 'bilm-search-recent';
 
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuery = urlParams.get('q') || '';
@@ -170,8 +222,80 @@
     const tvSection = document.getElementById('tvSection');
     const moviesResults = document.getElementById('moviesResults');
     const tvResults = document.getElementById('tvResults');
+    const recentSearchesList = document.getElementById('recentSearchesList');
+    const recentSearchesEmpty = document.getElementById('recentSearchesEmpty');
 
     resultsTitle.textContent = `Search Results for "${currentQuery}"`;
+
+    function loadList(key) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveList(key, items) {
+      localStorage.setItem(key, JSON.stringify(items));
+    }
+
+    function saveSearchHistory(query) {
+      if (!query) return;
+      const settings = window.bilmTheme?.getSettings?.() || {};
+      if (settings.searchHistory === false) return;
+      const entry = { query, updatedAt: Date.now() };
+      const history = loadList(SEARCH_HISTORY_KEY);
+      const recent = loadList(SEARCH_RECENT_KEY);
+      const nextHistory = [
+        entry,
+        ...history.filter(item => item.query.toLowerCase() !== query.toLowerCase())
+      ];
+      const nextRecent = [
+        entry,
+        ...recent.filter(item => item.query.toLowerCase() !== query.toLowerCase())
+      ].slice(0, 10);
+      saveList(SEARCH_HISTORY_KEY, nextHistory);
+      saveList(SEARCH_RECENT_KEY, nextRecent);
+    }
+
+    function renderRecentSearches() {
+      const recent = loadList(SEARCH_RECENT_KEY);
+      recentSearchesList.innerHTML = '';
+      if (!recent.length) {
+        recentSearchesEmpty.style.display = 'block';
+        return;
+      }
+      recentSearchesEmpty.style.display = 'none';
+      recent.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'recent-search-item';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = item.query;
+        button.addEventListener('click', () => {
+          const url = new URL(window.location.href);
+          url.searchParams.set('q', item.query);
+          window.location.href = url.toString();
+        });
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove-search';
+        remove.textContent = '✕';
+        remove.setAttribute('aria-label', `Remove ${item.query} from recent searches`);
+        remove.addEventListener('click', () => {
+          const nextRecent = recent.filter(entry => entry.query.toLowerCase() !== item.query.toLowerCase());
+          const history = loadList(SEARCH_HISTORY_KEY);
+          const nextHistory = history.filter(entry => entry.query.toLowerCase() !== item.query.toLowerCase());
+          saveList(SEARCH_RECENT_KEY, nextRecent);
+          saveList(SEARCH_HISTORY_KEY, nextHistory);
+          renderRecentSearches();
+        });
+        li.appendChild(button);
+        li.appendChild(remove);
+        recentSearchesList.appendChild(li);
+      });
+    }
 
     function fetchImdbMovies(query) {
       if (!query) return Promise.resolve([]);
@@ -213,7 +337,10 @@
         .catch(() => []);
     }
 
+    renderRecentSearches();
+
     if (currentQuery) {
+      saveSearchHistory(currentQuery);
       Promise.all([
         fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(currentQuery)}`).then(r => r.json()),
         fetch(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(currentQuery)}`).then(r => r.json()),

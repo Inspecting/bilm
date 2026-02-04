@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const CONTINUE_KEY = 'bilm-continue-watching';
   const FAVORITES_KEY = 'bilm-favorites';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const SEARCH_RECENT_KEY = 'bilm-search-recent';
 
   document.querySelector('main').classList.add('visible');
 
@@ -25,6 +26,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const settings = window.bilmTheme?.getSettings?.() || {};
     if (settings.searchHistory !== false) {
       const history = loadList(SEARCH_HISTORY_KEY);
+      const recent = loadList(SEARCH_RECENT_KEY);
+      const entry = { query, updatedAt: Date.now() };
+      const nextHistory = [
+        entry,
+        ...history.filter(item => item.query.toLowerCase() !== query.toLowerCase())
+      ];
+      const nextRecent = [
+        entry,
+        ...recent.filter(item => item.query.toLowerCase() !== query.toLowerCase())
+      ].slice(0, 10);
+      saveList(SEARCH_HISTORY_KEY, nextHistory);
+      saveList(SEARCH_RECENT_KEY, nextRecent);
       const next = [
         { query, updatedAt: Date.now() },
         ...history.filter(item => item.query.toLowerCase() !== query.toLowerCase())
