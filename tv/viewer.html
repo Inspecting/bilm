@@ -442,7 +442,7 @@
   let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
   let totalSeasons = 1;
   let episodesPerSeason = {};
-  let continueWatchingEnabled = false;
+  let continueWatchingEnabled = initialSettings?.continueWatching !== false;
   let mediaDetails = null;
   const CONTINUE_KEY = 'bilm-continue-watching';
   const FAVORITES_KEY = 'bilm-favorites';
@@ -614,6 +614,7 @@
       setActiveServer(newServer);
       updateIframe();
     }
+    continueWatchingEnabled = event.detail?.continueWatching !== false;
   });
 
   function saveProgress() {
@@ -942,8 +943,9 @@ nextEpisodeBtn.addEventListener('click', () => {
   }
 
   setTimeout(() => {
-    continueWatchingEnabled = true;
-    updateContinueWatching();
+    if (continueWatchingEnabled) {
+      updateContinueWatching();
+    }
     setInterval(updateContinueWatching, 30000);
   }, 30000);
 </script>

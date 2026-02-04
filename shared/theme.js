@@ -5,7 +5,9 @@
     background: 'deep',
     motion: true,
     particles: true,
-    defaultServer: 'vidsrc'
+    defaultServer: 'vidsrc',
+    searchHistory: true,
+    continueWatching: true
   };
 
   const backgroundColors = {

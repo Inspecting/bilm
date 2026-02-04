@@ -140,14 +140,54 @@ button.search-btn:hover {
   margin-bottom: 8px;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
 .section-title {
   font-size: 26px;
   font-weight: 700;
-  margin-bottom: 16px;
   color: var(--text-primary);
   display: flex;
   align-items: baseline;
   gap: 10px;
+}
+
+.section-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.section-btn {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.section-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--accent-soft);
+  box-shadow: 0 0 12px var(--accent-soft);
+}
+
+.section-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.section-btn-danger {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fecaca;
 }
 
 .subsection {
@@ -211,6 +251,7 @@ button.search-btn:hover {
   user-select: none;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   border: 1px solid transparent;
+  position: relative;
 }
 
 .movie-card:hover {
@@ -237,6 +278,39 @@ button.search-btn:hover {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.card-action {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.85);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  z-index: 2;
+}
+
+.card-action:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+}
+
+.movie-card.is-editing {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.movie-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 18px var(--accent-glow);
 }
 
 /* Show more arrow card */
