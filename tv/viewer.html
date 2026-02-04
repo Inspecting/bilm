@@ -443,11 +443,9 @@
   let totalSeasons = 1;
   let episodesPerSeason = {};
   let continueWatchingEnabled = initialSettings?.continueWatching !== false;
-  let continueWatchingReady = false;
   let mediaDetails = null;
   const CONTINUE_KEY = 'bilm-continue-watching';
   const FAVORITES_KEY = 'bilm-favorites';
-  const WATCH_HISTORY_KEY = 'bilm-watch-history';
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -469,33 +467,6 @@
 
   function saveList(key, items) {
     localStorage.setItem(key, JSON.stringify(items));
-  }
-
-  function addToWatchHistory() {
-    if (!mediaDetails) return;
-    const settings = window.bilmTheme?.getSettings?.() || {};
-    if (settings.watchHistory === false) return;
-    const items = loadList(WATCH_HISTORY_KEY);
-    const key = `tv-${mediaDetails.id}`;
-    const payload = {
-      key,
-      id: mediaDetails.id,
-      type: 'tv',
-      title: mediaDetails.title,
-      date: mediaDetails.firstAirDate,
-      year: mediaDetails.year,
-      poster: mediaDetails.poster,
-      link: mediaDetails.link,
-      updatedAt: Date.now(),
-      season: currentSeason,
-      episode: currentEpisode
-    };
-    const existingIndex = items.findIndex(item => item.key === key);
-    if (existingIndex >= 0) {
-      items.splice(existingIndex, 1);
-    }
-    items.unshift(payload);
-    saveList(WATCH_HISTORY_KEY, items);
   }
 
   function updateFavoriteButton(isFavorite) {
@@ -705,9 +676,8 @@
       url = buildTvUrl('vidsrc');
     }
     iframe.src = url;
-    if (continueWatchingReady) {
-      updateContinueWatching();
-    }
+
+    updateContinueWatching();
   }
 
   function populateSeasons(total) {
@@ -929,7 +899,6 @@ nextEpisodeBtn.addEventListener('click', () => {
         poster,
         link: `/bilm/tv/viewer.html?id=${tmdbId}`
       };
-      addToWatchHistory();
 
       const favorites = loadList(FAVORITES_KEY);
       updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
@@ -974,12 +943,11 @@ nextEpisodeBtn.addEventListener('click', () => {
   }
 
   setTimeout(() => {
-    continueWatchingReady = true;
     if (continueWatchingEnabled) {
       updateContinueWatching();
     }
     setInterval(updateContinueWatching, 30000);
-  }, 15000);
+  }, 30000);
 </script>
 
 </body>
