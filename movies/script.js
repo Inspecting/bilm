@@ -1,5 +1,6 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
-const BASE_URL = 'https://inspecting.github.io/bilm';
+const WATCH_HISTORY_KEY = 'bilm-watch-history';
+const HISTORY_ENABLED_KEY = 'bilm-history-enabled';
 const moviesPerLoad = 15;
 
 let allGenres = [];
@@ -66,7 +67,30 @@ function createMovieCard(movie) {
   card.appendChild(p);
 
   card.onclick = () => {
-    window.location.href = movie.link || '#';
+    if (movie.link) {
+      if (localStorage.getItem(HISTORY_ENABLED_KEY) !== 'false') {
+        const items = loadList(WATCH_HISTORY_KEY);
+        const key = `movie-${movie.tmdbId}`;
+        const existingIndex = items.findIndex(item => item.key === key);
+        const payload = {
+          key,
+          id: movie.tmdbId,
+          type: 'movie',
+          title: movie.title,
+          date: movie.date || '',
+          year: movie.year,
+          poster: movie.img,
+          link: movie.link,
+          updatedAt: Date.now()
+        };
+        if (existingIndex >= 0) {
+          items.splice(existingIndex, 1);
+        }
+        items.unshift(payload);
+        saveList(WATCH_HISTORY_KEY, items);
+      }
+      window.location.href = movie.link;
+    }
   };
 
   return card;
@@ -113,9 +137,10 @@ async function loadMoviesForSection(section) {
     const movieData = {
       tmdbId: movie.id,
       title: movie.title,
+      date: movie.release_date || '',
       year: movie.release_date?.slice(0, 4) || 'N/A',
       img: poster,
-      link: `${BASE_URL}/movies/viewer.html?id=${movie.id}`
+      link: `/bilm/movies/viewer.html?id=${movie.id}`
     };
 
     const card = createMovieCard(movieData);

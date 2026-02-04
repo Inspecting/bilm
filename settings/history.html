@@ -307,6 +307,7 @@
     <div class="panel is-active" id="searchPanel">
       <div class="tab-row" id="searchSort">
         <button class="tab-btn is-active" type="button" data-sort="recent">Recent</button>
+        <button class="tab-btn" type="button" data-sort="old">Old</button>
         <button class="tab-btn" type="button" data-sort="az">A–Z</button>
         <button class="tab-btn" type="button" data-sort="za">Z–A</button>
       </div>
@@ -424,6 +425,8 @@
   function renderSearchList() {
     const items = loadList(SEARCH_HISTORY_KEY);
     let sorted = [...items];
+    if (state.search.sort === 'old') {
+      sorted.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
     if (state.search.sort === 'az') {
       sorted.sort((a, b) => a.query.localeCompare(b.query));
     } else if (state.search.sort === 'za') {

@@ -353,28 +353,6 @@
       <h2>History & Privacy</h2>
       <p>Manage how Bilm saves search and watch history on this device.</p>
 
-      <div class="control-row">
-        <div>
-          <label>Search History</label>
-          <small>Save recent searches for quick access.</small>
-        </div>
-        <label class="toggle">
-          <input id="searchHistoryToggle" type="checkbox" />
-          <span></span>
-        </label>
-      </div>
-
-      <div class="control-row">
-        <div>
-          <label>Continue Watching</label>
-          <small>Keep track of recently played titles.</small>
-        </div>
-        <label class="toggle">
-          <input id="continueWatchingToggle" type="checkbox" />
-          <span></span>
-        </label>
-      </div>
-
       <div class="actions-row">
         <a class="btn btn-outline" href="/bilm/settings/history.html">View History</a>
       </div>
@@ -432,8 +410,6 @@
     backgroundSelect.value = settings.background || 'deep';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
-    searchHistoryToggle.checked = settings.searchHistory !== false;
-    continueWatchingToggle.checked = settings.continueWatching !== false;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
   }
@@ -465,14 +441,6 @@
 
   particleToggle.addEventListener('change', (event) => {
     applySettings({ particles: event.target.checked });
-  });
-
-  searchHistoryToggle.addEventListener('change', (event) => {
-    applySettings({ searchHistory: event.target.checked });
-  });
-
-  continueWatchingToggle.addEventListener('change', (event) => {
-    applySettings({ continueWatching: event.target.checked });
   });
 
   serverSelect.addEventListener('change', (event) => {
