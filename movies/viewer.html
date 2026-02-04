@@ -342,7 +342,7 @@ iframe {
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
   const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
   let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
-  let continueWatchingEnabled = false;
+  let continueWatchingEnabled = initialSettings?.continueWatching !== false;
   let mediaDetails = null;
   let imdbId = null;
   const CONTINUE_KEY = 'bilm-continue-watching';
@@ -546,6 +546,7 @@ iframe {
       setActiveServer(newServer);
       updateIframe();
     }
+    continueWatchingEnabled = event.detail?.continueWatching !== false;
   });
 
   if (favoriteBtn) {
@@ -598,8 +599,9 @@ iframe {
   updateIframe();
   loadMovieDetails();
   setTimeout(() => {
-    continueWatchingEnabled = true;
-    updateContinueWatching();
+    if (continueWatchingEnabled) {
+      updateContinueWatching();
+    }
     setInterval(updateContinueWatching, 30000);
   }, 30000);
 </script>
