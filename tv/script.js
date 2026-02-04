@@ -1,6 +1,5 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
-const WATCH_HISTORY_KEY = 'bilm-watch-history';
-const HISTORY_ENABLED_KEY = 'bilm-history-enabled';
+const BASE_URL = 'https://inspecting.github.io/bilm';
 const showsPerLoad = 15;
 
 let allGenres = [];
@@ -67,32 +66,7 @@ function createShowCard(show) {
   card.appendChild(p);
 
   card.onclick = () => {
-    if (show.link) {
-      if (localStorage.getItem(HISTORY_ENABLED_KEY) !== 'false') {
-        const items = loadList(WATCH_HISTORY_KEY);
-        const key = `tv-${show.tmdbId}`;
-        const existingIndex = items.findIndex(item => item.key === key);
-        const payload = {
-          key,
-          id: show.tmdbId,
-          type: 'tv',
-          title: show.title,
-          date: show.date || '',
-          year: show.year,
-          poster: show.img,
-          link: show.link,
-          updatedAt: Date.now(),
-          season: show.season || 1,
-          episode: show.episode || 1
-        };
-        if (existingIndex >= 0) {
-          items.splice(existingIndex, 1);
-        }
-        items.unshift(payload);
-        saveList(WATCH_HISTORY_KEY, items);
-      }
-      window.location.href = show.link;
-    }
+    window.location.href = show.link || '#';
   };
 
   return card;
@@ -138,10 +112,9 @@ async function loadShowsForSection(section) {
     const showData = {
       tmdbId: show.id,
       title: show.name,
-      date: show.first_air_date || '',
       year: show.first_air_date?.slice(0, 4) || 'N/A',
       img: poster,
-      link: `/bilm/tv/viewer.html?id=${show.id}`
+      link: `${BASE_URL}/tv/viewer.html?id=${show.id}`
     };
 
     const card = createShowCard(showData);

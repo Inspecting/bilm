@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const CONTINUE_KEY = 'bilm-continue-watching';
   const FAVORITES_KEY = 'bilm-favorites';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
-  const HISTORY_ENABLED_KEY = 'bilm-history-enabled';
 
   document.querySelector('main').classList.add('visible');
 
@@ -24,13 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const query = searchInput.value.trim();
     if (!query) return alert('Please enter a search term');
     const settings = window.bilmTheme?.getSettings?.() || {};
-    const historyEnabled = localStorage.getItem(HISTORY_ENABLED_KEY) !== 'false';
-    if (settings.searchHistory !== false && historyEnabled) {
+    if (settings.searchHistory !== false) {
       const history = loadList(SEARCH_HISTORY_KEY);
       const next = [
         { query, updatedAt: Date.now() },
         ...history.filter(item => item.query.toLowerCase() !== query.toLowerCase())
-      ];
+      ].slice(0, 10);
       saveList(SEARCH_HISTORY_KEY, next);
     }
     window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
@@ -88,7 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
       continueEditBtn.textContent = isEditing ? 'Done' : 'Edit';
       continueWatchingSection.classList.toggle('is-editing', isEditing);
       continueRemoveBtn.disabled = state.selected.size === 0;
-      continueRemoveBtn.hidden = !isEditing;
     } else {
       favoritesEditBtn.textContent = isEditing ? 'Done' : 'Edit';
       favoritesSection.classList.toggle('is-editing', isEditing);

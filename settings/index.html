@@ -353,8 +353,31 @@
       <h2>History & Privacy</h2>
       <p>Manage how Bilm saves search and watch history on this device.</p>
 
+      <div class="control-row">
+        <div>
+          <label>Search History</label>
+          <small>Save recent searches for quick access.</small>
+        </div>
+        <label class="toggle">
+          <input id="searchHistoryToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Continue Watching</label>
+          <small>Keep track of recently played titles.</small>
+        </div>
+        <label class="toggle">
+          <input id="continueWatchingToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
       <div class="actions-row">
-        <a class="btn btn-outline" href="/bilm/settings/history.html">View History</a>
+        <button class="btn btn-outline" id="clearSearchHistoryBtn">Clear Search History</button>
+        <button class="btn btn-outline" id="clearContinueBtn">Clear Continue Watching</button>
       </div>
     </section>
 
@@ -394,10 +417,14 @@
   const serverSelect = document.getElementById('serverSelect');
   const searchHistoryToggle = document.getElementById('searchHistoryToggle');
   const continueWatchingToggle = document.getElementById('continueWatchingToggle');
+  const clearSearchHistoryBtn = document.getElementById('clearSearchHistoryBtn');
+  const clearContinueBtn = document.getElementById('clearContinueBtn');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const presetsContainer = document.getElementById('accentPresets');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+  const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const CONTINUE_KEY = 'bilm-continue-watching';
 
   function applySettings(partial) {
     const current = window.bilmTheme?.getSettings?.() || {};
@@ -410,6 +437,8 @@
     backgroundSelect.value = settings.background || 'deep';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
+    searchHistoryToggle.checked = settings.searchHistory !== false;
+    continueWatchingToggle.checked = settings.continueWatching !== false;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
   }
@@ -443,8 +472,30 @@
     applySettings({ particles: event.target.checked });
   });
 
+  searchHistoryToggle.addEventListener('change', (event) => {
+    applySettings({ searchHistory: event.target.checked });
+  });
+
+  continueWatchingToggle.addEventListener('change', (event) => {
+    applySettings({ continueWatching: event.target.checked });
+  });
+
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
+  });
+
+  clearSearchHistoryBtn.addEventListener('click', () => {
+    const confirmReset = confirm('Clear your saved search history?');
+    if (!confirmReset) return;
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
+    alert('✅ Search history cleared.');
+  });
+
+  clearContinueBtn.addEventListener('click', () => {
+    const confirmReset = confirm('Remove all items from Continue Watching?');
+    if (!confirmReset) return;
+    localStorage.removeItem(CONTINUE_KEY);
+    alert('✅ Continue Watching cleared.');
   });
 
   resetThemeBtn.addEventListener('click', () => {

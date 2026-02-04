@@ -148,17 +148,6 @@ button.search-btn:hover {
   margin-bottom: 16px;
 }
 
-.section-header--compact {
-  justify-content: flex-start;
-}
-
-.section-title-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 .section-title {
   font-size: 26px;
   font-weight: 700;
