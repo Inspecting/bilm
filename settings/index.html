@@ -214,6 +214,55 @@
       flex-wrap: wrap;
     }
 
+    .history-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .history-group h3 {
+      font-size: 0.95rem;
+      color: var(--text-primary);
+    }
+
+    .history-list {
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .history-item {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .history-item strong {
+      font-size: 0.9rem;
+      color: var(--text-primary);
+    }
+
+    .history-item small {
+      color: var(--text-subtle);
+      font-size: 0.75rem;
+    }
+
+    .history-item a {
+      color: var(--accent);
+      font-size: 0.8rem;
+      text-decoration: none;
+    }
+
+    .history-item a:hover {
+      text-decoration: underline;
+    }
+
     .btn {
       padding: 10px 16px;
       border-radius: var(--radius-sm);
@@ -350,6 +399,60 @@
     </section>
 
     <section class="settings-card">
+      <h2>History & Privacy</h2>
+      <p>Manage how Bilm saves search and watch history on this device.</p>
+
+      <div class="control-row">
+        <div>
+          <label>Search History</label>
+          <small>Save recent searches for quick access.</small>
+        </div>
+        <label class="toggle">
+          <input id="searchHistoryToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Continue Watching</label>
+          <small>Keep track of recently played titles.</small>
+        </div>
+        <label class="toggle">
+          <input id="continueWatchingToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Watch History</label>
+          <small>Save what you click for later reference.</small>
+        </div>
+        <label class="toggle">
+          <input id="watchHistoryToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn btn-outline" id="clearSearchHistoryBtn">Clear Search History</button>
+        <button class="btn btn-outline" id="clearContinueBtn">Clear Continue Watching</button>
+        <button class="btn btn-outline" id="clearWatchHistoryBtn">Clear Watch History</button>
+      </div>
+
+      <div class="history-group">
+        <h3>Search History</h3>
+        <div class="history-list" id="searchHistoryList"></div>
+      </div>
+
+      <div class="history-group">
+        <h3>Watch History</h3>
+        <div class="history-list" id="watchHistoryList"></div>
+      </div>
+    </section>
+
+    <section class="settings-card">
       <h2>Reset & Maintenance</h2>
       <p>Restore defaults or clear all local data.</p>
 
@@ -383,10 +486,22 @@
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
   const serverSelect = document.getElementById('serverSelect');
+  const searchHistoryToggle = document.getElementById('searchHistoryToggle');
+  const continueWatchingToggle = document.getElementById('continueWatchingToggle');
+  const watchHistoryToggle = document.getElementById('watchHistoryToggle');
+  const clearSearchHistoryBtn = document.getElementById('clearSearchHistoryBtn');
+  const clearContinueBtn = document.getElementById('clearContinueBtn');
+  const clearWatchHistoryBtn = document.getElementById('clearWatchHistoryBtn');
+  const searchHistoryList = document.getElementById('searchHistoryList');
+  const watchHistoryList = document.getElementById('watchHistoryList');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const presetsContainer = document.getElementById('accentPresets');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+  const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const SEARCH_RECENT_KEY = 'bilm-search-recent';
+  const WATCH_HISTORY_KEY = 'bilm-watch-history';
+  const CONTINUE_KEY = 'bilm-continue-watching';
 
   function applySettings(partial) {
     const current = window.bilmTheme?.getSettings?.() || {};
@@ -399,8 +514,65 @@
     backgroundSelect.value = settings.background || 'deep';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
+    searchHistoryToggle.checked = settings.searchHistory !== false;
+    continueWatchingToggle.checked = settings.continueWatching !== false;
+    watchHistoryToggle.checked = settings.watchHistory !== false;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
+    renderHistories();
+  }
+
+  function loadList(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderHistories() {
+    const searches = loadList(SEARCH_HISTORY_KEY);
+    searchHistoryList.innerHTML = '';
+    if (!searches.length) {
+      searchHistoryList.innerHTML = '<div class="history-item"><small>No search history yet.</small></div>';
+    } else {
+      searches.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'history-item';
+        const title = document.createElement('strong');
+        title.textContent = item.query;
+        const time = document.createElement('small');
+        time.textContent = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '';
+        row.appendChild(title);
+        row.appendChild(time);
+        searchHistoryList.appendChild(row);
+      });
+    }
+
+    const watchItems = loadList(WATCH_HISTORY_KEY);
+    watchHistoryList.innerHTML = '';
+    if (!watchItems.length) {
+      watchHistoryList.innerHTML = '<div class="history-item"><small>No watch history yet.</small></div>';
+    } else {
+      watchItems.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'history-item';
+        const title = document.createElement('strong');
+        title.textContent = item.title || 'Untitled';
+        const time = document.createElement('small');
+        time.textContent = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '';
+        row.appendChild(title);
+        row.appendChild(time);
+        if (item.link) {
+          const link = document.createElement('a');
+          link.href = item.link;
+          link.textContent = 'Open';
+          row.appendChild(link);
+        }
+        watchHistoryList.appendChild(row);
+      });
+    }
   }
 
   accentPresets.forEach(color => {
@@ -432,8 +604,44 @@
     applySettings({ particles: event.target.checked });
   });
 
+  searchHistoryToggle.addEventListener('change', (event) => {
+    applySettings({ searchHistory: event.target.checked });
+  });
+
+  continueWatchingToggle.addEventListener('change', (event) => {
+    applySettings({ continueWatching: event.target.checked });
+  });
+
+  watchHistoryToggle.addEventListener('change', (event) => {
+    applySettings({ watchHistory: event.target.checked });
+  });
+
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
+  });
+
+  clearSearchHistoryBtn.addEventListener('click', () => {
+    const confirmReset = confirm('Clear your saved search history?');
+    if (!confirmReset) return;
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
+    localStorage.removeItem(SEARCH_RECENT_KEY);
+    renderHistories();
+    alert('✅ Search history cleared.');
+  });
+
+  clearContinueBtn.addEventListener('click', () => {
+    const confirmReset = confirm('Remove all items from Continue Watching?');
+    if (!confirmReset) return;
+    localStorage.removeItem(CONTINUE_KEY);
+    alert('✅ Continue Watching cleared.');
+  });
+
+  clearWatchHistoryBtn.addEventListener('click', () => {
+    const confirmReset = confirm('Clear your watch history?');
+    if (!confirmReset) return;
+    localStorage.removeItem(WATCH_HISTORY_KEY);
+    renderHistories();
+    alert('✅ Watch history cleared.');
   });
 
   resetThemeBtn.addEventListener('click', () => {

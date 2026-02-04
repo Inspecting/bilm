@@ -47,7 +47,13 @@
     </div>
 
     <section class="section" id="continueWatchingSection">
-      <h2 class="section-title">Continue Watching</h2>
+      <div class="section-header">
+        <h2 class="section-title">Continue Watching</h2>
+        <div class="section-actions">
+          <button class="section-btn" id="continueEditBtn" type="button">Edit</button>
+          <button class="section-btn section-btn-danger" id="continueRemoveBtn" type="button" disabled>Remove selected</button>
+        </div>
+      </div>
       <div class="subsection">
         <h3 class="subsection-title">Movies</h3>
         <div class="scroll-row" id="continueMovies"></div>
@@ -59,7 +65,13 @@
     </section>
 
     <section class="section" id="favoritesSection">
-      <h2 class="section-title">Favorites</h2>
+      <div class="section-header">
+        <h2 class="section-title">Favorites</h2>
+        <div class="section-actions">
+          <button class="section-btn" id="favoritesEditBtn" type="button">Edit</button>
+          <button class="section-btn section-btn-danger" id="favoritesRemoveBtn" type="button" disabled>Remove selected</button>
+        </div>
+      </div>
       <div class="subsection">
         <h3 class="subsection-title">Movies</h3>
         <div class="scroll-row" id="favoriteMovies"></div>
