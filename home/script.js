@@ -85,10 +85,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (section === 'continue') {
       continueEditBtn.textContent = isEditing ? 'Done' : 'Edit';
       continueWatchingSection.classList.toggle('is-editing', isEditing);
+      continueRemoveBtn.hidden = !isEditing;
       continueRemoveBtn.disabled = state.selected.size === 0;
     } else {
       favoritesEditBtn.textContent = isEditing ? 'Done' : 'Edit';
       favoritesSection.classList.toggle('is-editing', isEditing);
+      favoritesRemoveBtn.hidden = !isEditing;
       favoritesRemoveBtn.disabled = state.selected.size === 0;
     }
   }
