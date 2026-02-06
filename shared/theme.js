@@ -3,7 +3,6 @@
   const DEFAULT_SETTINGS = {
     accent: '#a855f7',
     background: 'deep',
-    customBackground: '#1b1230',
     customBackground: '#0b0b14',
     motion: true,
     particles: true,
@@ -51,15 +50,6 @@
     root.dataset.background = settings.background || DEFAULT_SETTINGS.background;
     root.dataset.motion = settings.motion === false ? 'off' : 'on';
 
-    const customBackground = settings.customBackground || DEFAULT_SETTINGS.customBackground;
-    root.style.setProperty('--bg-custom', customBackground);
-    const customRgb = hexToRgb(customBackground) || hexToRgb(DEFAULT_SETTINGS.customBackground);
-    if (customRgb) {
-      root.style.setProperty('--bg-custom-rgb', `${customRgb.r}, ${customRgb.g}, ${customRgb.b}`);
-    }
-
-    const themeColor = root.dataset.background === 'custom'
-      ? customBackground
     if (root.dataset.background === 'custom') {
       root.style.setProperty('--bg-custom', settings.customBackground || DEFAULT_SETTINGS.customBackground);
     }
