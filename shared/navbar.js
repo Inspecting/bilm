@@ -43,7 +43,7 @@
     const history = loadList(SEARCH_HISTORY_KEY);
     const next = [
       { query, updatedAt: Date.now() },
-      ...history.filter(item => String(item.query || '').toLowerCase() !== query.toLowerCase())
+      ...history
     ].slice(0, 10);
     saveList(SEARCH_HISTORY_KEY, next);
   }
@@ -67,7 +67,7 @@
       }
       document.body.style.overflow = '';
     }
-    window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(trimmedQuery)}`;
+    window.location.href = `/bilm/search/?q=${encodeURIComponent(trimmedQuery)}`;
   }
 
   // Desktop nav buttons

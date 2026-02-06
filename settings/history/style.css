@@ -21,10 +21,14 @@ body {
 body {
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 main {
   flex: 1;
+  overflow-y: auto;
+  height: calc(100vh - 60px);
   width: 100%;
   max-width: 1220px;
   margin: 0 auto;

@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (state.activeType === 'search') {
         row.addEventListener('click', () => {
           const query = encodeURIComponent(item.query || '');
-          window.location.href = `/bilm/home/search.html?q=${query}`;
+          window.location.href = `/bilm/search/?q=${query}`;
         });
       }
     }

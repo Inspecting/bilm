@@ -16,10 +16,13 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
 }
 
 main {
   flex: 1;
+  overflow-y: auto;
+  height: calc(100vh - 60px);
   padding: 20px;
   display: flex;
   justify-content: center;
