@@ -10,6 +10,7 @@ body {
   font-family: 'Poppins', sans-serif;
   background-color: var(--bg-main);
   color: var(--text-primary);
+  overflow: hidden;
 }
 
 body {
@@ -20,13 +21,16 @@ body {
 main {
   flex: 1;
   width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 28px 22px 80px;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .history-shell {
-  margin-top: 20px;
+  max-width: 1200px;
+  width: calc(100% - 44px);
+  margin: 20px auto 0;
   border: 1px solid var(--border);
   background: var(--surface-1);
   border-radius: var(--radius-lg);
@@ -44,7 +48,7 @@ main {
 }
 
 @media (max-width: 720px) {
-  main {
-    padding: 20px 16px 80px;
+  .history-shell {
+    width: calc(100% - 32px);
   }
 }
