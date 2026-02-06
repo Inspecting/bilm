@@ -31,10 +31,7 @@
       font-family: 'Poppins', sans-serif;
       background-color: var(--bg-main);
       color: var(--text-primary);
-    }
-
-    html {
-      scrollbar-gutter: stable;
+      overflow: hidden;
     }
 
     body {
@@ -48,6 +45,9 @@
       max-width: 1200px;
       width: 100%;
       margin: 0 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
     }
 
     .page-header {
@@ -228,11 +228,6 @@
       background: linear-gradient(135deg, var(--accent), #7c3aed);
       box-shadow: 0 10px 20px rgba(124, 58, 237, 0.35);
       transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-    .btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
-    }
-
     }
 
     .btn:hover {

@@ -10,6 +10,7 @@ body {
   font-family: 'Poppins', sans-serif;
   background-color: var(--bg-main);
   color: var(--text-primary);
+  overflow: hidden;
 }
 
 body {
@@ -23,6 +24,9 @@ main {
   max-width: 1200px;
   margin: 0 auto;
   padding: 28px 22px 80px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .history-shell {
