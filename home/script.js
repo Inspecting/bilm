@@ -27,11 +27,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const history = loadList(SEARCH_HISTORY_KEY);
       const next = [
         { query, updatedAt: Date.now() },
-        ...history.filter(item => item.query.toLowerCase() !== query.toLowerCase())
+        ...history
       ].slice(0, 10);
       saveList(SEARCH_HISTORY_KEY, next);
     }
-    window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
+    window.location.href = `/bilm/search/?q=${encodeURIComponent(query)}`;
   };
 
   searchInput.addEventListener('keydown', (e) => {
