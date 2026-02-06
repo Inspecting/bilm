@@ -279,3 +279,30 @@ nav button.active {
     display: none;
   }
 }
+
+.mobile-recent-searches {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mobile-recent-chip {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.mobile-recent-chip:hover {
+  border-color: var(--accent-soft);
+  box-shadow: 0 0 8px var(--accent-soft);
+}
+
+.mobile-recent-empty {
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+}

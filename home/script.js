@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const CONTINUE_KEY = 'bilm-continue-watching';
   const FAVORITES_KEY = 'bilm-favorites';
-  const SEARCH_HISTORY_KEY = 'bilm-search-history';
 
   document.querySelector('main').classList.add('visible');
 
@@ -24,12 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!query) return alert('Please enter a search term');
     const settings = window.bilmTheme?.getSettings?.() || {};
     if (settings.searchHistory !== false) {
-      const history = loadList(SEARCH_HISTORY_KEY);
-      const next = [
-        { query, updatedAt: Date.now() },
-        ...history.filter(item => item.query.toLowerCase() !== query.toLowerCase())
-      ].slice(0, 10);
-      saveList(SEARCH_HISTORY_KEY, next);
+      window.bilmHistory?.upsertSearchHistory?.({ query, source: 'home' });
     }
     window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
   };

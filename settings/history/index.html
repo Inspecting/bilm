@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - History</title>
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <link rel="manifest" href="/bilm/manifest.json" />
+  <link rel="apple-touch-icon" href="/bilm/icon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+  <link rel="stylesheet" href="/bilm/settings/history/style.css" />
+  <script src="/bilm/shared/theme.js"></script>
+  <script src="/bilm/shared/history.js"></script>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+
+  <main>
+    <section class="history-shell" aria-labelledby="historyTitle">
+      <h1 id="historyTitle">History</h1>
+      <p class="history-note">Stored locally on this device only.</p>
+
+      <section class="history-section" aria-labelledby="watchHistoryHeading">
+        <div class="section-head">
+          <h2 id="watchHistoryHeading">Watch History</h2>
+          <button id="clearWatchHistoryBtn" class="action-btn action-danger" type="button">Clear Watch History</button>
+        </div>
+        <div id="watchHistoryList" class="history-list"></div>
+        <p id="watchHistoryEmpty" class="empty-state">No watch history yet.</p>
+      </section>
+
+      <section class="history-section" aria-labelledby="searchHistoryHeading">
+        <div class="section-head">
+          <h2 id="searchHistoryHeading">Search History</h2>
+          <button id="clearSearchHistoryBtn" class="action-btn action-danger" type="button">Clear Search History</button>
+        </div>
+        <div id="searchHistoryList" class="history-list"></div>
+        <p id="searchHistoryEmpty" class="empty-state">No search history yet.</p>
+      </section>
+
+      <div class="footer-actions">
+        <button id="clearAllHistoryBtn" class="action-btn action-danger" type="button">Clear All History</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/bilm/settings/history/script.js"></script>
+</body>
+</html>
