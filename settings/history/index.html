@@ -12,7 +12,7 @@
 
   <link rel="manifest" href="/bilm/manifest.json" />
   <link rel="apple-touch-icon" href="/bilm/icon.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="/bilm/shared/theme.css" />
   <link rel="stylesheet" href="/bilm/settings/history/style.css" />
@@ -23,32 +23,70 @@
 
   <main>
     <section class="history-shell" aria-labelledby="historyTitle">
-      <h1 id="historyTitle">History</h1>
+      <header class="history-header">
+        <div>
+          <h1 id="historyTitle">History</h1>
+          <p class="history-subtitle">Search smarter, clean faster, and keep only what matters.</p>
+        </div>
+        <button id="compactViewBtn" class="control-btn" type="button" aria-pressed="false">Compact view</button>
+      </header>
 
       <div class="history-switch" role="tablist" aria-label="History type">
         <button id="searchTabBtn" class="tab-btn is-active" type="button" role="tab" aria-selected="true">Search History</button>
         <button id="watchTabBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Watch History</button>
       </div>
 
-      <div class="history-controls">
-        <div class="sort-controls" aria-label="Sort history">
-          <button id="sortRecentBtn" class="control-btn is-active" type="button">Recent</button>
-          <button id="sortOldBtn" class="control-btn" type="button">Old</button>
+      <section class="panel panel-stats" aria-label="History stats">
+        <div class="stat-item">
+          <span class="stat-label">Visible entries</span>
+          <strong id="visibleCount" class="stat-value">0</strong>
         </div>
-      </div>
+        <div class="stat-item">
+          <span class="stat-label">Total entries</span>
+          <strong id="totalCount" class="stat-value">0</strong>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Newest</span>
+          <strong id="newestLabel" class="stat-value">—</strong>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Oldest</span>
+          <strong id="oldestLabel" class="stat-value">—</strong>
+        </div>
+      </section>
 
-      <div id="historyActions" class="sub-controls">
+      <section class="panel filters-panel" aria-label="Filters and sorting">
+        <div class="input-wrap">
+          <label for="searchFilterInput" class="sr-only">Filter history text</label>
+          <input id="searchFilterInput" type="search" placeholder="Filter by title or query…" autocomplete="off" />
+        </div>
+
+        <div class="button-row" id="dateRangeFilters" role="group" aria-label="Date range">
+          <button class="filter-btn is-active" type="button" data-range="all">All time</button>
+          <button class="filter-btn" type="button" data-range="today">Today</button>
+          <button class="filter-btn" type="button" data-range="week">7 days</button>
+          <button class="filter-btn" type="button" data-range="month">30 days</button>
+        </div>
+
+        <div class="button-row" id="sortControls" role="group" aria-label="Sort history">
+          <button id="sortRecentBtn" class="control-btn is-active" type="button">Newest first</button>
+          <button id="sortOldBtn" class="control-btn" type="button">Oldest first</button>
+        </div>
+
+        <div id="watchFilters" class="button-row" role="group" aria-label="Watch history type" hidden>
+          <button class="type-filter-btn is-active" type="button" data-filter="all">All watch</button>
+          <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
+          <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+        </div>
+      </section>
+
+      <section class="panel actions-panel" aria-label="Actions">
         <button id="clearHistoryBtn" class="control-btn danger" type="button">Clear all search history</button>
         <button id="selectModeBtn" class="control-btn" type="button">Select</button>
+        <button id="selectAllBtn" class="control-btn" type="button" hidden>Select all visible</button>
         <button id="cancelSelectBtn" class="control-btn" type="button" hidden>Cancel</button>
         <button id="deleteSelectedBtn" class="control-btn danger" type="button" hidden>Delete selected</button>
-      </div>
-
-      <div id="watchFilters" class="sub-controls" hidden>
-        <button class="filter-btn is-active" type="button" data-filter="all">All</button>
-        <button class="filter-btn" type="button" data-filter="movie">Movies</button>
-        <button class="filter-btn" type="button" data-filter="tv">TV Shows</button>
-      </div>
+      </section>
 
       <ul id="historyList" class="history-list" aria-live="polite"></ul>
     </section>
