@@ -87,25 +87,7 @@
     </section>
   </main>
 
-  <!-- Load shared navbar HTML + CSS + JS dynamically like search.html -->
-  <script>
-    fetch('/bilm/shared/navbar.html')
-      .then(res => res.text())
-      .then(html => {
-        document.getElementById('navbar-placeholder').innerHTML = html;
-
-        // Load navbar CSS
-        const css = document.createElement('link');
-        css.rel = 'stylesheet';
-        css.href = '/bilm/shared/navbar.css';
-        document.head.appendChild(css);
-
-        // Load navbar JS
-        const script = document.createElement('script');
-        script.src = '/bilm/shared/navbar.js';
-        document.body.appendChild(script);
-      });
-  </script>
+  <script src="/bilm/shared/navbar.js" defer></script>
 
   <script src="/bilm/home/script.js"></script>
 

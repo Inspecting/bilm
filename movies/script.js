@@ -138,7 +138,7 @@ function setupInfiniteScroll(section) {
       await loadMoviesForSection(section);
       loading = false;
     }
-  });
+  }, { passive: true });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
