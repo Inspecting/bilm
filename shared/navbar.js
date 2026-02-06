@@ -21,6 +21,55 @@
   const isSearchPage = fileName.startsWith('search');
   let page = section || 'home';
 
+  const SEARCH_HISTORY_KEY = 'bilm-search-history';
+
+  function loadList(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveList(key, list) {
+    localStorage.setItem(key, JSON.stringify(list));
+  }
+
+  function saveSearchHistoryEntry(query) {
+    const settings = window.bilmTheme?.getSettings?.() || {};
+    if (settings.searchHistory === false) return;
+    const history = loadList(SEARCH_HISTORY_KEY);
+    const next = [
+      { query, updatedAt: Date.now() },
+      ...history.filter(item => String(item.query || '').toLowerCase() !== query.toLowerCase())
+    ].slice(0, 10);
+    saveList(SEARCH_HISTORY_KEY, next);
+  }
+
+  function submitSearch(query, { closeMobileOverlay = false } = {}) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return;
+    saveSearchHistoryEntry(trimmedQuery);
+    if (closeMobileOverlay) {
+      const overlay = shadow.getElementById('mobileSearchOverlay');
+      const input = shadow.getElementById('mobileSearchInput');
+      const clearBtn = shadow.getElementById('mobileSearchCloseBtn');
+      if (overlay) {
+        overlay.classList.remove('active');
+      }
+      if (input) {
+        input.value = '';
+      }
+      if (clearBtn) {
+        clearBtn.style.display = 'none';
+      }
+      document.body.style.overflow = '';
+    }
+    window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(trimmedQuery)}`;
+  }
+
   // Desktop nav buttons
   const buttons = shadow.querySelectorAll('nav.navbar button[data-page]');
   buttons.forEach(btn => {
@@ -60,7 +109,7 @@
       if (e.key === 'Enter') {
         const query = searchInput.value.trim();
         if (query) {
-          window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
+          submitSearch(query);
         }
       }
     });
@@ -96,7 +145,7 @@
       if (e.key === 'Enter') {
         const query = input.value.trim();
         if (query) {
-          window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
+          submitSearch(query, { closeMobileOverlay: true });
         }
       } else if (e.key === 'Escape') {
         closeOverlay();

@@ -37,6 +37,7 @@ let episodesPerSeason = {};
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const CONTINUE_KEY = 'bilm-continue-watching';
+const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -128,13 +129,20 @@ function toggleFavorite() {
   updateFavoriteButton(true);
 }
 
+function upsertHistoryItem(key, payload) {
+  const items = loadList(key);
+  const existingIndex = items.findIndex(item => item.key === payload.key);
+  if (existingIndex >= 0) {
+    items.splice(existingIndex, 1);
+  }
+  items.unshift(payload);
+  saveList(key, items);
+}
+
 function updateContinueWatching() {
   if (!continueWatchingEnabled || !mediaDetails) return;
-  const items = loadList(CONTINUE_KEY);
-  const key = `tv-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key);
   const payload = {
-    key,
+    key: `tv-${mediaDetails.id}`,
     id: mediaDetails.id,
     type: 'tv',
     title: mediaDetails.title,
@@ -147,11 +155,8 @@ function updateContinueWatching() {
     episode: currentEpisode
   };
 
-  if (existingIndex >= 0) {
-    items.splice(existingIndex, 1);
-  }
-  items.unshift(payload);
-  saveList(CONTINUE_KEY, items);
+  upsertHistoryItem(CONTINUE_KEY, payload);
+  upsertHistoryItem(WATCH_HISTORY_KEY, payload);
 }
 
 fullscreenBtn.onclick = () => {
