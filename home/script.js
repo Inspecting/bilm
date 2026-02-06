@@ -4,23 +4,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const homeSearchForm = document.getElementById('homeSearchForm');
 
   const continueWatchingSection = document.getElementById('continueWatchingSection');
-  const watchLaterSection = document.getElementById('watchLaterSection');
   const favoritesSection = document.getElementById('favoritesSection');
   const continueItemsRow = document.getElementById('continueItems');
-  const watchLaterItemsRow = document.getElementById('watchLaterItems');
   const favoriteItemsRow = document.getElementById('favoriteItems');
   const continueFilterButtons = [...document.querySelectorAll('#continueFilters .type-filter-btn')];
-  const watchLaterFilterButtons = [...document.querySelectorAll('#watchLaterFilters .type-filter-btn')];
   const favoritesFilterButtons = [...document.querySelectorAll('#favoritesFilters .type-filter-btn')];
   const continueEditBtn = document.getElementById('continueEditBtn');
   const continueRemoveBtn = document.getElementById('continueRemoveBtn');
-  const watchLaterEditBtn = document.getElementById('watchLaterEditBtn');
-  const watchLaterRemoveBtn = document.getElementById('watchLaterRemoveBtn');
   const favoritesEditBtn = document.getElementById('favoritesEditBtn');
   const favoritesRemoveBtn = document.getElementById('favoritesRemoveBtn');
 
   const CONTINUE_KEY = 'bilm-continue-watching';
-  const WATCH_LATER_KEY = 'bilm-watch-later';
   const FAVORITES_KEY = 'bilm-favorites';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
 
@@ -89,11 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
       selected: new Set(),
       filter: 'all'
     },
-    watchLater: {
-      editing: false,
-      selected: new Set(),
-      filter: 'all'
-    },
     favorites: {
       editing: false,
       selected: new Set(),
@@ -119,11 +108,6 @@ document.addEventListener('DOMContentLoaded', () => {
       continueWatchingSection.classList.toggle('is-editing', isEditing);
       continueRemoveBtn.hidden = !isEditing;
       continueRemoveBtn.disabled = state.selected.size === 0;
-    } else if (section === 'watchLater') {
-      watchLaterEditBtn.textContent = isEditing ? 'Done' : 'Edit';
-      watchLaterSection.classList.toggle('is-editing', isEditing);
-      watchLaterRemoveBtn.hidden = !isEditing;
-      watchLaterRemoveBtn.disabled = state.selected.size === 0;
     } else {
       favoritesEditBtn.textContent = isEditing ? 'Done' : 'Edit';
       favoritesSection.classList.toggle('is-editing', isEditing);
@@ -133,11 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateFilterButtons(section) {
-    const buttons = section === 'continue'
-      ? continueFilterButtons
-      : section === 'watchLater'
-        ? watchLaterFilterButtons
-        : favoritesFilterButtons;
+    const buttons = section === 'continue' ? continueFilterButtons : favoritesFilterButtons;
     const activeFilter = sectionState[section].filter;
     buttons.forEach(button => {
       button.classList.toggle('is-active', button.dataset.filter === activeFilter);
@@ -180,20 +160,14 @@ document.addEventListener('DOMContentLoaded', () => {
       actionBtn.type = 'button';
       actionBtn.className = 'card-action';
       actionBtn.textContent = '✕';
-      actionBtn.setAttribute('aria-label', section === 'favorites'
-        ? 'Remove from favorites'
-        : section === 'watchLater'
-          ? 'Remove from watch later'
-          : 'Remove from continue watching');
+      actionBtn.setAttribute('aria-label', section === 'favorites' ? 'Remove from favorites' : 'Remove from continue watching');
       actionBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         const confirmRemove = confirm(section === 'favorites'
           ? 'Remove this item from favorites?'
-          : section === 'watchLater'
-            ? 'Remove this item from watch later?'
-            : 'Remove this item from continue watching?');
+          : 'Remove this item from continue watching?');
         if (!confirmRemove) return;
-        const key = section === 'favorites' ? FAVORITES_KEY : section === 'watchLater' ? WATCH_LATER_KEY : CONTINUE_KEY;
+        const key = section === 'favorites' ? FAVORITES_KEY : CONTINUE_KEY;
         const list = loadList(key).filter(entry => entry.key !== item.key);
         saveList(key, list);
         state.selected.delete(item.key);
@@ -236,11 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderSections() {
     const continueItems = sortByRecent(loadList(CONTINUE_KEY));
-    const watchLaterItems = sortByRecent(loadList(WATCH_LATER_KEY));
     const favoriteItems = sortByRecent(loadList(FAVORITES_KEY));
 
     const continueFilteredItems = applyTypeFilter(continueItems, sectionState.continue.filter);
-    const watchLaterFilteredItems = applyTypeFilter(watchLaterItems, sectionState.watchLater.filter);
     const favoritesFilteredItems = applyTypeFilter(favoriteItems, sectionState.favorites.filter);
 
     const continueEmpty = sectionState.continue.filter === 'movie'
@@ -249,12 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'Start a show to keep your place.'
         : 'Start watching something to build your list.';
 
-    const watchLaterEmpty = sectionState.watchLater.filter === 'movie'
-      ? 'Save movies for later viewing.'
-      : sectionState.watchLater.filter === 'tv'
-        ? 'Save TV shows to watch later.'
-        : 'Build a watch-later list for your next session.';
-
     const favoritesEmpty = sectionState.favorites.filter === 'movie'
       ? 'Save movies you love for quick access.'
       : sectionState.favorites.filter === 'tv'
@@ -262,16 +228,11 @@ document.addEventListener('DOMContentLoaded', () => {
         : 'Favorite anything you want quick access to.';
 
     renderRow(continueItemsRow, continueFilteredItems, continueEmpty, 'continue');
-    renderRow(watchLaterItemsRow, watchLaterFilteredItems, watchLaterEmpty, 'watchLater');
     renderRow(favoriteItemsRow, favoritesFilteredItems, favoritesEmpty, 'favorites');
   }
 
   continueEditBtn.addEventListener('click', () => {
     setEditing('continue', !sectionState.continue.editing);
-  });
-
-  watchLaterEditBtn.addEventListener('click', () => {
-    setEditing('watchLater', !sectionState.watchLater.editing);
   });
 
   favoritesEditBtn.addEventListener('click', () => {
@@ -287,18 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
     saveList(CONTINUE_KEY, list);
     state.selected.clear();
     updateEditUI('continue');
-    renderSections();
-  });
-
-  watchLaterRemoveBtn.addEventListener('click', () => {
-    const state = sectionState.watchLater;
-    if (!state.selected.size) return;
-    const confirmRemove = confirm('Remove selected items from Watch Later?');
-    if (!confirmRemove) return;
-    const list = loadList(WATCH_LATER_KEY).filter(item => !state.selected.has(item.key));
-    saveList(WATCH_LATER_KEY, list);
-    state.selected.clear();
-    updateEditUI('watchLater');
     renderSections();
   });
 
@@ -322,14 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  watchLaterFilterButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      sectionState.watchLater.filter = button.dataset.filter;
-      updateFilterButtons('watchLater');
-      renderSections();
-    });
-  });
-
   favoritesFilterButtons.forEach((button) => {
     button.addEventListener('click', () => {
       sectionState.favorites.filter = button.dataset.filter;
@@ -340,10 +281,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderSections();
   updateEditUI('continue');
-  updateEditUI('watchLater');
   updateEditUI('favorites');
   updateFilterButtons('continue');
-  updateFilterButtons('watchLater');
   updateFilterButtons('favorites');
 
   window.addEventListener('storage', renderSections);
