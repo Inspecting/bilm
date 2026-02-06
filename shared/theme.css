@@ -25,6 +25,8 @@
   --bg-aurora: #062a2a;
   --bg-slate: #111827;
   --bg-sunset: #2a1326;
+  --bg-custom: #1b1230;
+  --bg-custom-rgb: 27, 18, 48;
   --bg-custom: #0b0b14;
   --bg-main: var(--bg-deep);
   --bg-tint: rgba(14, 10, 28, 0.7);
@@ -75,6 +77,9 @@
 
 :root[data-background='custom'] {
   --bg-main: var(--bg-custom);
+  --bg-tint: rgba(var(--bg-custom-rgb), 0.72);
+  --surface-1: rgba(var(--bg-custom-rgb), 0.9);
+  --surface-2: rgba(var(--bg-custom-rgb), 0.94);
   --bg-tint: color-mix(in srgb, var(--bg-custom) 78%, transparent);
   --surface-1: color-mix(in srgb, var(--bg-custom) 72%, #ffffff 8%);
   --surface-2: color-mix(in srgb, var(--bg-custom) 68%, #ffffff 12%);
