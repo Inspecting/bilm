@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('searchInput');
   const searchBtn = document.getElementById('searchBtn');
+  const homeSearchForm = document.getElementById('homeSearchForm');
 
   const continueWatchingSection = document.getElementById('continueWatchingSection');
   const favoritesSection = document.getElementById('favoritesSection');
@@ -19,9 +20,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelector('main').classList.add('visible');
 
-  searchBtn.onclick = () => {
+  function runSearch() {
     const query = searchInput.value.trim();
-    if (!query) return alert('Please enter a search term');
+    if (!query) {
+      alert('Please enter a search term');
+      return;
+    }
+
     const settings = window.bilmTheme?.getSettings?.() || {};
     if (settings.searchHistory !== false) {
       const history = loadList(SEARCH_HISTORY_KEY);
@@ -31,11 +36,25 @@ document.addEventListener('DOMContentLoaded', () => {
       ].slice(0, 10);
       saveList(SEARCH_HISTORY_KEY, next);
     }
+
     window.location.href = `/bilm/search/?q=${encodeURIComponent(query)}`;
-  };
+  }
+
+  searchBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    runSearch();
+  });
+
+  homeSearchForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    runSearch();
+  });
 
   searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') searchBtn.click();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      runSearch();
+    }
   });
 
   function loadList(key) {

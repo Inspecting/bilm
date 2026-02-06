@@ -102,16 +102,12 @@
     };
   });
 
-  // Search input handlers (no changes here)
   const searchInput = shadow.querySelector('#searchInput');
-  if (searchInput) {
-    searchInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        const query = searchInput.value.trim();
-        if (query) {
-          submitSearch(query);
-        }
-      }
+  const navbarSearchForm = shadow.getElementById('navbarSearchForm');
+  if (navbarSearchForm && searchInput) {
+    navbarSearchForm.addEventListener('submit', event => {
+      event.preventDefault();
+      submitSearch(searchInput.value);
     });
   }
 

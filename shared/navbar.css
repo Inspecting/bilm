@@ -111,7 +111,15 @@ nav button.active {
   top: 50%;
   left: 12px;
   transform: translateY(-50%);
-  pointer-events: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .search-icon svg {

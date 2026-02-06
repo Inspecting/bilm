@@ -40,10 +40,12 @@
         Bilm
         <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" style="height: 1em; vertical-align: middle; margin-left: 8px;" />
       </h1>
-      <input id="searchInput" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
-      <div class="button-row">
-        <button class="search-btn" id="searchBtn">Search</button>
-      </div>
+      <form id="homeSearchForm" action="/bilm/search/" method="get">
+        <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
+        <div class="button-row">
+          <button class="search-btn" id="searchBtn" type="submit">Search</button>
+        </div>
+      </form>
     </div>
 
     <section class="section" id="continueWatchingSection">
