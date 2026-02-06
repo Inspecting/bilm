@@ -13,6 +13,12 @@ body {
   overflow-x: hidden;
 }
 
+#navbarContainer {
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+}
+
 body {
   display: flex;
   flex-direction: column;
@@ -23,13 +29,13 @@ main {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 28px 22px 80px;
+  padding: 16px 22px 80px;
 }
 
 .history-shell {
   max-width: 1200px;
   width: calc(100% - 44px);
-  margin: 20px auto 0;
+  margin: 0 auto;
   border: 1px solid var(--border);
   background: var(--surface-1);
   border-radius: var(--radius-lg);
@@ -118,6 +124,11 @@ main {
   cursor: pointer;
 }
 
+.history-item.is-selected {
+  border-color: var(--accent-1);
+  box-shadow: 0 0 0 1px var(--accent-1);
+}
+
 .history-left {
   display: flex;
   align-items: center;
@@ -139,11 +150,6 @@ main {
 .history-meta {
   color: var(--text-muted);
   font-size: 0.9rem;
-}
-
-.history-checkbox {
-  width: 18px;
-  height: 18px;
 }
 
 .empty-state {
