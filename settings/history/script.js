@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+  if (window.__bilmHistoryPageInitialized) return;
+  window.__bilmHistoryPageInitialized = true;
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
   const WATCH_HISTORY_KEY = 'bilm-continue-watching';
 
@@ -30,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const raw = localStorage.getItem(key);
       const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.filter(item => item && typeof item === 'object') : [];
       return Array.isArray(list) ? list : [];
     } catch {
       return [];
@@ -41,6 +44,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getTimestamp(item) {
+    const direct = Number(item.updatedAt || item.watchedAt || item.searchedAt || 0);
+    if (direct) return direct;
+    if (item.date && item.time) {
+      const parsed = new Date(`${item.date} ${item.time}`).getTime();
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    if (item.date) {
+      const parsed = new Date(item.date).getTime();
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
     return Number(item.updatedAt) || 0;
   }
 
