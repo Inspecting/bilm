@@ -15,17 +15,12 @@
   shadow.innerHTML = `<style>${css}</style>${html}`;
 
   const pathParts = location.pathname.split('/').filter(Boolean);
-  let page = pathParts.at(-1)?.split('.')[0] || 'home';
-  if (page === '') page = 'home';
+  const bilmIndex = pathParts.indexOf('bilm');
+  const section = pathParts[bilmIndex + 1] || 'home';
+  const fileName = pathParts.at(-1) || '';
+  const isSearchPage = fileName.startsWith('search');
 
-  // Detect if on viewer page inside movies or tv folder
-  if (page === 'viewer' && pathParts.length >= 2) {
-    const parentFolder = pathParts[pathParts.length - 2];
-    if (parentFolder === 'movies') page = 'movies';
-    else if (parentFolder === 'tv') page = 'tv';
-  }
-
-  const isSearchPage = page === 'search';
+  const page = ['home', 'movies', 'tv', 'settings'].includes(section) ? section : 'home';
 
   // Desktop nav buttons
   const buttons = shadow.querySelectorAll('nav.navbar button[data-page]');
@@ -59,7 +54,6 @@
     };
   });
 
-  // Search input handlers (no changes here)
   const searchInput = shadow.querySelector('#searchInput');
   if (searchInput) {
     searchInput.addEventListener('keydown', e => {
@@ -72,7 +66,6 @@
     });
   }
 
-  // Mobile search overlay handlers (no changes here)
   const overlay = shadow.getElementById('mobileSearchOverlay');
   if (overlay) {
     const input = shadow.getElementById('mobileSearchInput');
