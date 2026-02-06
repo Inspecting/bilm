@@ -3,6 +3,7 @@
   const DEFAULT_SETTINGS = {
     accent: '#a855f7',
     background: 'deep',
+    customBackground: '#1b1230',
     motion: true,
     particles: true,
     defaultServer: 'vidsrc',
@@ -13,7 +14,10 @@
   const backgroundColors = {
     deep: '#0b0b14',
     midnight: '#05050b',
-    velvet: '#120818'
+    velvet: '#120818',
+    aurora: '#062a2a',
+    slate: '#111827',
+    sunset: '#2a1326'
   };
 
   const hexToRgb = (hex) => {
@@ -46,7 +50,16 @@
     root.dataset.background = settings.background || DEFAULT_SETTINGS.background;
     root.dataset.motion = settings.motion === false ? 'off' : 'on';
 
-    const themeColor = backgroundColors[root.dataset.background] || backgroundColors.deep;
+    const customBackground = settings.customBackground || DEFAULT_SETTINGS.customBackground;
+    root.style.setProperty('--bg-custom', customBackground);
+    const customRgb = hexToRgb(customBackground) || hexToRgb(DEFAULT_SETTINGS.customBackground);
+    if (customRgb) {
+      root.style.setProperty('--bg-custom-rgb', `${customRgb.r}, ${customRgb.g}, ${customRgb.b}`);
+    }
+
+    const themeColor = root.dataset.background === 'custom'
+      ? customBackground
+      : (backgroundColors[root.dataset.background] || backgroundColors.deep);
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
       metaTheme.setAttribute('content', themeColor);
