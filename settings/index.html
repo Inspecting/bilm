@@ -430,6 +430,7 @@
     const settings = window.bilmTheme?.getSettings?.() || {};
     accentPicker.value = settings.accent || '#a855f7';
     backgroundSelect.value = settings.background || 'deep';
+    customBackgroundPicker.value = settings.customBackground || '#1b1230';
     customBackgroundPicker.value = settings.customBackground || '#0b0b14';
     customBackgroundRow.hidden = (settings.background || 'deep') !== 'custom';
     motionToggle.checked = settings.motion !== false;
