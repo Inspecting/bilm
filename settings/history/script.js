@@ -19,6 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelSelectBtn = document.getElementById('cancelSelectBtn');
   const clearAllBtn = document.getElementById('clearAllBtn');
   const watchFilters = document.getElementById('watchFilters');
+  const clearSearchBtn = document.getElementById('clearSearchBtn');
+  const watchFilters = document.getElementById('watchFilters');
+  const searchActions = document.getElementById('searchActions');
   const historyList = document.getElementById('historyList');
 
   const filterButtons = [...document.querySelectorAll('.filter-btn')];
@@ -189,6 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sortOldBtn.classList.toggle('is-active', state.sortOrder === 'old');
 
     clearAllBtn.textContent = getClearLabel();
+    searchActions.hidden = state.activeType !== 'search';
     watchFilters.hidden = state.activeType !== 'watch';
 
     selectModeBtn.hidden = state.selectMode;
@@ -266,6 +270,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!ok) return;
 
     saveList(getActiveKey(), []);
+  clearSearchBtn.addEventListener('click', () => {
+    const ok = window.confirm('Clear all search history?');
+    if (!ok) return;
+    saveList(SEARCH_HISTORY_KEY, []);
     state.selectMode = false;
     state.selectedKeys.clear();
     render();
