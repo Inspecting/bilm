@@ -13,10 +13,7 @@
   const backgroundColors = {
     deep: '#0b0b14',
     midnight: '#05050b',
-    velvet: '#120818',
-    aurora: '#071520',
-    slate: '#0f172a',
-    ember: '#1a0b08'
+    velvet: '#120818'
   };
 
   const hexToRgb = (hex) => {
