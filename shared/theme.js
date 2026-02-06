@@ -3,6 +3,7 @@
   const DEFAULT_SETTINGS = {
     accent: '#a855f7',
     background: 'deep',
+    customBackground: '#0b0b14',
     motion: true,
     particles: true,
     defaultServer: 'vidsrc',
@@ -13,7 +14,10 @@
   const backgroundColors = {
     deep: '#0b0b14',
     midnight: '#05050b',
-    velvet: '#120818'
+    velvet: '#120818',
+    aurora: '#062a2a',
+    slate: '#111827',
+    sunset: '#2a1326'
   };
 
   const hexToRgb = (hex) => {
@@ -46,7 +50,13 @@
     root.dataset.background = settings.background || DEFAULT_SETTINGS.background;
     root.dataset.motion = settings.motion === false ? 'off' : 'on';
 
-    const themeColor = backgroundColors[root.dataset.background] || backgroundColors.deep;
+    if (root.dataset.background === 'custom') {
+      root.style.setProperty('--bg-custom', settings.customBackground || DEFAULT_SETTINGS.customBackground);
+    }
+
+    const themeColor = root.dataset.background === 'custom'
+      ? (settings.customBackground || DEFAULT_SETTINGS.customBackground)
+      : (backgroundColors[root.dataset.background] || backgroundColors.deep);
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
       metaTheme.setAttribute('content', themeColor);
