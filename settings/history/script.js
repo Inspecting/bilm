@@ -17,9 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectModeBtn = document.getElementById('selectModeBtn');
   const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
   const cancelSelectBtn = document.getElementById('cancelSelectBtn');
-  const clearSearchBtn = document.getElementById('clearSearchBtn');
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
   const watchFilters = document.getElementById('watchFilters');
-  const searchActions = document.getElementById('searchActions');
+  const historyActions = document.getElementById('historyActions');
   const historyList = document.getElementById('historyList');
 
   const filterButtons = [...document.querySelectorAll('.filter-btn')];
@@ -181,8 +181,12 @@ document.addEventListener('DOMContentLoaded', () => {
     sortRecentBtn.classList.toggle('is-active', state.sortOrder === 'recent');
     sortOldBtn.classList.toggle('is-active', state.sortOrder === 'old');
 
-    searchActions.hidden = state.activeType !== 'search';
+    historyActions.hidden = false;
     watchFilters.hidden = state.activeType !== 'watch';
+
+    clearHistoryBtn.textContent = state.activeType === 'search'
+      ? 'Clear all search history'
+      : 'Clear all watch history';
 
     selectModeBtn.hidden = state.selectMode;
     deleteSelectedBtn.hidden = !state.selectMode;
@@ -254,10 +258,12 @@ document.addEventListener('DOMContentLoaded', () => {
     render();
   });
 
-  clearSearchBtn.addEventListener('click', () => {
-    const ok = window.confirm('Clear all search history?');
+  clearHistoryBtn.addEventListener('click', () => {
+    const isSearch = state.activeType === 'search';
+    const key = isSearch ? SEARCH_HISTORY_KEY : WATCH_HISTORY_KEY;
+    const ok = window.confirm(`Clear all ${isSearch ? 'search' : 'watch'} history?`);
     if (!ok) return;
-    saveList(SEARCH_HISTORY_KEY, []);
+    saveList(key, []);
     state.selectMode = false;
     state.selectedKeys.clear();
     render();
