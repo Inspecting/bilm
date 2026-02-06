@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
-  const WATCH_HISTORY_KEY = 'bilm-continue-watching';
+  const WATCH_HISTORY_KEY = 'bilm-watch-history';
+  const LEGACY_WATCH_HISTORY_KEY = 'bilm-continue-watching';
   const HISTORY_PREFS_KEY = 'bilm-history-page-prefs';
 
   const state = {
@@ -48,6 +49,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function saveList(key, list) {
     localStorage.setItem(key, JSON.stringify(list));
+  }
+
+  function migrateLegacyWatchHistory() {
+    const current = loadList(WATCH_HISTORY_KEY);
+    if (current.length) return;
+    const legacy = loadList(LEGACY_WATCH_HISTORY_KEY);
+    if (!legacy.length) return;
+    saveList(WATCH_HISTORY_KEY, legacy);
   }
 
   function loadPrefs() {
@@ -394,5 +403,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   loadPrefs();
+  migrateLegacyWatchHistory();
   render();
 });
