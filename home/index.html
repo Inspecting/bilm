@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜</title>
+
+  <!-- PWA & iOS fullscreen meta tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <!-- Manifest & Apple Touch Icon -->
+  <link rel="manifest" href="/bilm/manifest.json" />
+  <link rel="apple-touch-icon" href="/bilm/icon.png" />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+
+  <!-- Theme styles -->
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+
+  <!-- Your existing home page styles -->
+  <link rel="stylesheet" href="/bilm/home/style.css" />
+
+  <script src="/bilm/shared/theme.js"></script>
+</head>
+<body>
+
+  <canvas id="bgCanvas" aria-hidden="true"></canvas>
+
+  <!-- Navbar placeholder (same ID as search.html) -->
+  <div id="navbar-placeholder"></div>
+
+  <main>
+    <div class="search-container">
+      <h1>
+        <span class="heart-icon" aria-hidden="true">❤</span>
+        Bilm
+        <span class="heart-icon" aria-hidden="true">❤</span>
+      </h1>
+      <form id="homeSearchForm" action="/bilm/search/" method="get">
+        <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
+        <div class="button-row">
+          <button class="search-btn" id="searchBtn" type="submit">Search</button>
+        </div>
+      </form>
+    </div>
+
+    <section class="section" id="continueWatchingSection">
+      <div class="section-header">
+        <div class="section-title-row">
+          <h2 class="section-title">Continue Watching</h2>
+          <div class="section-actions">
+            <button class="section-btn section-btn-compact" id="continueEditBtn" type="button">Edit</button>
+            <button class="section-btn section-btn-danger" id="continueRemoveBtn" type="button" disabled hidden>Remove selected</button>
+          </div>
+        </div>
+      </div>
+      <div class="section-filters" id="continueFilters" role="group" aria-label="Continue watching type">
+        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
+        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
+        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+      </div>
+      <div class="scroll-row" id="continueItems"></div>
+    </section>
+
+    <section class="section" id="favoritesSection">
+      <div class="section-header">
+        <div class="section-title-row">
+          <h2 class="section-title">Favorites</h2>
+          <div class="section-actions">
+            <button class="section-btn section-btn-compact" id="favoritesEditBtn" type="button">Edit</button>
+            <button class="section-btn section-btn-danger" id="favoritesRemoveBtn" type="button" disabled hidden>Remove selected</button>
+          </div>
+        </div>
+      </div>
+      <div class="section-filters" id="favoritesFilters" role="group" aria-label="Favorites type">
+        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
+        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
+        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+      </div>
+      <div class="scroll-row" id="favoriteItems"></div>
+    </section>
+  </main>
+
+  <script src="/bilm/shared/navbar.js" defer></script>
+
+  <script src="/bilm/home/script.js"></script>
+
+  <!-- Particle effect -->
+  <script>
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+    const dotCount = 80;
+    let dots = [];
+    let animationId = null;
+    let particlesEnabled = true;
+    let motionEnabled = true;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function initDots() {
+      dots = [];
+      for (let i = 0; i < dotCount; i++) {
+        dots.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          r: Math.random() * 2 + 1,
+          dx: (Math.random() - 0.5) * 0.7,
+          dy: (Math.random() - 0.5) * 0.7,
+        });
+      }
+    }
+
+    function renderFrame(shouldMove = true) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c084fc';
+      ctx.shadowBlur = 8;
+
+      for (let dot of dots) {
+        ctx.beginPath();
+        ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(193, 132, 252, 0.9)';
+        ctx.fill();
+
+        if (shouldMove) {
+          dot.x += dot.dx;
+          dot.y += dot.dy;
+
+          if (dot.x < 0 || dot.x > canvas.width) dot.dx *= -1;
+          if (dot.y < 0 || dot.y > canvas.height) dot.dy *= -1;
+        }
+      }
+
+      ctx.shadowBlur = 0;
+    }
+
+    function animate() {
+      renderFrame(true);
+      animationId = requestAnimationFrame(animate);
+    }
+
+    function stopAnimation() {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+    }
+
+    function applyParticleSettings(settings) {
+      particlesEnabled = settings?.particles !== false;
+      motionEnabled = settings?.motion !== false;
+      canvas.style.display = particlesEnabled ? 'block' : 'none';
+
+      stopAnimation();
+      if (!particlesEnabled) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
+      resize();
+      initDots();
+
+      if (motionEnabled) {
+        animate();
+      } else {
+        renderFrame(false);
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (!particlesEnabled) return;
+      resize();
+      initDots();
+      if (!motionEnabled) renderFrame(false);
+    });
+
+    window.addEventListener('bilm:theme-changed', (event) => {
+      applyParticleSettings(event.detail);
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const settings = window.bilmTheme?.getSettings?.();
+      applyParticleSettings(settings);
+    });
+  </script>
+
+</body>
+</html>
