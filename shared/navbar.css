@@ -9,8 +9,7 @@
 header {
   background-color: var(--surface-3);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 1000;
   border-bottom: 1px solid var(--border);
 }

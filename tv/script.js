@@ -1,6 +1,7 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const BASE_URL = 'https://inspecting.github.io/bilm';
 const showsPerLoad = 15;
+const PRIORITY_SECTION_COUNT = 4;
 
 let allGenres = [];
 const loadedCounts = {};
@@ -53,9 +54,12 @@ function createShowCard(show) {
   card.dataset.tmdbId = show.tmdbId;
 
   const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.decoding = 'async';
   img.src = show.img || 'https://via.placeholder.com/140x210?text=No+Image';
   img.alt = show.title;
   img.onerror = () => {
+    img.onerror = null;
     img.src = 'https://via.placeholder.com/140x210?text=No+Image';
   };
 
@@ -153,7 +157,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   sections.forEach(section => createSectionSkeleton(section, container));
 
-  await Promise.all(sections.map(section => loadShowsForSection(section)));
+  const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
+  const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
+  await Promise.all(prioritySections.map(section => loadShowsForSection(section)));
+
+  const loadDeferredSections = async () => {
+    await Promise.all(deferredSections.map(section => loadShowsForSection(section)));
+  };
+
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(loadDeferredSections, { timeout: 1200 });
+  } else {
+    setTimeout(loadDeferredSections, 0);
+  }
 
   sections.forEach(section => setupInfiniteScroll(section));
 });
