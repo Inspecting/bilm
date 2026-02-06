@@ -41,10 +41,18 @@
 
     main {
       flex: 1;
-      padding: 28px 22px 80px;
+      width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
+      padding: 0;
+    }
+
+    .settings-content {
       max-width: 1200px;
       width: 100%;
       margin: 0 auto;
+      padding: 28px 22px 80px;
       overflow-y: auto;
       overflow-x: hidden;
       scrollbar-gutter: stable;
@@ -253,7 +261,7 @@
     }
 
     @media (max-width: 720px) {
-      main {
+      .settings-content {
         padding: 20px 16px 80px;
       }
 
@@ -270,6 +278,7 @@
 <div id="navbarContainer"></div>
 
 <main>
+  <div class="settings-content">
   <div class="page-header">
     <h1>Settings</h1>
     <p>Personalize the Bilm experience with your preferred theme, motion, and playback defaults.</p>
@@ -380,6 +389,7 @@
         <button class="btn btn-danger" id="resetDataBtn">Reset Data</button>
       </div>
     </section>
+  </div>
   </div>
 </main>
 
