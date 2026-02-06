@@ -133,42 +133,6 @@ function toggleFavorite() {
   updateFavoriteButton(true);
 }
 
-
-function updateWatchHistory() {
-  const settings = window.bilmTheme?.getSettings?.() || {};
-  if (settings.watchHistory === false || !mediaDetails) return;
-  const key = `tv-${mediaDetails.id}-s${currentSeason}-e${currentEpisode}`;
-  const payload = {
-    key,
-    id: mediaDetails.id,
-    type: 'tv',
-    title: mediaDetails.title,
-    date: mediaDetails.firstAirDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    season: currentSeason,
-    episode: currentEpisode
-  };
-
-  if (window.bilmHistory?.upsertWatchHistory) {
-    window.bilmHistory.upsertWatchHistory(payload);
-    return;
-  }
-
-  const watchKey = 'bilm-watch-history-v1';
-  let items = [];
-  try {
-    const raw = localStorage.getItem(watchKey);
-    items = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(items)) items = [];
-  } catch {
-    items = [];
-  }
-  items = [{ ...payload, updatedAt: Date.now() }, ...items.filter((item) => item.key !== key)].slice(0, 200);
-  localStorage.setItem(watchKey, JSON.stringify(items));
-}
-
 function updateContinueWatching() {
   if (!continueWatchingEnabled || !mediaDetails) return;
   const items = loadList(CONTINUE_KEY);
@@ -193,7 +157,6 @@ function updateContinueWatching() {
   }
   items.unshift(payload);
   saveList(CONTINUE_KEY, items);
-  updateWatchHistory();
 }
 
 fullscreenBtn.onclick = () => {

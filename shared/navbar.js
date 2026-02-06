@@ -27,44 +27,6 @@
 
   const isSearchPage = page === 'search';
 
-
-  const SEARCH_HISTORY_KEY = 'bilm-search-history-v1';
-
-  function getSearchHistory() {
-    try {
-      const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function storeSearchQuery(query, source = 'navbar') {
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    const settings = window.bilmTheme?.getSettings?.() || {};
-    if (settings.searchHistory === false) return;
-
-    if (window.bilmHistory?.upsertSearchHistory) {
-      window.bilmHistory.upsertSearchHistory({ query: trimmed, source });
-      return;
-    }
-
-    const next = [
-      { query: trimmed, source, updatedAt: Date.now() },
-      ...getSearchHistory().filter((item) => (item.query || '').toLowerCase() !== trimmed.toLowerCase())
-    ].slice(0, 10);
-
-    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
-  }
-
-  function goToSearch(query) {
-    const trimmed = query.trim();
-    if (!trimmed) return;
-    window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(trimmed)}`;
-  }
-
   // Desktop nav buttons
   const buttons = shadow.querySelectorAll('nav.navbar button[data-page]');
   buttons.forEach(btn => {
@@ -104,49 +66,18 @@
       if (e.key === 'Enter') {
         const query = searchInput.value.trim();
         if (query) {
-          storeSearchQuery(query, 'desktop-navbar');
-          goToSearch(query);
+          window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
         }
       }
     });
   }
 
-  // Mobile search overlay handlers
+  // Mobile search overlay handlers (no changes here)
   const overlay = shadow.getElementById('mobileSearchOverlay');
   if (overlay) {
     const input = shadow.getElementById('mobileSearchInput');
     const clearBtn = shadow.getElementById('mobileSearchCloseBtn');
     const topCloseBtn = shadow.getElementById('mobileSearchTopCloseBtn');
-    const recentsContainer = shadow.getElementById('mobileRecentSearches');
-
-    const renderRecentSearches = () => {
-      if (!recentsContainer) return;
-      const settings = window.bilmTheme?.getSettings?.() || {};
-      if (settings.searchHistory === false) {
-        recentsContainer.innerHTML = '<div class="mobile-recent-empty">Search history is turned off in Settings.</div>';
-        return;
-      }
-
-      const recent = (window.bilmHistory?.getSearchHistory?.() || getSearchHistory()).slice(0, 10);
-      if (!recent.length) {
-        recentsContainer.innerHTML = '<div class="mobile-recent-empty">No recent searches yet.</div>';
-        return;
-      }
-
-      recentsContainer.innerHTML = '';
-      recent.forEach((entry) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'mobile-recent-chip';
-        btn.textContent = entry.query;
-        btn.addEventListener('click', () => {
-          input.value = entry.query;
-          storeSearchQuery(entry.query, 'mobile-recent');
-          goToSearch(entry.query);
-        });
-        recentsContainer.appendChild(btn);
-      });
-    };
 
     const closeOverlay = () => {
       overlay.classList.remove('active');
@@ -171,22 +102,11 @@
       if (e.key === 'Enter') {
         const query = input.value.trim();
         if (query) {
-          storeSearchQuery(query, 'mobile-navbar');
-          goToSearch(query);
+          window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(query)}`;
         }
       } else if (e.key === 'Escape') {
         closeOverlay();
       }
     });
-
-    overlay.addEventListener('transitionend', renderRecentSearches);
-    window.addEventListener('bilm:theme-changed', renderRecentSearches);
-
-    const mobileSearchBtn = shadow.getElementById('mobileSearchBtn');
-    if (mobileSearchBtn) {
-      mobileSearchBtn.addEventListener('click', () => {
-        renderRecentSearches();
-      });
-    }
   }
 })();
