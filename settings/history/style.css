@@ -23,6 +23,7 @@ main {
   max-width: 1200px;
   margin: 0 auto;
   padding: 28px 22px 90px;
+  padding: 28px 22px 80px;
 }
 
 .history-shell {
@@ -109,8 +110,18 @@ main {
   justify-content: flex-end;
 }
 
+.history-shell h1 {
+  margin-bottom: 8px;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+}
+
+.history-shell p {
+  color: var(--text-muted);
+}
+
 @media (max-width: 720px) {
   main {
     padding: 20px 16px 90px;
+    padding: 20px 16px 80px;
   }
 }
