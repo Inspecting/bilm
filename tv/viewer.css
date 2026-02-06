@@ -118,6 +118,7 @@ iframe {
 
 #fullscreenBtn,
 #serverBtn,
+#watchLaterBtn,
 #favoriteBtn {
   background: transparent;
   border: none;
@@ -140,6 +141,7 @@ iframe {
 
 #fullscreenBtn:hover,
 #serverBtn:hover,
+#watchLaterBtn:hover,
 #favoriteBtn:hover {
   background-color: var(--accent);
 }
@@ -150,6 +152,10 @@ iframe {
 
 #favoriteBtn.is-active {
   color: #facc15;
+}
+
+#watchLaterBtn.is-active {
+  color: #60a5fa;
 }
 
 #serverDropdown {
