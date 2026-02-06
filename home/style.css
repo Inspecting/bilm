@@ -81,6 +81,20 @@ main.visible {
   margin-bottom: 18px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heart-icon {
+  font-size: 0.9em;
+  line-height: 1;
+  display: inline-block;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 65%, #ffffff 35%), color-mix(in srgb, var(--accent) 55%, #ec4899 45%) 55%, color-mix(in srgb, var(--accent) 55%, #6366f1 45%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
 }
 
 input#searchInput {
@@ -201,17 +215,34 @@ button.search-btn:hover {
   color: #fecaca;
 }
 
-.subsection {
-  margin-bottom: 22px;
+.section-filters {
+  display: inline-flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
-.subsection-title {
-  font-size: 16px;
+.type-filter-btn {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
   font-weight: 600;
-  margin-bottom: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.type-filter-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-soft);
+  box-shadow: 0 0 10px var(--accent-soft);
+}
+
+.type-filter-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-soft);
 }
 
 .empty-state {
