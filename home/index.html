@@ -66,6 +66,25 @@
       <div class="scroll-row" id="continueItems"></div>
     </section>
 
+
+    <section class="section" id="watchLaterSection">
+      <div class="section-header">
+        <div class="section-title-row">
+          <h2 class="section-title">Watch Later</h2>
+          <div class="section-actions">
+            <button class="section-btn section-btn-compact" id="watchLaterEditBtn" type="button">Edit</button>
+            <button class="section-btn section-btn-danger" id="watchLaterRemoveBtn" type="button" disabled hidden>Remove selected</button>
+          </div>
+        </div>
+      </div>
+      <div class="section-filters" id="watchLaterFilters" role="group" aria-label="Watch later type">
+        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
+        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
+        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+      </div>
+      <div class="scroll-row" id="watchLaterItems"></div>
+    </section>
+
     <section class="section" id="favoritesSection">
       <div class="section-header">
         <div class="section-title-row">
@@ -119,13 +138,25 @@
 
     function renderFrame(shouldMove = true) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c084fc';
+      const styles = getComputedStyle(document.documentElement);
+      const accent = styles.getPropertyValue('--accent').trim() || '#c084fc';
+      const bgMode = document.documentElement.dataset.background || 'deep';
+      const modeTints = {
+        deep: 'rgba(193, 132, 252, 0.9)',
+        midnight: 'rgba(180, 178, 255, 0.88)',
+        velvet: 'rgba(255, 132, 214, 0.86)',
+        aurora: 'rgba(96, 221, 255, 0.86)',
+        slate: 'rgba(164, 197, 255, 0.88)',
+        ember: 'rgba(255, 162, 112, 0.88)'
+      };
+      const particleColor = modeTints[bgMode] || modeTints.deep;
+      ctx.shadowColor = accent;
       ctx.shadowBlur = 8;
 
       for (let dot of dots) {
         ctx.beginPath();
         ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(193, 132, 252, 0.9)';
+        ctx.fillStyle = particleColor;
         ctx.fill();
 
         if (shouldMove) {

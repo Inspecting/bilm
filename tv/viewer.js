@@ -14,6 +14,7 @@ const playerContainer = document.getElementById('playerContainer');
 const navbarContainer = document.getElementById('navbarContainer');
 const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
+const watchLaterBtn = document.getElementById('watchLaterBtn');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const seasonSelect = document.getElementById('seasonSelect');
 const episodeSelect = document.getElementById('episodeSelect');
@@ -38,6 +39,7 @@ let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
+const WATCH_LATER_KEY = 'bilm-watch-later';
 const FAVORITES_KEY = 'bilm-favorites';
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -90,6 +92,44 @@ function loadList(key) {
 
 function saveList(key, items) {
   localStorage.setItem(key, JSON.stringify(items));
+}
+
+
+function updateWatchLaterButton(isWatchLater) {
+  if (!watchLaterBtn) return;
+  watchLaterBtn.classList.toggle('is-active', isWatchLater);
+  watchLaterBtn.setAttribute('aria-pressed', isWatchLater ? 'true' : 'false');
+  watchLaterBtn.title = isWatchLater ? 'Remove from watch later' : 'Add to watch later';
+  watchLaterBtn.setAttribute('aria-label', watchLaterBtn.title);
+}
+
+function toggleWatchLater() {
+  if (!mediaDetails) return;
+  const items = loadList(WATCH_LATER_KEY);
+  const key = `tv-${mediaDetails.id}`;
+  const existingIndex = items.findIndex(item => item.key === key);
+  if (existingIndex >= 0) {
+    items.splice(existingIndex, 1);
+    saveList(WATCH_LATER_KEY, items);
+    updateWatchLaterButton(false);
+    return;
+  }
+
+  items.unshift({
+    key,
+    id: mediaDetails.id,
+    type: 'tv',
+    title: mediaDetails.title,
+    date: mediaDetails.firstAirDate,
+    year: mediaDetails.year,
+    poster: mediaDetails.poster,
+    link: mediaDetails.link,
+    updatedAt: Date.now(),
+    season: currentSeason,
+    episode: currentEpisode
+  });
+  saveList(WATCH_LATER_KEY, items);
+  updateWatchLaterButton(true);
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -537,6 +577,8 @@ async function fetchTMDBData() {
       link: `/bilm/tv/viewer.html?id=${tmdbId}`
     };
 
+    const watchLaterItems = loadList(WATCH_LATER_KEY);
+    updateWatchLaterButton(watchLaterItems.some(item => item.key === `tv-${tmdbId}`));
     const favorites = loadList(FAVORITES_KEY);
     updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
     mediaTitle.textContent = showTitle;
@@ -573,6 +615,13 @@ seasonSelect.addEventListener('change', () => {
 });
 
 fetchTMDBData();
+if (watchLaterBtn) {
+  watchLaterBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleWatchLater();
+  });
+}
+
 if (favoriteBtn) {
   favoriteBtn.addEventListener('click', (event) => {
     event.stopPropagation();

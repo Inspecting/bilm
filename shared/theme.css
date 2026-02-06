@@ -22,6 +22,9 @@
   --bg-deep: #0b0b14;
   --bg-midnight: #05050b;
   --bg-velvet: #120818;
+  --bg-aurora: #071520;
+  --bg-slate: #0f172a;
+  --bg-ember: #1a0b08;
   --bg-main: var(--bg-deep);
   --bg-tint: rgba(14, 10, 28, 0.7);
 }
@@ -45,6 +48,27 @@
   --bg-tint: rgba(22, 10, 34, 0.72);
   --surface-1: rgba(26, 14, 40, 0.92);
   --surface-2: rgba(34, 18, 48, 0.94);
+}
+
+:root[data-background='aurora'] {
+  --bg-main: var(--bg-aurora);
+  --bg-tint: rgba(10, 40, 62, 0.68);
+  --surface-1: rgba(13, 34, 52, 0.9);
+  --surface-2: rgba(16, 44, 67, 0.9);
+}
+
+:root[data-background='slate'] {
+  --bg-main: var(--bg-slate);
+  --bg-tint: rgba(20, 30, 52, 0.7);
+  --surface-1: rgba(20, 29, 47, 0.92);
+  --surface-2: rgba(29, 41, 64, 0.92);
+}
+
+:root[data-background='ember'] {
+  --bg-main: var(--bg-ember);
+  --bg-tint: rgba(52, 20, 16, 0.72);
+  --surface-1: rgba(44, 19, 16, 0.92);
+  --surface-2: rgba(58, 24, 19, 0.92);
 }
 
 html,
