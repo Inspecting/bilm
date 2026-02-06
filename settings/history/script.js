@@ -49,12 +49,26 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!searchTabBtn || !watchTabBtn || !sortRecentBtn || !sortOldBtn || !clearAllBtn || !selectModeBtn || !deleteSelectedBtn || !cancelSelectBtn || !watchFilters || !historyList) {
     return;
   }
+  const selectModeBtn = document.getElementById('selectModeBtn');
+  const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+  const cancelSelectBtn = document.getElementById('cancelSelectBtn');
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  const watchFilters = document.getElementById('watchFilters');
+  const clearSearchBtn = document.getElementById('clearSearchBtn');
+  const watchFilters = document.getElementById('watchFilters');
+  const searchActions = document.getElementById('searchActions');
+  const historyList = document.getElementById('historyList');
+
+  const filterButtons = [...document.querySelectorAll('.filter-btn')];
 
   function loadList(key) {
     try {
       const raw = localStorage.getItem(key);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed.filter(item => item && typeof item === 'object') : [];
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.filter(item => item && typeof item === 'object') : [];
+      return Array.isArray(list) ? list : [];
     } catch {
       return [];
     }
@@ -84,16 +98,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getItemId(item) {
     return item.key || `${state.activeType}-${item.query || item.title || 'item'}-${getTimestamp(item)}`;
+    return Number(item.updatedAt) || 0;
   }
 
   function formatDate(ts) {
     const date = new Date(ts);
     return Number.isNaN(date.getTime()) ? 'Unknown date' : date.toLocaleDateString();
+    if (Number.isNaN(date.getTime())) return 'Unknown date';
+    return date.toLocaleDateString();
   }
 
   function formatTime(ts) {
     const date = new Date(ts);
     return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (Number.isNaN(date.getTime())) return 'Unknown time';
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function getActiveKey() {
+    return state.activeType === 'search' ? SEARCH_HISTORY_KEY : WATCH_HISTORY_KEY;
+  }
+
+  function getItemId(item) {
+    return item.key || `${state.activeType}-${item.query || item.title}-${getTimestamp(item)}`;
   }
 
   function getVisibleItems() {
@@ -134,6 +161,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const itemId = getItemId(item);
     const row = document.createElement('li');
     row.className = 'history-item';
+    const sorted = [...items].sort((a, b) => getTimestamp(b) - getTimestamp(a));
+    if (state.sortOrder === 'old') {
+      sorted.reverse();
+    }
+
+    return sorted;
+  }
+
+  function renderEmptyState() {
+    const empty = document.createElement('li');
+    empty.className = 'empty-state';
+    empty.textContent = `No ${state.activeType === 'search' ? 'search' : 'watch'} history yet.`;
+    historyList.appendChild(empty);
+  }
+
+  function removeSingle(itemId) {
+    const key = getActiveKey();
+    const list = loadList(key);
+    const next = list.filter(item => getItemId(item) !== itemId);
+    saveList(key, next);
+    state.selectedKeys.delete(itemId);
+    render();
+  }
+
+  function renderHistoryItem(item) {
+    const itemId = getItemId(item);
+    const row = document.createElement('li');
+    row.className = 'history-item';
+    if (state.selectMode) row.classList.add('is-selectable');
 
     const left = document.createElement('div');
     left.className = 'history-left';
@@ -148,6 +204,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (checkbox.checked) state.selectedKeys.add(itemId);
         else state.selectedKeys.delete(itemId);
         syncActionState();
+      checkbox.setAttribute('aria-label', 'Select history item');
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          state.selectedKeys.add(itemId);
+        } else {
+          state.selectedKeys.delete(itemId);
+        }
+        syncSelectActions();
       });
       left.appendChild(checkbox);
     }
@@ -164,6 +228,16 @@ document.addEventListener('DOMContentLoaded', () => {
         ? `TV${item.season ? ` · S${item.season}` : ''}${item.episode ? `E${item.episode}` : ''}`
         : 'Movie';
       title.textContent = `${item.title || 'Unknown title'} · ${typeLabel}`;
+
+    if (state.activeType === 'search') {
+      title.textContent = item.query || 'Unknown search';
+      details.appendChild(title);
+    } else {
+      const descriptor = item.type === 'tv'
+        ? `TV${item.season ? ` · S${item.season}` : ''}${item.episode ? `E${item.episode}` : ''}`
+        : 'Movie';
+      title.textContent = `${item.title || 'Unknown title'} · ${descriptor}`;
+      details.appendChild(title);
     }
 
     const meta = document.createElement('p');
@@ -173,6 +247,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     details.appendChild(title);
     details.appendChild(meta);
+    meta.textContent = `${formatDate(getTimestamp(item))} · ${formatTime(getTimestamp(item))}`;
+    details.appendChild(meta);
+
     left.appendChild(details);
 
     const deleteBtn = document.createElement('button');
@@ -185,6 +262,11 @@ document.addEventListener('DOMContentLoaded', () => {
       saveList(getActiveKey(), next);
       state.selectedKeys.delete(itemId);
       render();
+    deleteBtn.setAttribute('aria-label', 'Delete history item');
+    deleteBtn.addEventListener('click', () => {
+      const ok = window.confirm('Delete this history entry?');
+      if (!ok) return;
+      removeSingle(itemId);
     });
 
     row.appendChild(left);
@@ -194,6 +276,8 @@ document.addEventListener('DOMContentLoaded', () => {
       row.addEventListener('click', (event) => {
         if (event.target === deleteBtn || event.target.classList.contains('history-checkbox')) return;
         window.location.href = `/bilm/home/search.html?q=${encodeURIComponent(item.query || '')}`;
+        const query = encodeURIComponent(item.query || '');
+        window.location.href = `/bilm/home/search.html?q=${query}`;
       });
     }
 
@@ -214,6 +298,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     items.forEach(renderItem);
+  function syncSelectActions() {
+    deleteSelectedBtn.disabled = state.selectedKeys.size === 0;
+  }
+
+  function getClearLabel() {
+    return state.activeType === 'search' ? 'Clear all search history' : 'Clear all watch history';
+  }
+
+  function getClearConfirmMessage() {
+    return state.activeType === 'search' ? 'Clear all search history?' : 'Clear all watch history?';
+  }
+
+  function render() {
+    searchTabBtn.classList.toggle('is-active', state.activeType === 'search');
+    watchTabBtn.classList.toggle('is-active', state.activeType === 'watch');
+    searchTabBtn.setAttribute('aria-selected', state.activeType === 'search' ? 'true' : 'false');
+    watchTabBtn.setAttribute('aria-selected', state.activeType === 'watch' ? 'true' : 'false');
+
+    sortRecentBtn.classList.toggle('is-active', state.sortOrder === 'recent');
+    sortOldBtn.classList.toggle('is-active', state.sortOrder === 'old');
+
+    clearAllBtn.textContent = getClearLabel();
+    searchActions.hidden = state.activeType !== 'search';
+    watchFilters.hidden = state.activeType !== 'watch';
+
+    selectModeBtn.hidden = state.selectMode;
+    deleteSelectedBtn.hidden = !state.selectMode;
+    cancelSelectBtn.hidden = !state.selectMode;
+    syncSelectActions();
+
+    filterButtons.forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.filter === state.watchFilter);
+    });
+
+    historyList.innerHTML = '';
+    const items = getVisibleItems();
+    if (!items.length) {
+      renderEmptyState();
+      return;
+    }
+
+    items.forEach(renderHistoryItem);
   }
 
   searchTabBtn.addEventListener('click', () => {
@@ -259,6 +385,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const next = loadList(getActiveKey()).filter(item => !state.selectedKeys.has(getItemId(item)));
     saveList(getActiveKey(), next);
+    const ok = window.confirm(`Delete ${state.selectedKeys.size} selected entr${state.selectedKeys.size === 1 ? 'y' : 'ies'}?`);
+    if (!ok) return;
+
+    const key = getActiveKey();
+    const list = loadList(key);
+    const next = list.filter(item => !state.selectedKeys.has(getItemId(item)));
+    saveList(key, next);
+
     state.selectMode = false;
     state.selectedKeys.clear();
     render();
@@ -268,6 +402,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const label = state.activeType === 'search' ? 'search' : 'watch';
     if (!window.confirm(`Clear all ${label} history?`)) return;
     saveList(getActiveKey(), []);
+    const ok = window.confirm(getClearConfirmMessage());
+    if (!ok) return;
+
+    saveList(getActiveKey(), []);
+  clearSearchBtn.addEventListener('click', () => {
+    const ok = window.confirm('Clear all search history?');
+    if (!ok) return;
+    saveList(SEARCH_HISTORY_KEY, []);
     state.selectMode = false;
     state.selectedKeys.clear();
     render();
@@ -276,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
   filterButtons.forEach(button => {
     button.addEventListener('click', () => {
       state.watchFilter = button.dataset.filter || 'all';
+      state.watchFilter = button.dataset.filter;
       render();
     });
   });
