@@ -98,26 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = document.createElement('li');
     row.className = 'history-item';
     if (state.selectMode) row.classList.add('is-selectable');
+    if (state.selectMode && state.selectedKeys.has(itemId)) row.classList.add('is-selected');
 
     const left = document.createElement('div');
     left.className = 'history-left';
-
-    if (state.selectMode) {
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'history-checkbox';
-      checkbox.checked = state.selectedKeys.has(itemId);
-      checkbox.setAttribute('aria-label', 'Select history item');
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) {
-          state.selectedKeys.add(itemId);
-        } else {
-          state.selectedKeys.delete(itemId);
-        }
-        syncSelectActions();
-      });
-      left.appendChild(checkbox);
-    }
 
     const details = document.createElement('div');
     details.className = 'history-details';
@@ -155,14 +139,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     row.appendChild(left);
-    row.appendChild(deleteBtn);
 
-    if (state.activeType === 'search') {
-      row.addEventListener('click', (event) => {
-        if (event.target === deleteBtn || event.target.classList.contains('history-checkbox')) return;
-        const query = encodeURIComponent(item.query || '');
-        window.location.href = `/bilm/home/search.html?q=${query}`;
+    if (state.selectMode) {
+      row.addEventListener('click', () => {
+        if (state.selectedKeys.has(itemId)) {
+          state.selectedKeys.delete(itemId);
+        } else {
+          state.selectedKeys.add(itemId);
+        }
+        render();
       });
+    } else {
+      row.appendChild(deleteBtn);
+
+      if (state.activeType === 'search') {
+        row.addEventListener('click', (event) => {
+          if (event.target === deleteBtn) return;
+          const query = encodeURIComponent(item.query || '');
+          window.location.href = `/bilm/home/search.html?q=${query}`;
+        });
+      }
     }
 
     historyList.appendChild(row);
@@ -188,9 +184,15 @@ document.addEventListener('DOMContentLoaded', () => {
       ? 'Clear all search history'
       : 'Clear all watch history';
 
+    if (state.activeType === 'search') {
+      watchFilters.hidden = true;
+      state.watchFilter = 'all';
+    }
+
     selectModeBtn.hidden = state.selectMode;
-    deleteSelectedBtn.hidden = !state.selectMode;
     cancelSelectBtn.hidden = !state.selectMode;
+    deleteSelectedBtn.hidden = !state.selectMode;
+    clearHistoryBtn.hidden = state.selectMode;
     syncSelectActions();
 
     filterButtons.forEach(btn => {
@@ -216,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   watchTabBtn.addEventListener('click', () => {
     state.activeType = 'watch';
+    state.watchFilter = 'all';
     state.selectMode = false;
     state.selectedKeys.clear();
     render();

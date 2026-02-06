@@ -35,19 +35,19 @@
           <button id="sortRecentBtn" class="control-btn is-active" type="button">Recent</button>
           <button id="sortOldBtn" class="control-btn" type="button">Old</button>
         </div>
-        <div class="action-controls">
-          <button id="deleteSelectedBtn" class="control-btn danger" type="button" hidden>Delete selected</button>
-          <button id="cancelSelectBtn" class="control-btn" type="button" hidden>Cancel</button>
-        </div>
       </div>
 
       <div id="historyActions" class="sub-controls">
         <button id="clearHistoryBtn" class="control-btn danger" type="button">Clear all search history</button>
         <button id="selectModeBtn" class="control-btn" type="button">Select</button>
+        <button id="cancelSelectBtn" class="control-btn" type="button" hidden>Cancel</button>
+        <button id="deleteSelectedBtn" class="control-btn danger" type="button" hidden>Delete selected</button>
       </div>
 
       <div id="watchFilters" class="sub-controls" hidden>
         <button class="filter-btn is-active" type="button" data-filter="all">All</button>
+        <button class="filter-btn" type="button" data-filter="movie">Movies</button>
+        <button class="filter-btn" type="button" data-filter="tv">TV Shows</button>
       </div>
 
       <ul id="historyList" class="history-list" aria-live="polite"></ul>
