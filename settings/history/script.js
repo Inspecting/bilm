@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectModeBtn = document.getElementById('selectModeBtn');
   const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
   const cancelSelectBtn = document.getElementById('cancelSelectBtn');
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  const watchFilters = document.getElementById('watchFilters');
   const clearSearchBtn = document.getElementById('clearSearchBtn');
   const watchFilters = document.getElementById('watchFilters');
   const searchActions = document.getElementById('searchActions');
@@ -172,6 +174,14 @@ document.addEventListener('DOMContentLoaded', () => {
     deleteSelectedBtn.disabled = state.selectedKeys.size === 0;
   }
 
+  function getClearLabel() {
+    return state.activeType === 'search' ? 'Clear all search history' : 'Clear all watch history';
+  }
+
+  function getClearConfirmMessage() {
+    return state.activeType === 'search' ? 'Clear all search history?' : 'Clear all watch history?';
+  }
+
   function render() {
     searchTabBtn.classList.toggle('is-active', state.activeType === 'search');
     watchTabBtn.classList.toggle('is-active', state.activeType === 'watch');
@@ -181,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sortRecentBtn.classList.toggle('is-active', state.sortOrder === 'recent');
     sortOldBtn.classList.toggle('is-active', state.sortOrder === 'old');
 
+    clearAllBtn.textContent = getClearLabel();
     searchActions.hidden = state.activeType !== 'search';
     watchFilters.hidden = state.activeType !== 'watch';
 
@@ -254,6 +265,11 @@ document.addEventListener('DOMContentLoaded', () => {
     render();
   });
 
+  clearAllBtn.addEventListener('click', () => {
+    const ok = window.confirm(getClearConfirmMessage());
+    if (!ok) return;
+
+    saveList(getActiveKey(), []);
   clearSearchBtn.addEventListener('click', () => {
     const ok = window.confirm('Clear all search history?');
     if (!ok) return;
