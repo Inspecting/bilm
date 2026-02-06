@@ -19,7 +19,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
 
   <!-- Navbar CSS -->
-  <link rel="stylesheet" href="/bilm/shared/navbar.css" />
   <link rel="stylesheet" href="/bilm/shared/theme.css" />
 
   <script src="/bilm/shared/theme.js"></script>
@@ -143,19 +142,7 @@
     </section>
   </main>
 
-  <script>
-    fetch('/bilm/shared/navbar.html')
-      .then(res => res.text())
-      .then(html => {
-        document.getElementById('navbar-placeholder').innerHTML = html;
-        const script = document.createElement('script');
-        script.src = '/bilm/shared/navbar.js';
-        script.onload = () => {
-          if (typeof initNavbar === 'function') initNavbar();
-        };
-        document.body.appendChild(script);
-      });
-  </script>
+  <script src="/bilm/shared/navbar.js" defer></script>
 
   <script>
     const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';

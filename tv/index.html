@@ -15,7 +15,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/bilm/shared/theme.css" />
   <link rel="stylesheet" href="./style.css" />
-  <!-- Remove direct navbar.css link; will load dynamically -->
   <script src="/bilm/shared/theme.js"></script>
 </head>
 <body>
@@ -27,23 +26,7 @@
   <div id="tvSections"></div>
 </main>
 
-<!-- Load shared navbar -->
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    fetch('/bilm/shared/navbar.html')
-      .then(res => res.text())
-      .then(html => {
-        document.getElementById('navbarContainer').innerHTML = html;
-        const css = document.createElement('link');
-        css.rel = 'stylesheet';
-        css.href = '/bilm/shared/navbar.css';
-        document.head.appendChild(css);
-        const js = document.createElement('script');
-        js.src = '/bilm/shared/navbar.js';
-        document.body.appendChild(js);
-      });
-  });
-</script>
+<script src="/bilm/shared/navbar.js" defer></script>
 
 <!-- Load TV shows logic -->
 <script src="./script.js"></script>

@@ -1,12 +1,7 @@
-// Loads your navbar (ensure /bilm/shared/navbar.html and navbar.js exist on your server)
-fetch('/bilm/shared/navbar.html')
-  .then(res => res.text())
-  .then(html => {
-    document.getElementById('navbarContainer').innerHTML = html;
-    const script = document.createElement('script');
-    script.src = '/bilm/shared/navbar.js';
-    document.body.appendChild(script);
-  });
+const navbarScript = document.createElement('script');
+navbarScript.src = '/bilm/shared/navbar.js';
+navbarScript.defer = true;
+document.body.appendChild(navbarScript);
 
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const params = new URLSearchParams(window.location.search);
