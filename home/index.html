@@ -36,9 +36,9 @@
   <main>
     <div class="search-container">
       <h1>
-        <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" style="height: 1em; vertical-align: middle; margin-right: 8px;" />
+        <span class="heart-icon" aria-hidden="true">❤</span>
         Bilm
-        <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" style="height: 1em; vertical-align: middle; margin-left: 8px;" />
+        <span class="heart-icon" aria-hidden="true">❤</span>
       </h1>
       <form id="homeSearchForm" action="/bilm/search/" method="get">
         <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
@@ -58,14 +58,12 @@
           </div>
         </div>
       </div>
-      <div class="subsection">
-        <h3 class="subsection-title">Movies</h3>
-        <div class="scroll-row" id="continueMovies"></div>
+      <div class="section-filters" id="continueFilters" role="group" aria-label="Continue watching type">
+        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
+        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
+        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
       </div>
-      <div class="subsection">
-        <h3 class="subsection-title">TV Shows</h3>
-        <div class="scroll-row" id="continueTv"></div>
-      </div>
+      <div class="scroll-row" id="continueItems"></div>
     </section>
 
     <section class="section" id="favoritesSection">
@@ -78,14 +76,12 @@
           </div>
         </div>
       </div>
-      <div class="subsection">
-        <h3 class="subsection-title">Movies</h3>
-        <div class="scroll-row" id="favoriteMovies"></div>
+      <div class="section-filters" id="favoritesFilters" role="group" aria-label="Favorites type">
+        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
+        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
+        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
       </div>
-      <div class="subsection">
-        <h3 class="subsection-title">TV Shows</h3>
-        <div class="scroll-row" id="favoriteTv"></div>
-      </div>
+      <div class="scroll-row" id="favoriteItems"></div>
     </section>
   </main>
 

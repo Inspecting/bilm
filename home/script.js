@@ -5,10 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const continueWatchingSection = document.getElementById('continueWatchingSection');
   const favoritesSection = document.getElementById('favoritesSection');
-  const continueMoviesRow = document.getElementById('continueMovies');
-  const continueTvRow = document.getElementById('continueTv');
-  const favoriteMoviesRow = document.getElementById('favoriteMovies');
-  const favoriteTvRow = document.getElementById('favoriteTv');
+  const continueItemsRow = document.getElementById('continueItems');
+  const favoriteItemsRow = document.getElementById('favoriteItems');
+  const continueFilterButtons = [...document.querySelectorAll('#continueFilters .type-filter-btn')];
+  const favoritesFilterButtons = [...document.querySelectorAll('#favoritesFilters .type-filter-btn')];
   const continueEditBtn = document.getElementById('continueEditBtn');
   const continueRemoveBtn = document.getElementById('continueRemoveBtn');
   const favoritesEditBtn = document.getElementById('favoritesEditBtn');
@@ -80,11 +80,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const sectionState = {
     continue: {
       editing: false,
-      selected: new Set()
+      selected: new Set(),
+      filter: 'all'
     },
     favorites: {
       editing: false,
-      selected: new Set()
+      selected: new Set(),
+      filter: 'all'
     }
   };
 
@@ -112,6 +114,14 @@ document.addEventListener('DOMContentLoaded', () => {
       favoritesRemoveBtn.hidden = !isEditing;
       favoritesRemoveBtn.disabled = state.selected.size === 0;
     }
+  }
+
+  function updateFilterButtons(section) {
+    const buttons = section === 'continue' ? continueFilterButtons : favoritesFilterButtons;
+    const activeFilter = sectionState[section].filter;
+    buttons.forEach(button => {
+      button.classList.toggle('is-active', button.dataset.filter === activeFilter);
+    });
   }
 
   function renderRow(container, items, emptyMessage, section) {
@@ -193,18 +203,32 @@ document.addEventListener('DOMContentLoaded', () => {
     return [...items].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   }
 
-  function filterByType(items, type) {
-    return items.filter(item => item.type === type);
+  function applyTypeFilter(items, filter) {
+    if (filter === 'all') return items;
+    return items.filter(item => item.type === filter);
   }
 
   function renderSections() {
     const continueItems = sortByRecent(loadList(CONTINUE_KEY));
     const favoriteItems = sortByRecent(loadList(FAVORITES_KEY));
 
-    renderRow(continueMoviesRow, filterByType(continueItems, 'movie'), 'Start a movie to see it here.', 'continue');
-    renderRow(continueTvRow, filterByType(continueItems, 'tv'), 'Start a show to keep your place.', 'continue');
-    renderRow(favoriteMoviesRow, filterByType(favoriteItems, 'movie'), 'Save movies you love for quick access.', 'favorites');
-    renderRow(favoriteTvRow, filterByType(favoriteItems, 'tv'), 'Favorite TV shows appear here.', 'favorites');
+    const continueFilteredItems = applyTypeFilter(continueItems, sectionState.continue.filter);
+    const favoritesFilteredItems = applyTypeFilter(favoriteItems, sectionState.favorites.filter);
+
+    const continueEmpty = sectionState.continue.filter === 'movie'
+      ? 'Start a movie to see it here.'
+      : sectionState.continue.filter === 'tv'
+        ? 'Start a show to keep your place.'
+        : 'Start watching something to build your list.';
+
+    const favoritesEmpty = sectionState.favorites.filter === 'movie'
+      ? 'Save movies you love for quick access.'
+      : sectionState.favorites.filter === 'tv'
+        ? 'Favorite TV shows appear here.'
+        : 'Favorite anything you want quick access to.';
+
+    renderRow(continueItemsRow, continueFilteredItems, continueEmpty, 'continue');
+    renderRow(favoriteItemsRow, favoritesFilteredItems, favoritesEmpty, 'favorites');
   }
 
   continueEditBtn.addEventListener('click', () => {
@@ -239,9 +263,27 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSections();
   });
 
+  continueFilterButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      sectionState.continue.filter = button.dataset.filter;
+      updateFilterButtons('continue');
+      renderSections();
+    });
+  });
+
+  favoritesFilterButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      sectionState.favorites.filter = button.dataset.filter;
+      updateFilterButtons('favorites');
+      renderSections();
+    });
+  });
+
   renderSections();
   updateEditUI('continue');
   updateEditUI('favorites');
+  updateFilterButtons('continue');
+  updateFilterButtons('favorites');
 
   window.addEventListener('storage', renderSections);
 });

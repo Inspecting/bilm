@@ -73,7 +73,7 @@
   // Desktop nav buttons
   const buttons = shadow.querySelectorAll('nav.navbar button[data-page]');
   buttons.forEach(btn => {
-    if (btn.dataset.page === page || (isSearchPage && btn.dataset.page === 'home')) {
+    if (btn.dataset.page === page) {
       btn.classList.add('active');
     }
     btn.onclick = () => {

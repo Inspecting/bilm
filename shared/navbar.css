@@ -37,9 +37,16 @@ header {
   gap: 4px;
 }
 
-.logo img {
-  height: 1.2em;
+.logo .heart-icon {
+  font-size: 1.05em;
   margin: 0 6px;
+  line-height: 1;
+  display: inline-block;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 65%, #ffffff 35%), color-mix(in srgb, var(--accent) 55%, #ec4899 45%) 55%, color-mix(in srgb, var(--accent) 55%, #6366f1 45%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 55%, transparent));
 }
 
 .nav-center {
