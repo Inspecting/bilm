@@ -1,12 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
   const WATCH_HISTORY_KEY = 'bilm-continue-watching';
+  const HISTORY_PREFS_KEY = 'bilm-history-page-prefs';
 
   const state = {
     activeType: 'search',
     sortOrder: 'recent',
     watchFilter: 'all',
+    dateRange: 'all',
+    textFilter: '',
     selectMode: false,
+    compactView: false,
     selectedKeys: new Set()
   };
 
@@ -15,14 +19,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const sortRecentBtn = document.getElementById('sortRecentBtn');
   const sortOldBtn = document.getElementById('sortOldBtn');
   const selectModeBtn = document.getElementById('selectModeBtn');
+  const selectAllBtn = document.getElementById('selectAllBtn');
   const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
   const cancelSelectBtn = document.getElementById('cancelSelectBtn');
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
   const watchFilters = document.getElementById('watchFilters');
-  const historyActions = document.getElementById('historyActions');
   const historyList = document.getElementById('historyList');
+  const searchFilterInput = document.getElementById('searchFilterInput');
+  const compactViewBtn = document.getElementById('compactViewBtn');
 
-  const filterButtons = [...document.querySelectorAll('.filter-btn')];
+  const visibleCount = document.getElementById('visibleCount');
+  const totalCount = document.getElementById('totalCount');
+  const newestLabel = document.getElementById('newestLabel');
+  const oldestLabel = document.getElementById('oldestLabel');
+
+  const watchTypeButtons = [...document.querySelectorAll('.type-filter-btn')];
+  const dateRangeButtons = [...document.querySelectorAll('#dateRangeFilters .filter-btn')];
 
   function loadList(key) {
     try {
@@ -38,20 +50,34 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(key, JSON.stringify(list));
   }
 
+  function loadPrefs() {
+    try {
+      const raw = localStorage.getItem(HISTORY_PREFS_KEY);
+      const prefs = raw ? JSON.parse(raw) : {};
+      state.compactView = Boolean(prefs.compactView);
+    } catch {
+      state.compactView = false;
+    }
+  }
+
+  function savePrefs() {
+    localStorage.setItem(HISTORY_PREFS_KEY, JSON.stringify({ compactView: state.compactView }));
+  }
+
   function getTimestamp(item) {
     return Number(item.updatedAt) || 0;
   }
 
-  function formatDate(ts) {
+  function formatDateTime(ts) {
     const date = new Date(ts);
     if (Number.isNaN(date.getTime())) return 'Unknown date';
-    return date.toLocaleDateString();
-  }
-
-  function formatTime(ts) {
-    const date = new Date(ts);
-    if (Number.isNaN(date.getTime())) return 'Unknown time';
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   }
 
   function getActiveKey() {
@@ -59,20 +85,42 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getItemId(item) {
-    return item.key || `${state.activeType}-${item.query || item.title}-${getTimestamp(item)}`;
+    const basis = state.activeType === 'search' ? item.query : `${item.title}-${item.type}-${item.season}-${item.episode}`;
+    return item.key || `${state.activeType}-${basis}-${getTimestamp(item)}`;
   }
 
-  function getVisibleItems() {
-    let items = loadList(getActiveKey());
+  function getRangeCutoff() {
+    const now = Date.now();
+    if (state.dateRange === 'today') return now - 24 * 60 * 60 * 1000;
+    if (state.dateRange === 'week') return now - 7 * 24 * 60 * 60 * 1000;
+    if (state.dateRange === 'month') return now - 30 * 24 * 60 * 60 * 1000;
+    return 0;
+  }
+
+  function matchesText(item) {
+    const q = state.textFilter.trim().toLowerCase();
+    if (!q) return true;
+
+    if (state.activeType === 'search') {
+      return String(item.query || '').toLowerCase().includes(q);
+    }
+
+    const fields = [item.title, item.type, item.season, item.episode].map(v => String(v || '').toLowerCase());
+    return fields.some(field => field.includes(q));
+  }
+
+  function getFilteredItems() {
+    const list = loadList(getActiveKey());
+    const cutoff = getRangeCutoff();
+
+    let items = list.filter(item => getTimestamp(item) >= cutoff && matchesText(item));
 
     if (state.activeType === 'watch' && state.watchFilter !== 'all') {
       items = items.filter(item => item.type === state.watchFilter);
     }
 
     const sorted = [...items].sort((a, b) => getTimestamp(b) - getTimestamp(a));
-    if (state.sortOrder === 'old') {
-      sorted.reverse();
-    }
+    if (state.sortOrder === 'old') sorted.reverse();
 
     return sorted;
   }
@@ -80,7 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderEmptyState() {
     const empty = document.createElement('li');
     empty.className = 'empty-state';
-    empty.textContent = `No ${state.activeType === 'search' ? 'search' : 'watch'} history yet.`;
+    empty.textContent = state.textFilter
+      ? 'No history matched your filters. Try broadening your search.'
+      : `No ${state.activeType === 'search' ? 'search' : 'watch'} history yet.`;
     historyList.appendChild(empty);
   }
 
@@ -93,48 +143,66 @@ document.addEventListener('DOMContentLoaded', () => {
     render();
   }
 
+  function updateStats(visibleItems) {
+    const allItems = loadList(getActiveKey());
+    visibleCount.textContent = String(visibleItems.length);
+    totalCount.textContent = String(allItems.length);
+
+    if (!allItems.length) {
+      newestLabel.textContent = '—';
+      oldestLabel.textContent = '—';
+      return;
+    }
+
+    const sorted = [...allItems].sort((a, b) => getTimestamp(a) - getTimestamp(b));
+    oldestLabel.textContent = formatDateTime(getTimestamp(sorted[0]));
+    newestLabel.textContent = formatDateTime(getTimestamp(sorted[sorted.length - 1]));
+  }
+
   function renderHistoryItem(item) {
     const itemId = getItemId(item);
     const row = document.createElement('li');
     row.className = 'history-item';
+
     if (state.selectMode) row.classList.add('is-selectable');
     if (state.selectMode && state.selectedKeys.has(itemId)) row.classList.add('is-selected');
 
     const left = document.createElement('div');
     left.className = 'history-left';
 
-    const details = document.createElement('div');
-    details.className = 'history-details';
-
     const title = document.createElement('p');
     title.className = 'history-title';
 
+    const meta = document.createElement('p');
+    meta.className = 'history-meta';
+    meta.textContent = formatDateTime(getTimestamp(item));
+
+    const chip = document.createElement('span');
+    chip.className = 'history-chip';
+
     if (state.activeType === 'search') {
       title.textContent = item.query || 'Unknown search';
-      details.appendChild(title);
+      chip.textContent = 'Search';
     } else {
       const descriptor = item.type === 'tv'
         ? `TV${item.season ? ` · S${item.season}` : ''}${item.episode ? `E${item.episode}` : ''}`
         : 'Movie';
-      title.textContent = `${item.title || 'Unknown title'} · ${descriptor}`;
-      details.appendChild(title);
+      title.textContent = item.title || 'Unknown title';
+      chip.textContent = descriptor;
     }
 
-    const meta = document.createElement('p');
-    meta.className = 'history-meta';
-    meta.textContent = `${formatDate(getTimestamp(item))} · ${formatTime(getTimestamp(item))}`;
-    details.appendChild(meta);
-
-    left.appendChild(details);
+    left.appendChild(title);
+    left.appendChild(meta);
+    left.appendChild(chip);
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'delete-btn';
-    deleteBtn.textContent = 'X';
+    deleteBtn.textContent = '✕';
     deleteBtn.setAttribute('aria-label', 'Delete history item');
-    deleteBtn.addEventListener('click', () => {
-      const ok = window.confirm('Delete this history entry?');
-      if (!ok) return;
+    deleteBtn.addEventListener('click', event => {
+      event.stopPropagation();
+      if (!window.confirm('Delete this history entry?')) return;
       removeSingle(itemId);
     });
 
@@ -142,19 +210,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (state.selectMode) {
       row.addEventListener('click', () => {
-        if (state.selectedKeys.has(itemId)) {
-          state.selectedKeys.delete(itemId);
-        } else {
-          state.selectedKeys.add(itemId);
-        }
+        if (state.selectedKeys.has(itemId)) state.selectedKeys.delete(itemId);
+        else state.selectedKeys.add(itemId);
         render();
       });
     } else {
       row.appendChild(deleteBtn);
 
       if (state.activeType === 'search') {
-        row.addEventListener('click', (event) => {
-          if (event.target === deleteBtn) return;
+        row.addEventListener('click', () => {
           const query = encodeURIComponent(item.query || '');
           window.location.href = `/bilm/home/search.html?q=${query}`;
         });
@@ -164,11 +228,20 @@ document.addEventListener('DOMContentLoaded', () => {
     historyList.appendChild(row);
   }
 
-  function syncSelectActions() {
-    deleteSelectedBtn.disabled = state.selectedKeys.size === 0;
+  function syncSelectActions(items) {
+    const selectedSize = state.selectedKeys.size;
+    deleteSelectedBtn.disabled = selectedSize === 0;
+    selectAllBtn.textContent = selectedSize === items.length && items.length
+      ? 'Unselect all visible'
+      : 'Select all visible';
   }
 
   function render() {
+    document.body.classList.toggle('compact', state.compactView);
+    compactViewBtn.setAttribute('aria-pressed', state.compactView ? 'true' : 'false');
+    compactViewBtn.classList.toggle('is-active', state.compactView);
+    compactViewBtn.textContent = state.compactView ? 'Comfortable view' : 'Compact view';
+
     searchTabBtn.classList.toggle('is-active', state.activeType === 'search');
     watchTabBtn.classList.toggle('is-active', state.activeType === 'watch');
     searchTabBtn.setAttribute('aria-selected', state.activeType === 'search' ? 'true' : 'false');
@@ -177,50 +250,55 @@ document.addEventListener('DOMContentLoaded', () => {
     sortRecentBtn.classList.toggle('is-active', state.sortOrder === 'recent');
     sortOldBtn.classList.toggle('is-active', state.sortOrder === 'old');
 
-    historyActions.hidden = false;
+    clearHistoryBtn.textContent = state.activeType === 'search' ? 'Clear all search history' : 'Clear all watch history';
     watchFilters.hidden = state.activeType !== 'watch';
 
-    clearHistoryBtn.textContent = state.activeType === 'search'
-      ? 'Clear all search history'
-      : 'Clear all watch history';
-
     if (state.activeType === 'search') {
-      watchFilters.hidden = true;
       state.watchFilter = 'all';
     }
 
     selectModeBtn.hidden = state.selectMode;
+    selectAllBtn.hidden = !state.selectMode;
     cancelSelectBtn.hidden = !state.selectMode;
     deleteSelectedBtn.hidden = !state.selectMode;
     clearHistoryBtn.hidden = state.selectMode;
-    syncSelectActions();
 
-    filterButtons.forEach(btn => {
+    watchTypeButtons.forEach(btn => {
       btn.classList.toggle('is-active', btn.dataset.filter === state.watchFilter);
     });
 
+    dateRangeButtons.forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.range === state.dateRange);
+    });
+
     historyList.innerHTML = '';
-    const items = getVisibleItems();
+    const items = getFilteredItems();
+    updateStats(items);
+
     if (!items.length) {
       renderEmptyState();
+      syncSelectActions(items);
       return;
     }
 
     items.forEach(renderHistoryItem);
+    syncSelectActions(items);
+  }
+
+  function resetSelection() {
+    state.selectMode = false;
+    state.selectedKeys.clear();
   }
 
   searchTabBtn.addEventListener('click', () => {
     state.activeType = 'search';
-    state.selectMode = false;
-    state.selectedKeys.clear();
+    resetSelection();
     render();
   });
 
   watchTabBtn.addEventListener('click', () => {
     state.activeType = 'watch';
-    state.watchFilter = 'all';
-    state.selectMode = false;
-    state.selectedKeys.clear();
+    resetSelection();
     render();
   });
 
@@ -240,44 +318,81 @@ document.addEventListener('DOMContentLoaded', () => {
     render();
   });
 
+  selectAllBtn.addEventListener('click', () => {
+    const items = getFilteredItems();
+    const itemIds = items.map(getItemId);
+    const allSelected = itemIds.length && itemIds.every(id => state.selectedKeys.has(id));
+
+    if (allSelected) {
+      itemIds.forEach(id => state.selectedKeys.delete(id));
+    } else {
+      itemIds.forEach(id => state.selectedKeys.add(id));
+    }
+
+    render();
+  });
+
   cancelSelectBtn.addEventListener('click', () => {
-    state.selectMode = false;
-    state.selectedKeys.clear();
+    resetSelection();
     render();
   });
 
   deleteSelectedBtn.addEventListener('click', () => {
     if (!state.selectedKeys.size) return;
-    const ok = window.confirm(`Delete ${state.selectedKeys.size} selected entr${state.selectedKeys.size === 1 ? 'y' : 'ies'}?`);
-    if (!ok) return;
+    const count = state.selectedKeys.size;
+    if (!window.confirm(`Delete ${count} selected entr${count === 1 ? 'y' : 'ies'}?`)) return;
 
     const key = getActiveKey();
     const list = loadList(key);
     const next = list.filter(item => !state.selectedKeys.has(getItemId(item)));
     saveList(key, next);
 
-    state.selectMode = false;
-    state.selectedKeys.clear();
+    resetSelection();
     render();
   });
 
   clearHistoryBtn.addEventListener('click', () => {
     const isSearch = state.activeType === 'search';
-    const key = isSearch ? SEARCH_HISTORY_KEY : WATCH_HISTORY_KEY;
-    const ok = window.confirm(`Clear all ${isSearch ? 'search' : 'watch'} history?`);
-    if (!ok) return;
-    saveList(key, []);
-    state.selectMode = false;
-    state.selectedKeys.clear();
+    if (!window.confirm(`Clear all ${isSearch ? 'search' : 'watch'} history?`)) return;
+    saveList(getActiveKey(), []);
+    resetSelection();
     render();
   });
 
-  filterButtons.forEach(button => {
+  watchTypeButtons.forEach(button => {
     button.addEventListener('click', () => {
       state.watchFilter = button.dataset.filter;
       render();
     });
   });
 
+  dateRangeButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      state.dateRange = button.dataset.range;
+      resetSelection();
+      render();
+    });
+  });
+
+  searchFilterInput.addEventListener('input', () => {
+    state.textFilter = searchFilterInput.value;
+    resetSelection();
+    render();
+  });
+
+  compactViewBtn.addEventListener('click', () => {
+    state.compactView = !state.compactView;
+    savePrefs();
+    render();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === '/' && document.activeElement !== searchFilterInput) {
+      event.preventDefault();
+      searchFilterInput.focus();
+    }
+  });
+
+  loadPrefs();
   render();
 });
