@@ -22,6 +22,10 @@
   --bg-deep: #0b0b14;
   --bg-midnight: #05050b;
   --bg-velvet: #120818;
+  --bg-aurora: #062a2a;
+  --bg-slate: #111827;
+  --bg-sunset: #2a1326;
+  --bg-custom: #0b0b14;
   --bg-main: var(--bg-deep);
   --bg-tint: rgba(14, 10, 28, 0.7);
 }
@@ -45,6 +49,35 @@
   --bg-tint: rgba(22, 10, 34, 0.72);
   --surface-1: rgba(26, 14, 40, 0.92);
   --surface-2: rgba(34, 18, 48, 0.94);
+}
+
+
+:root[data-background='aurora'] {
+  --bg-main: var(--bg-aurora);
+  --bg-tint: rgba(6, 42, 42, 0.72);
+  --surface-1: rgba(8, 48, 48, 0.9);
+  --surface-2: rgba(10, 58, 58, 0.92);
+}
+
+:root[data-background='slate'] {
+  --bg-main: var(--bg-slate);
+  --bg-tint: rgba(17, 24, 39, 0.72);
+  --surface-1: rgba(21, 31, 52, 0.9);
+  --surface-2: rgba(27, 39, 65, 0.92);
+}
+
+:root[data-background='sunset'] {
+  --bg-main: var(--bg-sunset);
+  --bg-tint: rgba(42, 19, 38, 0.72);
+  --surface-1: rgba(54, 21, 46, 0.9);
+  --surface-2: rgba(68, 26, 56, 0.92);
+}
+
+:root[data-background='custom'] {
+  --bg-main: var(--bg-custom);
+  --bg-tint: color-mix(in srgb, var(--bg-custom) 78%, transparent);
+  --surface-1: color-mix(in srgb, var(--bg-custom) 72%, #ffffff 8%);
+  --surface-2: color-mix(in srgb, var(--bg-custom) 68%, #ffffff 12%);
 }
 
 html,

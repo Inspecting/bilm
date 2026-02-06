@@ -302,13 +302,25 @@
       <div class="control-row">
         <div>
           <label for="backgroundSelect">Background Mode</label>
-          <small>Deep, Midnight, or Velvet.</small>
+          <small>Pick a preset theme or build your own.</small>
         </div>
         <select id="backgroundSelect">
           <option value="deep">Deep</option>
           <option value="midnight">Midnight</option>
           <option value="velvet">Velvet</option>
+          <option value="aurora">Aurora</option>
+          <option value="slate">Slate</option>
+          <option value="sunset">Sunset</option>
+          <option value="custom">Custom</option>
         </select>
+      </div>
+
+      <div class="control-row" id="customBackgroundRow" hidden>
+        <div>
+          <label for="customBackgroundPicker">Custom Background</label>
+          <small>Choose a custom background base color.</small>
+        </div>
+        <input id="customBackgroundPicker" type="color" />
       </div>
     </section>
 
@@ -399,6 +411,8 @@
   const accentPresets = ['#a855f7', '#c084fc', '#7c3aed', '#ec4899', '#38bdf8'];
   const accentPicker = document.getElementById('accentPicker');
   const backgroundSelect = document.getElementById('backgroundSelect');
+  const customBackgroundRow = document.getElementById('customBackgroundRow');
+  const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
   const serverSelect = document.getElementById('serverSelect');
@@ -416,6 +430,8 @@
     const settings = window.bilmTheme?.getSettings?.() || {};
     accentPicker.value = settings.accent || '#a855f7';
     backgroundSelect.value = settings.background || 'deep';
+    customBackgroundPicker.value = settings.customBackground || '#0b0b14';
+    customBackgroundRow.hidden = (settings.background || 'deep') !== 'custom';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
     const preferredServer = settings.defaultServer || 'vidsrc';
@@ -440,7 +456,15 @@
   });
 
   backgroundSelect.addEventListener('change', (event) => {
-    applySettings({ background: event.target.value });
+    const nextBackground = event.target.value;
+    customBackgroundRow.hidden = nextBackground !== 'custom';
+    applySettings({ background: nextBackground });
+  });
+
+  customBackgroundPicker.addEventListener('input', (event) => {
+    applySettings({ customBackground: event.target.value, background: 'custom' });
+    backgroundSelect.value = 'custom';
+    customBackgroundRow.hidden = false;
   });
 
   motionToggle.addEventListener('change', (event) => {
