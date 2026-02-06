@@ -364,11 +364,22 @@
 
       <div class="control-row">
         <div>
-          <label>Incognito</label>
-          <small>Temporary browsing mode (coming soon).</small>
+          <label>Save Watch History</label>
+          <small>Track recently watched movies and episodes on this device.</small>
         </div>
         <label class="toggle">
-          <input id="incognitoToggle" type="checkbox" />
+          <input id="watchHistoryToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Save Search History</label>
+          <small>Keep up to 10 recent searches for quick reuse.</small>
+        </div>
+        <label class="toggle">
+          <input id="searchHistoryToggle" type="checkbox" />
           <span></span>
         </label>
       </div>
@@ -408,6 +419,8 @@
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
   const serverSelect = document.getElementById('serverSelect');
+  const watchHistoryToggle = document.getElementById('watchHistoryToggle');
+  const searchHistoryToggle = document.getElementById('searchHistoryToggle');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const presetsContainer = document.getElementById('accentPresets');
@@ -426,6 +439,8 @@
     particleToggle.checked = settings.particles !== false;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
+    watchHistoryToggle.checked = settings.watchHistory !== false;
+    searchHistoryToggle.checked = settings.searchHistory !== false;
   }
 
   accentPresets.forEach(color => {
@@ -459,6 +474,14 @@
 
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
+  });
+
+  watchHistoryToggle.addEventListener('change', (event) => {
+    applySettings({ watchHistory: event.target.checked });
+  });
+
+  searchHistoryToggle.addEventListener('change', (event) => {
+    applySettings({ searchHistory: event.target.checked });
   });
 
   resetThemeBtn.addEventListener('click', () => {
