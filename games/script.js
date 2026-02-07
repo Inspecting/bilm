@@ -1,4 +1,5 @@
 const catalogUrl = 'https://www.onlinegames.io/media/plugins/genGames/embed.json';
+const fallbackCatalogUrl = 'catalog.json';
 const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="#1f1f28"/><text x="50%" y="50%" font-size="22" font-family="Poppins, sans-serif" fill="#9ca3af" text-anchor="middle" dominant-baseline="middle">Game</text></svg>`;
 const placeholderImage = `data:image/svg+xml,${encodeURIComponent(placeholderSvg)}`;
 
@@ -121,6 +122,7 @@ const renderSections = (games) => {
     return;
   }
 
+  elements.empty.hidden = true;
   const hasCategories = games.some((game) => Boolean(game.category));
   const grouped = new Map();
 
@@ -152,19 +154,36 @@ const setStatus = (text) => {
   if (elements.status) elements.status.textContent = text;
 };
 
+const fetchCatalog = async (url) => {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Failed to load catalog: ${url}`);
+  return response.json();
+};
+
 const loadGames = async () => {
-  try {
-    const response = await fetch(catalogUrl, { cache: 'no-store' });
-    if (!response.ok) throw new Error('Failed to load game catalog');
-    const data = await response.json();
-    const entries = normalizeGames(data).map(normalizeEntry).filter((game) => game.title);
-    setStatus(`${entries.length} games loaded`);
-    renderSections(entries);
-  } catch (error) {
-    console.error(error);
-    setStatus('Unable to load games right now');
-    elements.empty.hidden = false;
+  const sources = [catalogUrl, fallbackCatalogUrl];
+  let lastError = null;
+
+  for (const source of sources) {
+    try {
+      const data = await fetchCatalog(source);
+      const entries = normalizeGames(data).map(normalizeEntry).filter((game) => game.title);
+      if (entries.length) {
+        const label = source === catalogUrl ? 'Live catalog' : 'Backup catalog';
+        setStatus(`${entries.length} games loaded · ${label}`);
+        renderSections(entries);
+        return;
+      }
+      lastError = new Error(`Catalog ${source} returned no games`);
+    } catch (error) {
+      lastError = error;
+      console.warn(error);
+    }
   }
+
+  console.error(lastError);
+  setStatus('Unable to load games right now');
+  elements.empty.hidden = false;
 };
 
 if (elements.modalClose) {
