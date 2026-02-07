@@ -6,12 +6,7 @@ const placeholderImage = `data:image/svg+xml,${encodeURIComponent(placeholderSvg
 const elements = {
   status: document.getElementById('gameStatus'),
   sections: document.getElementById('gameSections'),
-  empty: document.getElementById('gameEmpty'),
-  modal: document.getElementById('gameModal'),
-  modalTitle: document.getElementById('gameModalTitle'),
-  modalDescription: document.getElementById('gameModalDescription'),
-  modalEmbed: document.getElementById('gameModalEmbed'),
-  modalClose: document.getElementById('gameModalClose')
+  empty: document.getElementById('gameEmpty')
 };
 
 const normalizeGames = (data) => {
@@ -66,41 +61,50 @@ const normalizeEntry = (entry, index) => {
   };
 };
 
-const openModal = (game) => {
-  if (!elements.modal) return;
-  if (elements.modalTitle) elements.modalTitle.textContent = game.title;
-  if (elements.modalDescription) {
-    elements.modalDescription.textContent = game.description || 'No description available yet.';
+const gameStoreKey = 'bilm:games:selection';
+
+const getStoredGames = () => {
+  try {
+    const stored = sessionStorage.getItem(gameStoreKey);
+    return stored ? JSON.parse(stored) : {};
+  } catch (error) {
+    console.warn('Unable to read stored games', error);
+    return {};
   }
-  if (elements.modalEmbed) {
-    elements.modalEmbed.innerHTML = game.embedMarkup || '';
-  }
-  elements.modal.classList.add('is-open');
-  elements.modal.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
 };
 
-const closeModal = () => {
-  if (!elements.modal) return;
-  elements.modal.classList.remove('is-open');
-  elements.modal.setAttribute('aria-hidden', 'true');
-  if (elements.modalEmbed) elements.modalEmbed.innerHTML = '';
-  document.body.style.overflow = '';
+const setStoredGames = (games) => {
+  try {
+    sessionStorage.setItem(gameStoreKey, JSON.stringify(games));
+  } catch (error) {
+    console.warn('Unable to save game', error);
+  }
+};
+
+const saveGameSelection = (game) => {
+  const stored = getStoredGames();
+  const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `game-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  stored[id] = game;
+  setStoredGames(stored);
+  return id;
 };
 
 const createCard = (game) => {
-  const card = document.createElement(game.embedMarkup ? 'button' : 'a');
+  const playable = Boolean(game.embedMarkup || game.url);
+  const card = document.createElement('button');
   card.className = 'game-card';
-  if (game.embedMarkup) {
-    card.type = 'button';
-    card.addEventListener('click', () => openModal(game));
-  } else if (game.url) {
-    card.href = game.url;
-    card.target = '_blank';
-    card.rel = 'noopener noreferrer';
+  card.type = 'button';
+  if (playable) {
+    card.addEventListener('click', () => {
+      const id = saveGameSelection(game);
+      window.location.href = `./play.html?game=${encodeURIComponent(id)}`;
+    });
   } else {
     card.classList.add('is-disabled');
     card.setAttribute('aria-disabled', 'true');
+    card.disabled = true;
   }
 
   const image = document.createElement('img');
@@ -140,12 +144,12 @@ const renderSections = (games) => {
     title.className = 'section-title';
     title.textContent = category;
 
-    const row = document.createElement('div');
-    row.className = 'scroll-row';
+    const grid = document.createElement('div');
+    grid.className = 'section-grid';
 
-    items.forEach((game) => row.appendChild(createCard(game)));
+    items.forEach((game) => grid.appendChild(createCard(game)));
 
-    section.append(title, row);
+    section.append(title, grid);
     elements.sections.appendChild(section);
   }
 };
@@ -185,17 +189,5 @@ const loadGames = async () => {
   setStatus('Unable to load games right now');
   elements.empty.hidden = false;
 };
-
-if (elements.modalClose) {
-  elements.modalClose.addEventListener('click', closeModal);
-}
-if (elements.modal) {
-  elements.modal.addEventListener('click', (event) => {
-    if (event.target === elements.modal) closeModal();
-  });
-}
-window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeModal();
-});
 
 loadGames();
