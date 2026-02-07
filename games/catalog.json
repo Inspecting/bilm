@@ -1,0 +1,44 @@
+[
+  {
+    "title": "Hextris",
+    "image": "https://hextris.io/favicon.ico",
+    "url": "https://hextris.io/",
+    "category": "Puzzle",
+    "description": "Fast-paced puzzle game inspired by Tetris and Hexagon."
+  },
+  {
+    "title": "2048",
+    "image": "https://play2048.co/favicon.ico",
+    "url": "https://play2048.co/",
+    "category": "Puzzle",
+    "description": "Combine tiles to reach 2048."
+  },
+  {
+    "title": "Slither.io",
+    "image": "https://slither.io/s/1/favicon.ico",
+    "url": "https://slither.io/",
+    "category": "Arcade",
+    "description": "Multiplayer snake game with a modern twist."
+  },
+  {
+    "title": "Agar.io",
+    "image": "https://agar.io/favicon.ico",
+    "url": "https://agar.io/",
+    "category": "Arcade",
+    "description": "Grow your cell by consuming others."
+  },
+  {
+    "title": "Krunker",
+    "image": "https://krunker.io/favicon.ico",
+    "url": "https://krunker.io/",
+    "category": "Action",
+    "description": "Fast-paced voxel FPS in your browser."
+  },
+  {
+    "title": "Cookie Clicker",
+    "image": "https://orteil.dashnet.org/cookieclicker/favicon.ico",
+    "url": "https://orteil.dashnet.org/cookieclicker/",
+    "category": "Idle",
+    "description": "Bake as many cookies as you can."
+  }
+]
