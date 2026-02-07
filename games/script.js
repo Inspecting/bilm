@@ -5,39 +5,100 @@ const placeholderImage = `data:image/svg+xml,${encodeURIComponent(placeholderSvg
 const elements = {
   status: document.getElementById('gameStatus'),
   sections: document.getElementById('gameSections'),
-  empty: document.getElementById('gameEmpty')
+  empty: document.getElementById('gameEmpty'),
+  modal: document.getElementById('gameModal'),
+  modalTitle: document.getElementById('gameModalTitle'),
+  modalDescription: document.getElementById('gameModalDescription'),
+  modalEmbed: document.getElementById('gameModalEmbed'),
+  modalClose: document.getElementById('gameModalClose')
 };
 
 const normalizeGames = (data) => {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.games)) return data.games;
   if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (data && typeof data === 'object') {
+    const values = Object.values(data).filter((value) => Array.isArray(value));
+    if (values.length === 1) return values[0];
+  }
   return [];
+};
+
+const buildEmbedMarkup = (embed, title) => {
+  if (!embed || typeof embed !== 'string') return '';
+  const trimmed = embed.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('<')) return trimmed;
+  const safeTitle = title?.replace(/"/g, '') || 'Game';
+  return `<iframe src="${trimmed}" title="${safeTitle}" loading="lazy" allowfullscreen></iframe>`;
+};
+
+const extractEmbedSrc = (embedMarkup) => {
+  if (!embedMarkup) return '';
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(embedMarkup, 'text/html');
+    const iframe = doc.querySelector('iframe');
+    if (iframe?.src) return iframe.src;
+  } catch (error) {
+    console.warn('Unable to parse embed HTML', error);
+  }
+  return '';
 };
 
 const normalizeEntry = (entry, index) => {
   const title = entry?.title || entry?.name || entry?.game || entry?.label || `Game ${index + 1}`;
   const image = entry?.image || entry?.thumb || entry?.thumbnail || entry?.imageUrl || entry?.thumbUrl || entry?.cover || placeholderImage;
-  const url = entry?.url || entry?.link || entry?.playUrl || entry?.gameUrl || entry?.embedUrl || entry?.href || '';
+  const embedMarkup = buildEmbedMarkup(entry?.embed || entry?.iframe || entry?.embedHtml || entry?.embedCode, title);
+  const embedSrc = extractEmbedSrc(embedMarkup);
+  const url = entry?.url || entry?.link || entry?.playUrl || entry?.gameUrl || entry?.embedUrl || entry?.href || embedSrc || '';
   const category = entry?.category || entry?.genre || entry?.group || (Array.isArray(entry?.tags) ? entry.tags[0] : null);
+  const description = entry?.description || entry?.about || entry?.summary || '';
   return {
     title,
     image,
     url,
-    category: category ? String(category) : null
+    embedMarkup,
+    category: category ? String(category) : null,
+    description: description ? String(description) : ''
   };
 };
 
+const openModal = (game) => {
+  if (!elements.modal) return;
+  if (elements.modalTitle) elements.modalTitle.textContent = game.title;
+  if (elements.modalDescription) {
+    elements.modalDescription.textContent = game.description || 'No description available yet.';
+  }
+  if (elements.modalEmbed) {
+    elements.modalEmbed.innerHTML = game.embedMarkup || '';
+  }
+  elements.modal.classList.add('is-open');
+  elements.modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+};
+
+const closeModal = () => {
+  if (!elements.modal) return;
+  elements.modal.classList.remove('is-open');
+  elements.modal.setAttribute('aria-hidden', 'true');
+  if (elements.modalEmbed) elements.modalEmbed.innerHTML = '';
+  document.body.style.overflow = '';
+};
+
 const createCard = (game) => {
-  const card = document.createElement('a');
+  const card = document.createElement(game.embedMarkup ? 'button' : 'a');
   card.className = 'game-card';
-  if (game.url) {
+  if (game.embedMarkup) {
+    card.type = 'button';
+    card.addEventListener('click', () => openModal(game));
+  } else if (game.url) {
     card.href = game.url;
     card.target = '_blank';
     card.rel = 'noopener noreferrer';
   } else {
     card.classList.add('is-disabled');
-    card.href = '#';
     card.setAttribute('aria-disabled', 'true');
   }
 
@@ -96,7 +157,7 @@ const loadGames = async () => {
     const response = await fetch(catalogUrl, { cache: 'no-store' });
     if (!response.ok) throw new Error('Failed to load game catalog');
     const data = await response.json();
-    const entries = normalizeGames(data).map(normalizeEntry);
+    const entries = normalizeGames(data).map(normalizeEntry).filter((game) => game.title);
     setStatus(`${entries.length} games loaded`);
     renderSections(entries);
   } catch (error) {
@@ -105,5 +166,17 @@ const loadGames = async () => {
     elements.empty.hidden = false;
   }
 };
+
+if (elements.modalClose) {
+  elements.modalClose.addEventListener('click', closeModal);
+}
+if (elements.modal) {
+  elements.modal.addEventListener('click', (event) => {
+    if (event.target === elements.modal) closeModal();
+  });
+}
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeModal();
+});
 
 loadGames();

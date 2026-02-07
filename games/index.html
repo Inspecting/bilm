@@ -38,6 +38,20 @@
     </div>
   </main>
 
+  <div class="modal" id="gameModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <p class="modal-kicker">Now playing</p>
+          <h2 class="modal-title" id="gameModalTitle">Game</h2>
+        </div>
+        <button class="modal-close" type="button" id="gameModalClose" aria-label="Close">&times;</button>
+      </div>
+      <p class="modal-description" id="gameModalDescription"></p>
+      <div class="modal-embed" id="gameModalEmbed"></div>
+    </div>
+  </div>
+
   <script src="/bilm/shared/navbar.js" defer></script>
   <script src="./script.js"></script>
 </body>
