@@ -89,6 +89,7 @@ nav button.active {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 12px;
 }
 
 .search-input-wrapper {
@@ -105,6 +106,33 @@ nav button.active {
   padding: 8px 12px 8px 36px;
   font-size: 14px;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.account-wrapper {
+  display: flex;
+  align-items: center;
+  padding-left: 16px;
+}
+
+.account-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.account-button:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-soft);
+  transform: translateY(-1px);
 }
 
 .search-input:focus {

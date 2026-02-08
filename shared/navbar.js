@@ -14,6 +14,27 @@
 
   shadow.innerHTML = `<style>${css}</style>${html}`;
 
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+
+  const ensureAuth = async () => {
+    await loadScript('/bilm/shared/supabase-config.js');
+    if (!window.bilmAuth) {
+      await loadScript('/bilm/shared/auth.js');
+    }
+    return window.bilmAuth;
+  };
+
   const pathParts = location.pathname.split('/').filter(Boolean);
   const bilmIndex = pathParts.indexOf('bilm');
   const section = bilmIndex >= 0 ? pathParts[bilmIndex + 1] : pathParts[0];
@@ -109,6 +130,41 @@
       event.preventDefault();
       submitSearch(searchInput.value);
     });
+  }
+
+  const accountButton = shadow.getElementById('accountButton');
+  if (accountButton) {
+    const updateAccountButton = async () => {
+      const auth = await ensureAuth();
+      if (!auth) return;
+      await auth.init();
+      const profile = await auth.getProfile();
+      if (profile?.username) {
+        accountButton.textContent = profile.username;
+        accountButton.setAttribute('aria-label', `Account for ${profile.username}`);
+      } else {
+        accountButton.textContent = 'Login';
+        accountButton.setAttribute('aria-label', 'Login');
+      }
+    };
+
+    updateAccountButton();
+
+    try {
+      const auth = await ensureAuth();
+      if (auth) {
+        const config = auth.readConfig();
+        const client = await auth.init();
+        if (config && client) {
+          auth.startAutoSync();
+          client.auth?.onAuthStateChange(() => {
+            updateAccountButton();
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Auth unavailable:', error);
+    }
   }
 
   // Mobile search overlay handlers (no changes here)
