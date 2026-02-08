@@ -102,7 +102,7 @@ nav button.active {
   color: var(--text-primary);
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 8px 12px 8px 36px;
+  padding: 8px 32px 8px 36px;
   font-size: 14px;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
@@ -133,6 +133,29 @@ nav button.active {
   stroke: var(--text-muted);
   width: 16px;
   height: 16px;
+}
+
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: none;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-clear:hover {
+  color: var(--text-primary);
 }
 
 /* Hide header on mobile */
