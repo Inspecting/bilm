@@ -128,7 +128,7 @@ main {
   width: 100%;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-glow);
-  overflow: visible;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: rgba(0, 0, 0, 0.9);
@@ -164,7 +164,6 @@ main {
   aspect-ratio: 16 / 9;
   position: relative;
   background: black;
-  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -173,7 +172,6 @@ iframe {
   height: 100%;
   border: none;
   display: block;
-  border-radius: var(--radius-lg);
 }
 
 #clickShield {
@@ -194,10 +192,41 @@ iframe {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
   user-select: none;
   position: relative;
   z-index: 10;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.playback-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.playback-note label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.playback-note input {
+  background: rgba(10, 10, 14, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 6px 10px;
+  min-width: 140px;
+  max-width: 220px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.playback-note input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.25);
 }
 
 #fullscreenBtn,

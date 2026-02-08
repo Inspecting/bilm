@@ -88,7 +88,7 @@
     }
     btn.onclick = () => {
       const target = btn.dataset.page;
-      window.location.href = `/bilm/${target === 'home' ? 'home/' : target}/`;
+      window.location.href = `/bilm/${target === 'home' ? 'home' : target}/`;
     };
   });
 
@@ -108,7 +108,7 @@
         document.body.style.overflow = 'hidden';
         return;
       }
-      window.location.href = `/bilm/${target === 'home' ? 'home/' : target}/`;
+      window.location.href = `/bilm/${target === 'home' ? 'home' : target}/`;
     };
   });
 
