@@ -20,12 +20,10 @@ Visit the site here:
 👉 Direct Link: https://inspecting.github.io/bilm/home/
 
 ## Optional Login & Sync
-Login is built into the site with Supabase. Users can sign up with a username and password (email is not shown), optionally use Google, and sync data across devices. The site still works without logging in.
+Login is built into the site with Supabase. Users can sign in with Google and sync data across devices. The site still works without logging in.
 
-**Notes**
-- The app uses a private internal email address for Supabase auth, but users only see and use their username.
 ## Optional Supabase Login & Sync
-You can enable Google login + username/email/password to sync data across devices. This is optional; the site still works with local-only storage if you skip it.
+You can enable Google login to sync data across devices. This is optional; the site still works with local-only storage if you skip it.
 
 **Quick setup**
 1. Create a Supabase project.
@@ -36,5 +34,4 @@ You can enable Google login + username/email/password to sync data across device
 5. (Optional) In **Authentication → Providers**, enable Google and add your site URL to the redirect list.
 
 **Notes**
-- Users can sign up with a username only; we create an internal email (`username@bilm.local`) for Supabase under the hood.
-- The desktop navbar shows the username when logged in. Mobile users can access login via **Settings → Account**.
+- The desktop navbar shows the account name when logged in. Mobile users can access login via **Settings → Account**.

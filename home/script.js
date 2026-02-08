@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const settings = window.bilmTheme?.getSettings?.() || {};
-    if (settings.searchHistory !== false) {
+    if (settings.searchHistory !== false && !settings.incognito) {
       const history = loadList(SEARCH_HISTORY_KEY);
       const next = [
         { query, updatedAt: Date.now() },
@@ -63,9 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function getStorage() {
+    const settings = window.bilmTheme?.getSettings?.() || {};
+    return settings.incognito ? sessionStorage : localStorage;
+  }
+
   function loadList(key) {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = getStorage().getItem(key);
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -73,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function saveList(key, items) {
-    localStorage.setItem(key, JSON.stringify(items));
+    getStorage().setItem(key, JSON.stringify(items));
   }
 
   function toYear(dateString) {

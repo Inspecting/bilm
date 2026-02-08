@@ -99,9 +99,14 @@ function stopContinueWatchingTimer() {
   continueWatchingReady = false;
 }
 
+function getStorage() {
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  return settings.incognito ? sessionStorage : localStorage;
+}
+
 function loadList(key) {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = getStorage().getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -109,7 +114,7 @@ function loadList(key) {
 }
 
 function saveList(key, items) {
-  localStorage.setItem(key, JSON.stringify(items));
+  getStorage().setItem(key, JSON.stringify(items));
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -264,7 +269,8 @@ function upsertHistoryItem(key, payload) {
 }
 
 function updateContinueWatching() {
-  if (!continueWatchingEnabled || !mediaDetails) return;
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  if (!continueWatchingEnabled || !mediaDetails || settings.incognito) return;
   const payload = {
     key: `tv-${mediaDetails.id}`,
     id: mediaDetails.id,
@@ -393,7 +399,9 @@ if (moreLikeBox) {
 
 function saveProgress() {
   if (!tmdbId) return;
-  localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  if (settings.incognito) return;
+  getStorage().setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
     season: currentSeason,
     episode: currentEpisode
   }));
@@ -401,7 +409,7 @@ function saveProgress() {
 
 function loadProgress() {
   if (!tmdbId) return;
-  const saved = localStorage.getItem(`bilm-tv-progress-${tmdbId}`);
+  const saved = getStorage().getItem(`bilm-tv-progress-${tmdbId}`);
   if (saved) {
     try {
       const parsed = JSON.parse(saved);

@@ -44,9 +44,14 @@
 
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
 
+  function getStorage() {
+    const settings = window.bilmTheme?.getSettings?.() || {};
+    return settings.incognito ? sessionStorage : localStorage;
+  }
+
   function loadList(key) {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = getStorage().getItem(key);
       const list = raw ? JSON.parse(raw) : [];
       return Array.isArray(list) ? list : [];
     } catch {
@@ -55,12 +60,12 @@
   }
 
   function saveList(key, list) {
-    localStorage.setItem(key, JSON.stringify(list));
+    getStorage().setItem(key, JSON.stringify(list));
   }
 
   function saveSearchHistoryEntry(query) {
     const settings = window.bilmTheme?.getSettings?.() || {};
-    if (settings.searchHistory === false) return;
+    if (settings.searchHistory === false || settings.incognito) return;
     const history = loadList(SEARCH_HISTORY_KEY);
     const next = [
       { query, updatedAt: Date.now() },

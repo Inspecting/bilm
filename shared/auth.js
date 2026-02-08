@@ -36,7 +36,6 @@
     if (window.BILM_SUPABASE_CONFIG?.url && window.BILM_SUPABASE_CONFIG?.anonKey) {
       return window.BILM_SUPABASE_CONFIG;
     }
-    return null;
     try {
       const raw = localStorage.getItem(CONFIG_KEY);
       if (!raw) return null;
@@ -63,64 +62,6 @@
       window.bilmSupabaseClientUrl = config.url;
     }
     return window.bilmSupabaseClient;
-  };
-
-  const normalizeUsername = (identifier) => {
-    const trimmed = `${identifier || ''}`.trim();
-  const normalizeIdentifier = (identifier) => {
-    const trimmed = `${identifier || ''}`.trim();
-    const isEmail = trimmed.includes('@');
-    if (isEmail) {
-      const username = trimmed.split('@')[0].trim();
-      return { email: trimmed, username: username || trimmed };
-    }
-    const safeBase = trimmed.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-    const safeEmail = `${safeBase || 'user'}@bilm.local`;
-    return { email: safeEmail, username: trimmed };
-  };
-
-  const resolveEmailForIdentifier = async (client, identifier) => {
-    const trimmed = `${identifier || ''}`.trim();
-    if (!trimmed) return null;
-    if (trimmed.includes('@')) return trimmed;
-    const { data, error } = await client
-      .from(PROFILE_TABLE)
-      .select('email')
-      .eq('username', trimmed)
-      .maybeSingle();
-    if (error || !data?.email) return null;
-    return data.email;
-  };
-
-  const signInWithPassword = async (identifier, password) => {
-    const client = await initClient();
-    if (!client) return { error: new Error('Supabase is not configured.') };
-    const email = await resolveEmailForIdentifier(client, identifier);
-    if (!email) return { error: new Error('No matching account found for that username.') };
-    return client.auth.signInWithPassword({ email, password });
-  };
-
-  const signUp = async (identifier, password) => {
-    const client = await initClient();
-    if (!client) return { error: new Error('Supabase is not configured.') };
-    const { email, username } = normalizeUsername(identifier);
-    const { email, username } = normalizeIdentifier(identifier);
-    const { data, error } = await client.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { username }
-      }
-    });
-    if (error) return { error };
-    if (data?.user) {
-      await client.from(PROFILE_TABLE).upsert({
-        id: data.user.id,
-        username,
-        email
-      });
-    }
-    return { data };
   };
 
   const signInWithGoogle = async () => {
@@ -208,6 +149,9 @@
   };
 
   const syncNow = async () => {
+    if (window.bilmTheme?.getSettings?.().incognito) {
+      return { error: new Error('Incognito mode is enabled.') };
+    }
     const client = await initClient();
     if (!client) return { error: new Error('Supabase is not configured.') };
     const { data: userData } = await client.auth.getUser();
@@ -263,8 +207,6 @@
     readConfig,
     saveConfig,
     init: initClient,
-    signInWithPassword,
-    signUp,
     signInWithGoogle,
     signOut,
     getProfile,

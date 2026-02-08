@@ -121,9 +121,14 @@ function updateIframe() {
   }
 }
 
+function getStorage() {
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  return settings.incognito ? sessionStorage : localStorage;
+}
+
 function loadList(key) {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = getStorage().getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -131,7 +136,7 @@ function loadList(key) {
 }
 
 function saveList(key, items) {
-  localStorage.setItem(key, JSON.stringify(items));
+  getStorage().setItem(key, JSON.stringify(items));
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -282,7 +287,8 @@ function upsertHistoryItem(key, payload) {
 }
 
 function updateContinueWatching() {
-  if (!continueWatchingEnabled || !mediaDetails) return;
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  if (!continueWatchingEnabled || !mediaDetails || settings.incognito) return;
   const payload = {
     key: `movie-${mediaDetails.id}`,
     id: mediaDetails.id,
