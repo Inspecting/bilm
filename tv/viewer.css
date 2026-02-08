@@ -40,6 +40,90 @@ main {
   gap: 12px;
 }
 
+.more-like-section {
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.more-like-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.more-like-header h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.more-like-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-md);
+}
+
+.more-like-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.more-like-card {
+  background-color: var(--surface-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  border: 1px solid transparent;
+}
+
+.more-like-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 0 18px var(--accent-glow);
+  border-color: var(--accent-soft);
+}
+
+.more-like-card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.more-like-card p {
+  padding: 6px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.more-like-status {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  min-height: 18px;
+}
+
 #playerWithControls {
   width: 100%;
   border-radius: var(--radius-lg);

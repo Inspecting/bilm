@@ -22,6 +22,9 @@ const prevSeasonBtn = document.getElementById('prevSeason');
 const nextSeasonBtn = document.getElementById('nextSeason');
 const prevEpisodeBtn = document.getElementById('prevEpisode');
 const nextEpisodeBtn = document.getElementById('nextEpisode');
+const moreLikeBox = document.getElementById('moreLikeBox');
+const moreLikeGrid = document.getElementById('moreLikeGrid');
+const moreLikeStatus = document.getElementById('moreLikeStatus');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
@@ -54,6 +57,21 @@ let seasonCooldownTimer = null;
 let episodeCooldownTimer = null;
 
 let imdbId = null;
+let similarPage = 1;
+let similarLoading = false;
+let similarEnded = false;
+let similarActive = false;
+const similarShowIds = new Set();
+
+async function fetchJSON(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 function startContinueWatchingTimer() {
   if (!continueWatchingEnabled || continueWatchingTimer || continueWatchingReady) return;
@@ -108,6 +126,73 @@ function updateWatchLaterButton(isWatchLater) {
   watchLaterBtn.setAttribute('aria-pressed', isWatchLater ? 'true' : 'false');
   watchLaterBtn.title = isWatchLater ? 'Remove from watch later' : 'Add to watch later';
   watchLaterBtn.setAttribute('aria-label', watchLaterBtn.title);
+}
+
+function setMoreLikeStatus(message) {
+  if (moreLikeStatus) {
+    moreLikeStatus.textContent = message;
+  }
+}
+
+function createMoreLikeCard(show) {
+  const card = document.createElement('div');
+  card.className = 'more-like-card';
+  card.dataset.tmdbId = show.id;
+
+  const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.src = show.poster_path
+    ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
+    : 'https://via.placeholder.com/140x210?text=No+Image';
+  img.alt = show.name || 'TV show poster';
+  img.onerror = () => {
+    img.onerror = null;
+    img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+  };
+
+  const title = document.createElement('p');
+  title.textContent = `${show.name || 'Untitled'} (${show.first_air_date?.slice(0, 4) || 'N/A'})`;
+
+  card.appendChild(img);
+  card.appendChild(title);
+
+  card.addEventListener('click', () => {
+    window.location.href = `/bilm/tv/viewer.html?id=${show.id}`;
+  });
+
+  return card;
+}
+
+async function fetchSimilarShows(page = 1) {
+  if (!tmdbId) return [];
+  const url = `https://api.themoviedb.org/3/tv/${tmdbId}/similar?api_key=${TMDB_API_KEY}&page=${page}`;
+  const data = await fetchJSON(url);
+  return data?.results || [];
+}
+
+async function loadMoreLikeShows() {
+  if (!moreLikeGrid || similarLoading || similarEnded) return;
+  similarLoading = true;
+  setMoreLikeStatus('Loading more titles…');
+
+  const shows = await fetchSimilarShows(similarPage);
+  if (!shows.length) {
+    similarEnded = true;
+    setMoreLikeStatus('No more recommendations right now.');
+    similarLoading = false;
+    return;
+  }
+
+  const uniqueShows = shows.filter(show => show.id && show.id !== Number(tmdbId) && !similarShowIds.has(show.id));
+  uniqueShows.forEach(show => {
+    similarShowIds.add(show.id);
+    moreLikeGrid.appendChild(createMoreLikeCard(show));
+  });
+
+  similarPage += 1;
+  setMoreLikeStatus('');
+  similarLoading = false;
 }
 
 function toggleFavorite() {
@@ -290,6 +375,21 @@ window.addEventListener('bilm:theme-changed', (event) => {
     }
   }
 });
+
+if (moreLikeBox) {
+  if (!tmdbId) {
+    setMoreLikeStatus('Recommendations unavailable.');
+  } else {
+    similarActive = true;
+    loadMoreLikeShows();
+  }
+  moreLikeBox.addEventListener('scroll', () => {
+    if (!similarActive || similarLoading || similarEnded) return;
+    if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 200) {
+      loadMoreLikeShows();
+    }
+  }, { passive: true });
+}
 
 function saveProgress() {
   if (!tmdbId) return;

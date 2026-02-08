@@ -62,26 +62,17 @@ main {
   color: var(--text-primary);
 }
 
-.more-like-btn {
-  border: 1px solid var(--border);
+.more-like-box {
   background: var(--surface-2);
-  color: var(--text-primary);
-  border-radius: var(--radius-md);
-  padding: 8px 14px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.more-like-btn:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--text-on-accent, #fff);
-  border-color: transparent;
-}
-
-.more-like-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-md);
 }
 
 .more-like-grid {
