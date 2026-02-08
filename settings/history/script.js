@@ -3,6 +3,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const WATCH_HISTORY_KEY = 'bilm-watch-history';
   const LEGACY_WATCH_HISTORY_KEY = 'bilm-continue-watching';
   const HISTORY_PREFS_KEY = 'bilm-history-page-prefs';
+  const storage = window.bilmTheme?.storage || {
+    getJSON: (key, fallback = []) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : fallback;
+      } catch {
+        return fallback;
+      }
+    },
+    setJSON: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  };
 
   const state = {
     activeType: 'search',
@@ -38,17 +53,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const dateRangeButtons = [...document.querySelectorAll('#dateRangeFilters .filter-btn')];
 
   function loadList(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      const list = raw ? JSON.parse(raw) : [];
-      return Array.isArray(list) ? list : [];
-    } catch {
-      return [];
-    }
+    const list = storage.getJSON(key, []);
+    return Array.isArray(list) ? list : [];
   }
 
   function saveList(key, list) {
-    localStorage.setItem(key, JSON.stringify(list));
+    storage.setJSON(key, list);
   }
 
   function migrateLegacyWatchHistory() {

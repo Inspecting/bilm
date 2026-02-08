@@ -23,6 +23,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const FAVORITES_KEY = 'bilm-favorites';
   const WATCH_LATER_KEY = 'bilm-watch-later';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const storage = window.bilmTheme?.storage || {
+    getJSON: (key, fallback = []) => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : fallback;
+      } catch {
+        return fallback;
+      }
+    },
+    setJSON: (key, value) => {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  };
 
   document.querySelector('main').classList.add('visible');
 
@@ -64,16 +79,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function loadList(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    const list = storage.getJSON(key, []);
+    return Array.isArray(list) ? list : [];
   }
 
   function saveList(key, items) {
-    localStorage.setItem(key, JSON.stringify(items));
+    storage.setJSON(key, items);
   }
 
   function toYear(dateString) {
