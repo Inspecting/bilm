@@ -211,6 +211,11 @@
       <section class="card split">
         <div>
           <h2>Login</h2>
+          <p>Use your username plus password. Google login is optional.</p>
+          <form id="loginForm" class="form-grid">
+            <div>
+              <label for="loginIdentifier">Username</label>
+              <input type="text" id="loginIdentifier" placeholder="your-username" required />
           <p>Use your username or email plus password. Google login is optional.</p>
           <form id="loginForm" class="form-grid">
             <div>
@@ -234,6 +239,12 @@
 
         <div>
           <h2>Sign Up</h2>
+          <p>Create an account with a username. You will be logged in automatically.</p>
+          <form id="signupForm" class="form-grid">
+            <div>
+              <label for="signupIdentifier">Username</label>
+              <input type="text" id="signupIdentifier" placeholder="your-username" required />
+              <p class="hint">Usernames are unique and used for sign-in.</p>
           <p>Create an account with username or email. You will be logged in automatically.</p>
           <form id="signupForm" class="form-grid">
             <div>
@@ -365,6 +376,10 @@ create policy "Users manage their data" on user_data
       event.preventDefault();
       setStatus('Logging in...');
       const identifier = document.getElementById('loginIdentifier').value;
+      if (identifier.includes('@')) {
+        setStatus('Please use your username (no email) to log in.', 'error');
+        return;
+      }
       const password = document.getElementById('loginPassword').value;
       const { error } = await window.bilmAuth.signInWithPassword(identifier, password);
       if (error) {
@@ -380,6 +395,10 @@ create policy "Users manage their data" on user_data
       event.preventDefault();
       setStatus('Creating account...');
       const identifier = document.getElementById('signupIdentifier').value;
+      if (identifier.includes('@')) {
+        setStatus('Please choose a username (no email).', 'error');
+        return;
+      }
       const password = document.getElementById('signupPassword').value;
       const { error } = await window.bilmAuth.signUp(identifier, password);
       if (error) {
@@ -432,6 +451,8 @@ create policy "Users manage their data" on user_data
       refreshStatus();
     });
 
+    window.addEventListener('DOMContentLoaded', async () => {
+      toggleForms(false);
     saveConfigBtn.addEventListener('click', () => {
       window.bilmAuth.saveConfig({
         url: supabaseUrl.value,

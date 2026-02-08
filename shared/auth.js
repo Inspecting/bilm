@@ -36,6 +36,7 @@
     if (window.BILM_SUPABASE_CONFIG?.url && window.BILM_SUPABASE_CONFIG?.anonKey) {
       return window.BILM_SUPABASE_CONFIG;
     }
+    return null;
     try {
       const raw = localStorage.getItem(CONFIG_KEY);
       if (!raw) return null;
@@ -64,6 +65,8 @@
     return window.bilmSupabaseClient;
   };
 
+  const normalizeUsername = (identifier) => {
+    const trimmed = `${identifier || ''}`.trim();
   const normalizeIdentifier = (identifier) => {
     const trimmed = `${identifier || ''}`.trim();
     const isEmail = trimmed.includes('@');
@@ -78,6 +81,7 @@
 
   const resolveEmailForIdentifier = async (client, identifier) => {
     const trimmed = `${identifier || ''}`.trim();
+    if (!trimmed) return null;
     if (trimmed.includes('@')) return trimmed;
     const { data, error } = await client
       .from(PROFILE_TABLE)
@@ -99,6 +103,7 @@
   const signUp = async (identifier, password) => {
     const client = await initClient();
     if (!client) return { error: new Error('Supabase is not configured.') };
+    const { email, username } = normalizeUsername(identifier);
     const { email, username } = normalizeIdentifier(identifier);
     const { data, error } = await client.auth.signUp({
       email,
