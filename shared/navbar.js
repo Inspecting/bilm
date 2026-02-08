@@ -28,6 +28,7 @@
   });
 
   const ensureAuth = async () => {
+    await loadScript('/bilm/shared/supabase-config.js');
     if (!window.bilmAuth) {
       await loadScript('/bilm/shared/auth.js');
     }
