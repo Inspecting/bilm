@@ -296,9 +296,10 @@ iframe {
   background: rgba(26, 22, 40, 0.9);
   padding: 12px 30px;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), 0 0 22px var(--accent-glow);
+  border: 1px solid var(--accent-soft);
   min-height: 54px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .group {
@@ -354,6 +355,28 @@ iframe {
 .smallBtn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  #playerWrapper {
+    max-width: 100%;
+  }
+
+  #controlsCompact {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .group select {
+    min-width: 0;
+    flex: 1;
+    text-align: center;
+  }
 }
 
 #closeBtn {

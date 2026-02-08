@@ -386,7 +386,7 @@
       <div class="control-row">
         <div>
           <label>Incognito</label>
-          <small>Temporary browsing mode (coming soon).</small>
+          <small>Browse without saving history or progress.</small>
         </div>
         <label class="toggle">
           <input id="incognitoToggle" type="checkbox" />
@@ -435,6 +435,7 @@
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const presetsContainer = document.getElementById('accentPresets');
+  const incognitoToggle = document.getElementById('incognitoToggle');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
 
   function applySettings(partial) {
@@ -452,6 +453,9 @@
     particleToggle.checked = settings.particles !== false;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
+    if (incognitoToggle) {
+      incognitoToggle.checked = settings.incognito === true;
+    }
   }
 
   accentPresets.forEach(color => {
@@ -493,6 +497,10 @@
 
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
+  });
+
+  incognitoToggle.addEventListener('change', (event) => {
+    applySettings({ incognito: event.target.checked });
   });
 
   resetThemeBtn.addEventListener('click', () => {

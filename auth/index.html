@@ -95,7 +95,6 @@
     }
 
     input[type="text"],
-    input[type="password"],
     input[type="url"],
     textarea {
       width: 100%;
@@ -208,59 +207,11 @@
         <p>Sign in to sync your favorites, watch history, and settings across devices. Login is optional.</p>
       </div>
 
-      <section class="card split">
-        <div>
-          <h2>Login</h2>
-          <p>Use your username plus password. Google login is optional.</p>
-          <form id="loginForm" class="form-grid">
-            <div>
-              <label for="loginIdentifier">Username</label>
-              <input type="text" id="loginIdentifier" placeholder="your-username" required />
-          <p>Use your username or email plus password. Google login is optional.</p>
-          <form id="loginForm" class="form-grid">
-            <div>
-              <label for="loginIdentifier">Username or Email</label>
-              <input type="text" id="loginIdentifier" placeholder="username or you@email.com" required />
-            </div>
-            <div>
-              <label for="loginPassword">Password</label>
-              <input type="password" id="loginPassword" placeholder="Your password" required />
-            </div>
-            <div class="row">
-              <button class="btn" type="submit">Log In</button>
-              <button class="btn btn-outline" type="button" id="googleLoginBtn">Continue with Google</button>
-            </div>
-          </form>
-          <div class="row">
-            <span>Don’t have an account?</span>
-            <button class="btn btn-outline" type="button" id="showSignupBtn">Create one</button>
-          </div>
-        </div>
-
-        <div>
-          <h2>Sign Up</h2>
-          <p>Create an account with a username. You will be logged in automatically.</p>
-          <form id="signupForm" class="form-grid">
-            <div>
-              <label for="signupIdentifier">Username</label>
-              <input type="text" id="signupIdentifier" placeholder="your-username" required />
-              <p class="hint">Usernames are unique and used for sign-in.</p>
-          <p>Create an account with username or email. You will be logged in automatically.</p>
-          <form id="signupForm" class="form-grid">
-            <div>
-              <label for="signupIdentifier">Username or Email</label>
-              <input type="text" id="signupIdentifier" placeholder="username or you@email.com" required />
-              <p class="hint">If you enter a username (no @), we create a private email under the hood for Supabase.</p>
-            </div>
-            <div>
-              <label for="signupPassword">Password</label>
-              <input type="password" id="signupPassword" placeholder="Create a password" required />
-            </div>
-            <div class="row">
-              <button class="btn" type="submit">Create Account</button>
-              <button class="btn btn-outline" type="button" id="showLoginBtn">I already have one</button>
-            </div>
-          </form>
+      <section class="card">
+        <h2>Sign In</h2>
+        <p>Use Google to sync your favorites, history, and settings across devices.</p>
+        <div class="row">
+          <button class="btn btn-outline" type="button" id="googleLoginBtn">Continue with Google</button>
         </div>
       </section>
 
@@ -332,10 +283,6 @@ create policy "Users manage their data" on user_data
   <script src="/bilm/shared/navbar.js" defer></script>
 
   <script>
-    const loginForm = document.getElementById('loginForm');
-    const signupForm = document.getElementById('signupForm');
-    const showSignupBtn = document.getElementById('showSignupBtn');
-    const showLoginBtn = document.getElementById('showLoginBtn');
     const statusEl = document.getElementById('accountStatus');
     const syncBtn = document.getElementById('syncBtn');
     const logoutBtn = document.getElementById('logoutBtn');
@@ -363,52 +310,6 @@ create policy "Users manage their data" on user_data
       setStatus(`Logged in as ${profile.username || profile.email}.`, 'success');
       usernameUpdate.value = profile.username || '';
     };
-
-    const toggleForms = (showSignup) => {
-      signupForm.style.display = showSignup ? 'grid' : 'none';
-      loginForm.style.display = showSignup ? 'none' : 'grid';
-    };
-
-    showSignupBtn.addEventListener('click', () => toggleForms(true));
-    showLoginBtn.addEventListener('click', () => toggleForms(false));
-
-    loginForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setStatus('Logging in...');
-      const identifier = document.getElementById('loginIdentifier').value;
-      if (identifier.includes('@')) {
-        setStatus('Please use your username (no email) to log in.', 'error');
-        return;
-      }
-      const password = document.getElementById('loginPassword').value;
-      const { error } = await window.bilmAuth.signInWithPassword(identifier, password);
-      if (error) {
-        setStatus(error.message, 'error');
-        return;
-      }
-      await window.bilmAuth.syncNow();
-      setStatus('Login complete and synced.', 'success');
-      refreshStatus();
-    });
-
-    signupForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setStatus('Creating account...');
-      const identifier = document.getElementById('signupIdentifier').value;
-      if (identifier.includes('@')) {
-        setStatus('Please choose a username (no email).', 'error');
-        return;
-      }
-      const password = document.getElementById('signupPassword').value;
-      const { error } = await window.bilmAuth.signUp(identifier, password);
-      if (error) {
-        setStatus(error.message, 'error');
-        return;
-      }
-      await window.bilmAuth.syncNow();
-      setStatus('Account created and logged in.', 'success');
-      refreshStatus();
-    });
 
     googleLoginBtn.addEventListener('click', async () => {
       setStatus('Redirecting to Google...');
@@ -451,8 +352,6 @@ create policy "Users manage their data" on user_data
       refreshStatus();
     });
 
-    window.addEventListener('DOMContentLoaded', async () => {
-      toggleForms(false);
     saveConfigBtn.addEventListener('click', () => {
       window.bilmAuth.saveConfig({
         url: supabaseUrl.value,
@@ -462,7 +361,6 @@ create policy "Users manage their data" on user_data
     });
 
     window.addEventListener('DOMContentLoaded', async () => {
-      toggleForms(false);
       const config = window.bilmAuth.readConfig();
       if (config) {
         supabaseUrl.value = config.url;

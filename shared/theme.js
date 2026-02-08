@@ -17,6 +17,7 @@
   }
 
   const STORAGE_KEY = 'bilm-theme-settings';
+  const INCOGNITO_KEY = 'bilm-incognito-mode';
   const DEFAULT_SETTINGS = {
     accent: '#a855f7',
     background: 'deep',
@@ -25,7 +26,8 @@
     particles: true,
     defaultServer: 'vidsrc',
     searchHistory: true,
-    continueWatching: true
+    continueWatching: true,
+    incognito: false
   };
 
   const backgroundColors = {
@@ -85,17 +87,23 @@
   const loadSettings = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { ...DEFAULT_SETTINGS };
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+      const stored = raw ? JSON.parse(raw) : {};
+      const incognito = sessionStorage.getItem(INCOGNITO_KEY) === 'true';
+      return { ...DEFAULT_SETTINGS, ...stored, incognito };
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
   };
 
   const saveSettings = (settings) => {
-    const next = { ...DEFAULT_SETTINGS, ...settings };
+    const incognito = settings?.incognito;
+    if (typeof incognito === 'boolean') {
+      sessionStorage.setItem(INCOGNITO_KEY, `${incognito}`);
+    }
+    const next = { ...DEFAULT_SETTINGS, ...settings, incognito: loadSettings().incognito };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      const { incognito: _incognito, ...persisted } = next;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     } catch {
       return;
     }
@@ -108,7 +116,7 @@
     } catch {
       return;
     }
-    applyTheme({ ...DEFAULT_SETTINGS });
+    applyTheme({ ...DEFAULT_SETTINGS, incognito: loadSettings().incognito });
   };
 
   const initial = loadSettings();

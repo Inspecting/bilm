@@ -37,9 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const watchTypeButtons = [...document.querySelectorAll('.type-filter-btn')];
   const dateRangeButtons = [...document.querySelectorAll('#dateRangeFilters .filter-btn')];
 
+  function getStorage() {
+    const settings = window.bilmTheme?.getSettings?.() || {};
+    return settings.incognito ? sessionStorage : localStorage;
+  }
+
   function loadList(key) {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = getStorage().getItem(key);
       const list = raw ? JSON.parse(raw) : [];
       return Array.isArray(list) ? list : [];
     } catch {
@@ -48,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function saveList(key, list) {
-    localStorage.setItem(key, JSON.stringify(list));
+    getStorage().setItem(key, JSON.stringify(list));
   }
 
   function migrateLegacyWatchHistory() {
