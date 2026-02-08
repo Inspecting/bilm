@@ -384,7 +384,7 @@
       <div class="control-row">
         <div>
           <label>Incognito</label>
-          <small>Temporary browsing mode (coming soon).</small>
+          <small>Temporarily pause search and watch history.</small>
         </div>
         <label class="toggle">
           <input id="incognitoToggle" type="checkbox" />
@@ -416,6 +416,7 @@
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
+  const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
@@ -435,6 +436,7 @@
     customBackgroundRow.hidden = (settings.background || 'deep') !== 'custom';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
+    incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
   }
@@ -474,6 +476,10 @@
 
   particleToggle.addEventListener('change', (event) => {
     applySettings({ particles: event.target.checked });
+  });
+
+  incognitoToggle.addEventListener('change', (event) => {
+    applySettings({ incognito: event.target.checked });
   });
 
   serverSelect.addEventListener('change', (event) => {

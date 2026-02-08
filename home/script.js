@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const settings = window.bilmTheme?.getSettings?.() || {};
-    if (settings.searchHistory !== false) {
+    if (settings.searchHistory !== false && settings.incognito !== true) {
       const history = loadList(SEARCH_HISTORY_KEY);
       const next = [
         { query, updatedAt: Date.now() },

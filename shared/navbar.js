@@ -39,7 +39,7 @@
 
   function saveSearchHistoryEntry(query) {
     const settings = window.bilmTheme?.getSettings?.() || {};
-    if (settings.searchHistory === false) return;
+    if (settings.searchHistory === false || settings.incognito === true) return;
     const history = loadList(SEARCH_HISTORY_KEY);
     const next = [
       { query, updatedAt: Date.now() },

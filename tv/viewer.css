@@ -328,6 +328,7 @@ iframe {
   cursor: pointer;
   min-width: 100px;
   font-size: 15px;
+  text-align: center;
   position: relative;
   z-index: 1;
   transition: background-color 0.3s ease;
