@@ -104,11 +104,27 @@
 
   const searchInput = shadow.querySelector('#searchInput');
   const navbarSearchForm = shadow.getElementById('navbarSearchForm');
+  const desktopClearBtn = shadow.getElementById('desktopSearchClearBtn');
   if (navbarSearchForm && searchInput) {
     navbarSearchForm.addEventListener('submit', event => {
       event.preventDefault();
       submitSearch(searchInput.value);
     });
+
+    const toggleDesktopClear = () => {
+      if (!desktopClearBtn) return;
+      desktopClearBtn.style.display = searchInput.value.trim().length > 0 ? 'flex' : 'none';
+    };
+
+    toggleDesktopClear();
+    searchInput.addEventListener('input', toggleDesktopClear);
+    if (desktopClearBtn) {
+      desktopClearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        toggleDesktopClear();
+        searchInput.focus();
+      });
+    }
   }
 
   // Mobile search overlay handlers (no changes here)

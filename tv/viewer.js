@@ -38,6 +38,7 @@ const normalizeServer = (server) => (supportedServers.includes(server) ? server 
 let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
 let totalSeasons = 1;
 let episodesPerSeason = {};
+let seasonEpisodeMemory = {};
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const CONTINUE_KEY = 'bilm-continue-watching';
@@ -45,7 +46,9 @@ const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
 const WATCH_LATER_KEY = 'bilm-watch-later';
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const isMobile = window.matchMedia('(max-width: 768px)').matches
+  || window.matchMedia('(pointer: coarse)').matches
+  || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const CONTINUE_WATCHING_DELAY = 15000;
 let continueWatchingReady = false;
 let continueWatchingTimer = null;
@@ -393,9 +396,11 @@ if (moreLikeBox) {
 
 function saveProgress() {
   if (!tmdbId) return;
+  seasonEpisodeMemory[currentSeason] = currentEpisode;
   localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
     season: currentSeason,
-    episode: currentEpisode
+    episode: currentEpisode,
+    seasonEpisodes: seasonEpisodeMemory
   }));
 }
 
@@ -406,10 +411,12 @@ function loadProgress() {
     try {
       const parsed = JSON.parse(saved);
       currentSeason = parsed.season || 1;
-      currentEpisode = parsed.episode || 1;
+      seasonEpisodeMemory = parsed.seasonEpisodes || {};
+      currentEpisode = parsed.episode || seasonEpisodeMemory[currentSeason] || 1;
     } catch {
       currentSeason = 1;
       currentEpisode = 1;
+      seasonEpisodeMemory = {};
     }
   }
 }
@@ -476,6 +483,26 @@ function populateEpisodes(count) {
   }
 }
 
+function rememberEpisode() {
+  seasonEpisodeMemory[currentSeason] = currentEpisode;
+}
+
+function getEpisodeForSeason(season) {
+  const maxEpisodes = episodesPerSeason[season] || 1;
+  const stored = seasonEpisodeMemory[season] || 1;
+  return Math.min(Math.max(stored, 1), maxEpisodes);
+}
+
+function updateSeasonSelection(newSeason) {
+  rememberEpisode();
+  currentSeason = newSeason;
+  if (!episodesPerSeason[currentSeason]) {
+    episodesPerSeason[currentSeason] = 1;
+  }
+  currentEpisode = getEpisodeForSeason(currentSeason);
+  populateEpisodes(episodesPerSeason[currentSeason]);
+}
+
 // Helper to disable or enable season controls
 function setSeasonControlsDisabled(disabled) {
   prevSeasonBtn.disabled = disabled || currentSeason <= 1;
@@ -513,8 +540,7 @@ function updateControls() {
 prevSeasonBtn.addEventListener('click', () => {
   if (seasonCooldownActive) return;
   if (currentSeason > 1) {
-    currentSeason--;
-    currentEpisode = 1;
+    updateSeasonSelection(currentSeason - 1);
     updateIframe();
     seasonCooldownActive = true;
 
@@ -536,8 +562,7 @@ prevSeasonBtn.addEventListener('click', () => {
 nextSeasonBtn.addEventListener('click', () => {
   if (seasonCooldownActive) return;
   if (currentSeason < totalSeasons) {
-    currentSeason++;
-    currentEpisode = 1;
+    updateSeasonSelection(currentSeason + 1);
     updateIframe();
     seasonCooldownActive = true;
 
@@ -557,8 +582,7 @@ nextSeasonBtn.addEventListener('click', () => {
 
 seasonSelect.addEventListener('change', () => {
   if (seasonCooldownActive) return;
-  currentSeason = parseInt(seasonSelect.value);
-  currentEpisode = 1;
+  updateSeasonSelection(parseInt(seasonSelect.value));
   updateIframe();
   seasonCooldownActive = true;
 
@@ -580,6 +604,7 @@ prevEpisodeBtn.addEventListener('click', () => {
   if (episodeCooldownActive) return;
   if (currentEpisode > 1) {
     currentEpisode--;
+    rememberEpisode();
     updateIframe();
     episodeCooldownActive = true;
 
@@ -601,6 +626,7 @@ nextEpisodeBtn.addEventListener('click', () => {
   if (episodeCooldownActive) return;
   if (currentEpisode < (episodesPerSeason[currentSeason] || 1)) {
     currentEpisode++;
+    rememberEpisode();
     updateIframe();
     episodeCooldownActive = true;
 
@@ -621,6 +647,7 @@ nextEpisodeBtn.addEventListener('click', () => {
 episodeSelect.addEventListener('change', () => {
   if (episodeCooldownActive) return;
   currentEpisode = parseInt(episodeSelect.value);
+  rememberEpisode();
   updateIframe();
   episodeCooldownActive = true;
 
@@ -689,13 +716,15 @@ async function fetchTMDBData() {
       episodesPerSeason[season.season_number] = season.episode_count || 1;
     });
 
+    loadProgress();
+
     populateSeasons(totalSeasons);
     if (!episodesPerSeason[currentSeason]) {
       episodesPerSeason[currentSeason] = 1;
     }
+    currentEpisode = getEpisodeForSeason(currentSeason);
+    seasonEpisodeMemory[currentSeason] = currentEpisode;
     populateEpisodes(episodesPerSeason[currentSeason]);
-
-    loadProgress();
 
     updateControls();
     updateIframe();
@@ -704,14 +733,6 @@ async function fetchTMDBData() {
     console.error('Error fetching TMDB data:', e);
   }
 }
-
-seasonSelect.addEventListener('change', () => {
-  // Update episodes dropdown for new season
-  const seasonNum = parseInt(seasonSelect.value);
-  if (episodesPerSeason[seasonNum]) {
-    populateEpisodes(episodesPerSeason[seasonNum]);
-  }
-});
 
 fetchTMDBData();
 if (favoriteBtn) {
