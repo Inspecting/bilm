@@ -360,6 +360,8 @@ function loadPlaybackNote() {
   const normalizedMinutes = normalizeTimeDigits(minutes, 2);
   playbackNoteHoursInput.value = normalizedHours || '00';
   playbackNoteMinutesInput.value = normalizedMinutes || '00';
+  playbackNoteHoursInput.value = normalizeTimeDigits(hours, 3);
+  playbackNoteMinutesInput.value = normalizeTimeDigits(minutes, 2);
 }
 
 function savePlaybackNote() {
