@@ -16,9 +16,8 @@ const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const watchLaterBtn = document.getElementById('watchLaterBtn');
-const mainContent = document.querySelector('main');
 
-const moreLikeBtn = document.getElementById('moreLikeBtn');
+const moreLikeBox = document.getElementById('moreLikeBox');
 const moreLikeGrid = document.getElementById('moreLikeGrid');
 const moreLikeStatus = document.getElementById('moreLikeStatus');
 
@@ -198,19 +197,11 @@ async function loadMoreLikeMovies() {
   if (!moreLikeGrid || similarLoading || similarEnded) return;
   similarLoading = true;
   setMoreLikeStatus('Loading more titles…');
-  if (moreLikeBtn) {
-    moreLikeBtn.disabled = true;
-    moreLikeBtn.textContent = 'Loading…';
-  }
 
   const movies = await fetchSimilarMovies(similarPage);
   if (!movies.length) {
     similarEnded = true;
     setMoreLikeStatus('No more recommendations right now.');
-    if (moreLikeBtn) {
-      moreLikeBtn.disabled = true;
-      moreLikeBtn.textContent = 'No more results';
-    }
     similarLoading = false;
     return;
   }
@@ -223,10 +214,6 @@ async function loadMoreLikeMovies() {
 
   similarPage += 1;
   setMoreLikeStatus('');
-  if (moreLikeBtn) {
-    moreLikeBtn.disabled = false;
-    moreLikeBtn.textContent = 'Load more';
-  }
   similarLoading = false;
 }
 
@@ -429,22 +416,16 @@ if (watchLaterBtn) {
   });
 }
 
-if (moreLikeBtn) {
+if (moreLikeBox) {
   if (!contentId) {
-    moreLikeBtn.disabled = true;
-  }
-  moreLikeBtn.addEventListener('click', () => {
-    if (!similarActive) {
-      similarActive = true;
-    }
+    setMoreLikeStatus('Recommendations unavailable.');
+  } else {
+    similarActive = true;
     loadMoreLikeMovies();
-  });
-}
-
-if (mainContent) {
-  mainContent.addEventListener('scroll', () => {
+  }
+  moreLikeBox.addEventListener('scroll', () => {
     if (!similarActive || similarLoading || similarEnded) return;
-    if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 300) {
+    if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 200) {
       loadMoreLikeMovies();
     }
   }, { passive: true });
