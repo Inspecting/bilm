@@ -216,6 +216,11 @@
             <div>
               <label for="loginIdentifier">Username</label>
               <input type="text" id="loginIdentifier" placeholder="your-username" required />
+          <p>Use your username or email plus password. Google login is optional.</p>
+          <form id="loginForm" class="form-grid">
+            <div>
+              <label for="loginIdentifier">Username or Email</label>
+              <input type="text" id="loginIdentifier" placeholder="username or you@email.com" required />
             </div>
             <div>
               <label for="loginPassword">Password</label>
@@ -240,6 +245,12 @@
               <label for="signupIdentifier">Username</label>
               <input type="text" id="signupIdentifier" placeholder="your-username" required />
               <p class="hint">Usernames are unique and used for sign-in.</p>
+          <p>Create an account with username or email. You will be logged in automatically.</p>
+          <form id="signupForm" class="form-grid">
+            <div>
+              <label for="signupIdentifier">Username or Email</label>
+              <input type="text" id="signupIdentifier" placeholder="username or you@email.com" required />
+              <p class="hint">If you enter a username (no @), we create a private email under the hood for Supabase.</p>
             </div>
             <div>
               <label for="signupPassword">Password</label>
@@ -271,6 +282,50 @@
         </div>
       </section>
 
+      <section class="card">
+        <h2>Supabase Setup</h2>
+        <p>To enable login and cloud sync, create a Supabase project and paste your project URL + anon key below.</p>
+        <div class="form-grid">
+          <div>
+            <label for="supabaseUrl">Supabase URL</label>
+            <input type="url" id="supabaseUrl" placeholder="https://xxxx.supabase.co" />
+          </div>
+          <div>
+            <label for="supabaseAnonKey">Supabase Anon Key</label>
+            <input type="text" id="supabaseAnonKey" placeholder="eyJhbGciOiJIUzI1NiIs..." />
+          </div>
+          <button class="btn" type="button" id="saveConfigBtn">Save Supabase Config</button>
+        </div>
+        <p class="hint">Find these values in Supabase → Project Settings → API.</p>
+        <h3>SQL setup</h3>
+        <p class="hint">Run this in Supabase → SQL Editor to enable profiles + cloud sync.</p>
+        <textarea readonly>
+create table if not exists profiles (
+  id uuid references auth.users not null primary key,
+  username text unique,
+  email text
+);
+
+create table if not exists user_data (
+  user_id uuid references auth.users not null primary key,
+  data jsonb,
+  updated_at timestamptz default now()
+);
+
+alter table profiles enable row level security;
+alter table user_data enable row level security;
+
+create policy "Profiles are readable by username" on profiles
+  for select using (true);
+
+create policy "Users manage their profile" on profiles
+  for all using (auth.uid() = id) with check (auth.uid() = id);
+
+create policy "Users manage their data" on user_data
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+        </textarea>
+        <p class="hint">Want to hide emails? Remove the email column or restrict it to auth users only.</p>
+      </section>
     </div>
   </main>
 
@@ -285,6 +340,9 @@
     const syncBtn = document.getElementById('syncBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const googleLoginBtn = document.getElementById('googleLoginBtn');
+    const saveConfigBtn = document.getElementById('saveConfigBtn');
+    const supabaseUrl = document.getElementById('supabaseUrl');
+    const supabaseAnonKey = document.getElementById('supabaseAnonKey');
     const usernameUpdate = document.getElementById('usernameUpdate');
     const updateUsernameBtn = document.getElementById('updateUsernameBtn');
 
@@ -395,6 +453,21 @@
 
     window.addEventListener('DOMContentLoaded', async () => {
       toggleForms(false);
+    saveConfigBtn.addEventListener('click', () => {
+      window.bilmAuth.saveConfig({
+        url: supabaseUrl.value,
+        anonKey: supabaseAnonKey.value
+      });
+      setStatus('Supabase config saved.', 'success');
+    });
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      toggleForms(false);
+      const config = window.bilmAuth.readConfig();
+      if (config) {
+        supabaseUrl.value = config.url;
+        supabaseAnonKey.value = config.anonKey;
+      }
       await refreshStatus();
     });
   </script>

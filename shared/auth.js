@@ -1,4 +1,5 @@
 (() => {
+  const CONFIG_KEY = 'bilm-supabase-config';
   const LAST_SYNC_KEY = 'bilm-cloud-sync-at';
   const PROFILE_TABLE = 'profiles';
   const DATA_TABLE = 'user_data';
@@ -36,6 +37,21 @@
       return window.BILM_SUPABASE_CONFIG;
     }
     return null;
+    try {
+      const raw = localStorage.getItem(CONFIG_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.url || !parsed?.anonKey) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveConfig = (config) => {
+    if (!config?.url || !config?.anonKey) return;
+    const safe = { url: config.url.trim(), anonKey: config.anonKey.trim() };
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(safe));
   };
 
   const initClient = async () => {
@@ -51,6 +67,13 @@
 
   const normalizeUsername = (identifier) => {
     const trimmed = `${identifier || ''}`.trim();
+  const normalizeIdentifier = (identifier) => {
+    const trimmed = `${identifier || ''}`.trim();
+    const isEmail = trimmed.includes('@');
+    if (isEmail) {
+      const username = trimmed.split('@')[0].trim();
+      return { email: trimmed, username: username || trimmed };
+    }
     const safeBase = trimmed.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
     const safeEmail = `${safeBase || 'user'}@bilm.local`;
     return { email: safeEmail, username: trimmed };
@@ -81,6 +104,7 @@
     const client = await initClient();
     if (!client) return { error: new Error('Supabase is not configured.') };
     const { email, username } = normalizeUsername(identifier);
+    const { email, username } = normalizeIdentifier(identifier);
     const { data, error } = await client.auth.signUp({
       email,
       password,
@@ -237,6 +261,7 @@
 
   window.bilmAuth = {
     readConfig,
+    saveConfig,
     init: initClient,
     signInWithPassword,
     signUp,
