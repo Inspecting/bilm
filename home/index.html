@@ -84,6 +84,24 @@
       </div>
       <div class="scroll-row" id="favoriteItems"></div>
     </section>
+
+    <section class="section" id="watchLaterSection">
+      <div class="section-header">
+        <div class="section-title-row">
+          <h2 class="section-title">Watch Later</h2>
+          <div class="section-actions">
+            <button class="section-btn section-btn-compact" id="watchLaterEditBtn" type="button">Edit</button>
+            <button class="section-btn section-btn-danger" id="watchLaterRemoveBtn" type="button" disabled hidden>Remove selected</button>
+          </div>
+        </div>
+      </div>
+      <div class="section-filters" id="watchLaterFilters" role="group" aria-label="Watch later type">
+        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
+        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
+        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+      </div>
+      <div class="scroll-row" id="watchLaterItems"></div>
+    </section>
   </main>
 
   <script src="/bilm/shared/navbar.js" defer></script>

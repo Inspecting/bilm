@@ -15,6 +15,7 @@ const closeBtn = document.getElementById('closeBtn');
 const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
 const favoriteBtn = document.getElementById('favoriteBtn');
+const watchLaterBtn = document.getElementById('watchLaterBtn');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
@@ -30,6 +31,7 @@ let imdbId = null;
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
+const WATCH_LATER_KEY = 'bilm-watch-later';
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const CONTINUE_WATCHING_DELAY = 15000;
@@ -121,6 +123,14 @@ function updateFavoriteButton(isFavorite) {
   favoriteBtn.setAttribute('aria-label', favoriteBtn.title);
 }
 
+function updateWatchLaterButton(isWatchLater) {
+  if (!watchLaterBtn) return;
+  watchLaterBtn.classList.toggle('is-active', isWatchLater);
+  watchLaterBtn.setAttribute('aria-pressed', isWatchLater ? 'true' : 'false');
+  watchLaterBtn.title = isWatchLater ? 'Remove from watch later' : 'Add to watch later';
+  watchLaterBtn.setAttribute('aria-label', watchLaterBtn.title);
+}
+
 function toggleFavorite() {
   if (!mediaDetails) return;
   const items = loadList(FAVORITES_KEY);
@@ -146,6 +156,33 @@ function toggleFavorite() {
   });
   saveList(FAVORITES_KEY, items);
   updateFavoriteButton(true);
+}
+
+function toggleWatchLater() {
+  if (!mediaDetails) return;
+  const items = loadList(WATCH_LATER_KEY);
+  const key = `movie-${mediaDetails.id}`;
+  const existingIndex = items.findIndex(item => item.key === key);
+  if (existingIndex >= 0) {
+    items.splice(existingIndex, 1);
+    saveList(WATCH_LATER_KEY, items);
+    updateWatchLaterButton(false);
+    return;
+  }
+
+  items.unshift({
+    key,
+    id: mediaDetails.id,
+    type: 'movie',
+    title: mediaDetails.title,
+    date: mediaDetails.releaseDate,
+    year: mediaDetails.year,
+    poster: mediaDetails.poster,
+    link: mediaDetails.link,
+    updatedAt: Date.now()
+  });
+  saveList(WATCH_LATER_KEY, items);
+  updateWatchLaterButton(true);
 }
 
 function upsertHistoryItem(key, payload) {
@@ -215,6 +252,8 @@ async function loadMovieDetails() {
 
     const favorites = loadList(FAVORITES_KEY);
     updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
+    const watchLater = loadList(WATCH_LATER_KEY);
+    updateWatchLaterButton(watchLater.some(item => item.key === `movie-${contentId}`));
     updateIframe();
     startContinueWatchingTimer();
   } catch (error) {
@@ -281,6 +320,13 @@ if (favoriteBtn) {
   favoriteBtn.addEventListener('click', (event) => {
     event.stopPropagation();
     toggleFavorite();
+  });
+}
+
+if (watchLaterBtn) {
+  watchLaterBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleWatchLater();
   });
 }
 
