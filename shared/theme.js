@@ -25,7 +25,8 @@
     particles: true,
     defaultServer: 'vidsrc',
     searchHistory: true,
-    continueWatching: true
+    continueWatching: true,
+    incognito: false
   };
 
   const backgroundColors = {

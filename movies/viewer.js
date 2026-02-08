@@ -282,7 +282,8 @@ function upsertHistoryItem(key, payload) {
 }
 
 function updateContinueWatching() {
-  if (!continueWatchingEnabled || !mediaDetails) return;
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  if (!continueWatchingEnabled || !mediaDetails || settings.incognito === true) return;
   const payload = {
     key: `movie-${mediaDetails.id}`,
     id: mediaDetails.id,
