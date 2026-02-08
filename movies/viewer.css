@@ -208,24 +208,37 @@ iframe {
   font-size: 0.85rem;
 }
 
-.playback-note label {
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.playback-note input {
+.playback-note-time {
+  display: flex;
+  align-items: center;
   background: rgba(10, 10, 14, 0.75);
   border: 1px solid var(--border);
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.playback-note-time input {
+  background: transparent;
+  border: none;
   color: var(--text-primary);
-  padding: 6px 10px;
-  min-width: 140px;
-  max-width: 220px;
+  padding: 6px 8px;
+  width: 48px;
   font-size: 0.85rem;
+  text-align: center;
   outline: none;
 }
 
-.playback-note input:focus {
+.playback-note-time input::placeholder {
+  color: var(--text-muted);
+}
+
+.playback-note-time .time-separator {
+  color: var(--text-muted);
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.playback-note-time:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.25);
 }
