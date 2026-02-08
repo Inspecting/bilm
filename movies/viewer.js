@@ -356,6 +356,10 @@ function loadPlaybackNote() {
   if (!key) return;
   const notes = loadPlaybackNotes();
   const { hours, minutes } = parsePlaybackNoteValue(notes[key]);
+  const normalizedHours = normalizeTimeDigits(hours, 3);
+  const normalizedMinutes = normalizeTimeDigits(minutes, 2);
+  playbackNoteHoursInput.value = normalizedHours || '00';
+  playbackNoteMinutesInput.value = normalizedMinutes || '00';
   playbackNoteHoursInput.value = normalizeTimeDigits(hours, 3);
   playbackNoteMinutesInput.value = normalizeTimeDigits(minutes, 2);
 }
