@@ -292,6 +292,9 @@
   const colorGreenInput = document.getElementById('colorGreen');
   const colorAccentInput = document.getElementById('colorAccent');
 
+  const ACCESS_KEY = 'bilm-site-unlocked';
+  const ACCESS_SEED = '1001';
+
   const STORAGE_KEY = 'rng-lab-settings';
   const STATE_KEY = 'rng-lab-state';
 
@@ -376,6 +379,14 @@
   }
 
   function setMessage(t){ messageEl.textContent = t; }
+
+  function unlockSiteIfSeedMatches(){
+    const seedValue = seedInput.value.trim();
+    if (seedValue !== ACCESS_SEED) return;
+    if (localStorage.getItem(ACCESS_KEY) === 'true') return;
+    localStorage.setItem(ACCESS_KEY, 'true');
+    setMessage('Access unlocked. The rest of the site is now available.');
+  }
 
   function getSegments(){
     const base = Array.from({length: 36}, (_, i) => ({
@@ -697,12 +708,15 @@
       applySettings();
       drawWheel();
       updateUI();
+      unlockSiteIfSeedMatches();
     };
 
     [wheelTypeSelect, payoutInput, greenPayoutInput, rngModeSelect, seedInput, biasSelect,
       spinDurationInput, spinLoopsInput, instantSelect, soundSelect, autoSpinCountInput,
       autoSpinDelayInput, strategySelect, colorRedInput, colorBlackInput, colorGreenInput, colorAccentInput]
       .forEach(el => el.addEventListener('change', handler));
+
+    seedInput.addEventListener('input', unlockSiteIfSeedMatches);
   }
 
   let rng = getRng();
