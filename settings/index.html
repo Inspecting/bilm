@@ -273,6 +273,8 @@
 
   <script src="/bilm/shared/access.js"></script>
   <script src="/bilm/shared/theme.js"></script>
+  <script src="/bilm/shared/supabase-config.js"></script>
+  <script src="/bilm/shared/auth.js"></script>
 </head>
 <body>
 
@@ -394,6 +396,19 @@
     </section>
 
     <section class="settings-card">
+      <h2>Account</h2>
+      <p>Login is optional. Sign in to sync data across devices.</p>
+
+      <div class="control-row">
+        <div>
+          <label>Account status</label>
+          <small id="accountStatusText">Not logged in.</small>
+        </div>
+        <a class="btn btn-outline" href="/bilm/auth/">Manage Login</a>
+      </div>
+    </section>
+
+    <section class="settings-card">
       <h2>Reset & Maintenance</h2>
       <p>Restore defaults or clear all local data.</p>
 
@@ -510,6 +525,22 @@
 
   window.addEventListener('DOMContentLoaded', syncUI);
   window.addEventListener('bilm:theme-changed', syncUI);
+
+  async function refreshAccountStatus() {
+    const statusEl = document.getElementById('accountStatusText');
+    if (!statusEl || !window.bilmAuth) return;
+    await window.bilmAuth.init();
+    const profile = await window.bilmAuth.getProfile();
+    if (profile?.username) {
+      statusEl.textContent = `Logged in as ${profile.username}`;
+    } else if (profile?.email) {
+      statusEl.textContent = `Logged in as ${profile.email}`;
+    } else {
+      statusEl.textContent = 'Not logged in.';
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', refreshAccountStatus);
 </script>
 
 </body>
