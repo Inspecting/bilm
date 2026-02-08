@@ -16,7 +16,8 @@ const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const watchLaterBtn = document.getElementById('watchLaterBtn');
-const playbackNoteInput = document.getElementById('playbackNote');
+const playbackNoteHoursInput = document.getElementById('playbackNoteHours');
+const playbackNoteMinutesInput = document.getElementById('playbackNoteMinutes');
 const seasonSelect = document.getElementById('seasonSelect');
 const episodeSelect = document.getElementById('episodeSelect');
 const prevSeasonBtn = document.getElementById('prevSeason');
@@ -322,22 +323,46 @@ function getPlaybackNoteKey() {
   return `tv-${tmdbId}-s${currentSeason}-e${currentEpisode}`;
 }
 
+function normalizeTimeDigits(value, maxLength) {
+  if (!value) return '';
+  return value.replace(/\D/g, '').slice(0, maxLength);
+}
+
+function parsePlaybackNoteValue(value) {
+  if (!value) return { hours: '', minutes: '' };
+  const parts = value.split(':').map(part => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return { hours: parts[0], minutes: parts[1] };
+  }
+  if (parts.length === 1) {
+    return { hours: parts[0], minutes: '' };
+  }
+  return { hours: '', minutes: '' };
+}
+
 function loadPlaybackNote() {
-  if (!playbackNoteInput) return;
+  if (!playbackNoteHoursInput || !playbackNoteMinutesInput) return;
   const key = getPlaybackNoteKey();
   if (!key) return;
   const notes = loadPlaybackNotes();
-  playbackNoteInput.value = notes[key] || '';
+  const { hours, minutes } = parsePlaybackNoteValue(notes[key]);
+  playbackNoteHoursInput.value = normalizeTimeDigits(hours, 3);
+  playbackNoteMinutesInput.value = normalizeTimeDigits(minutes, 2);
 }
 
 function savePlaybackNote() {
-  if (!playbackNoteInput) return;
+  if (!playbackNoteHoursInput || !playbackNoteMinutesInput) return;
   const key = getPlaybackNoteKey();
   if (!key) return;
   const notes = loadPlaybackNotes();
-  const value = playbackNoteInput.value.trim();
-  if (value) {
-    notes[key] = value;
+  const rawHours = normalizeTimeDigits(playbackNoteHoursInput.value, 3);
+  const rawMinutes = normalizeTimeDigits(playbackNoteMinutesInput.value, 2);
+  const minutes = rawMinutes ? String(Math.min(Number(rawMinutes), 59)).padStart(2, '0') : '';
+  playbackNoteHoursInput.value = rawHours;
+  playbackNoteMinutesInput.value = rawMinutes;
+  if (rawHours || minutes) {
+    const hours = rawHours || '0';
+    notes[key] = `${hours}:${minutes || '00'}`;
   } else {
     delete notes[key];
   }
@@ -809,9 +834,37 @@ if (watchLaterBtn) {
   });
 }
 
-if (playbackNoteInput) {
-  playbackNoteInput.addEventListener('input', () => {
-    savePlaybackNote();
+if (playbackNoteHoursInput && playbackNoteMinutesInput) {
+  [playbackNoteHoursInput, playbackNoteMinutesInput].forEach((input, index) => {
+    input.addEventListener('input', () => {
+      if (input === playbackNoteMinutesInput) {
+        input.value = normalizeTimeDigits(input.value, 2);
+      } else {
+        input.value = normalizeTimeDigits(input.value, 3);
+      }
+      savePlaybackNote();
+    });
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== ':' || input !== playbackNoteHoursInput) return;
+      event.preventDefault();
+      playbackNoteMinutesInput.focus();
+      playbackNoteMinutesInput.select();
+    });
+
+    input.addEventListener('blur', () => {
+      if (input === playbackNoteMinutesInput && input.value) {
+        const minutesValue = normalizeTimeDigits(input.value, 2);
+        input.value = String(Math.min(Number(minutesValue), 59)).padStart(2, '0');
+        savePlaybackNote();
+      }
+    });
+
+    input.addEventListener('focus', () => {
+      if (index === 1 && playbackNoteMinutesInput.value.length === 1) {
+        playbackNoteMinutesInput.select();
+      }
+    });
   });
 }
 
