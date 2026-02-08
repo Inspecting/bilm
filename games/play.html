@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - Play Game</title>
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+  <link rel="stylesheet" href="./play.css" />
+  <script src="/bilm/shared/access.js"></script>
+  <script src="/bilm/shared/theme.js"></script>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+
+  <main class="play-main">
+    <header class="play-header">
+      <div>
+        <p class="play-kicker">Now playing</p>
+        <h1 class="play-title" id="gameTitle">Loading game…</h1>
+        <p class="play-description" id="gameDescription"></p>
+      </div>
+      <a class="back-link" href="./index.html">Back to Games</a>
+    </header>
+
+    <section class="play-content" id="playContent">
+      <div class="play-frame" id="gameFrame"></div>
+      <aside class="play-panel">
+        <img class="play-poster" id="gamePoster" alt="" />
+        <div class="play-actions">
+          <button class="action-button" id="openSource" type="button">Open game in new tab</button>
+        </div>
+      </aside>
+    </section>
+
+    <div class="play-empty" id="playEmpty" hidden>
+      <h2>We couldn't load this game.</h2>
+      <p>Head back to the games list and pick another title.</p>
+      <a class="action-button" href="./index.html">Browse games</a>
+    </div>
+  </main>
+
+  <script src="/bilm/shared/navbar.js" defer></script>
+  <script src="./play.js"></script>
+</body>
+</html>
