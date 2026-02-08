@@ -45,6 +45,23 @@ const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
 const WATCH_LATER_KEY = 'bilm-watch-later';
+const storage = window.bilmTheme?.storage || {
+  getJSON: (key, fallback = []) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  },
+  setJSON: (key, value) => {
+    localStorage.setItem(key, JSON.stringify(value));
+  },
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value)
+};
 
 const isMobile = window.matchMedia('(max-width: 768px)').matches
   || window.matchMedia('(pointer: coarse)').matches
@@ -103,16 +120,12 @@ function stopContinueWatchingTimer() {
 }
 
 function loadList(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  const list = storage.getJSON(key, []);
+  return Array.isArray(list) ? list : [];
 }
 
 function saveList(key, items) {
-  localStorage.setItem(key, JSON.stringify(items));
+  storage.setJSON(key, items);
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -398,7 +411,7 @@ if (moreLikeBox) {
 function saveProgress() {
   if (!tmdbId) return;
   seasonEpisodeMemory[currentSeason] = currentEpisode;
-  localStorage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
+  storage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
     season: currentSeason,
     episode: currentEpisode,
     seasonEpisodes: seasonEpisodeMemory
@@ -407,7 +420,7 @@ function saveProgress() {
 
 function loadProgress() {
   if (!tmdbId) return;
-  const saved = localStorage.getItem(`bilm-tv-progress-${tmdbId}`);
+  const saved = storage.getItem(`bilm-tv-progress-${tmdbId}`);
   if (saved) {
     try {
       const parsed = JSON.parse(saved);

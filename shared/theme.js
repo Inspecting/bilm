@@ -17,6 +17,15 @@
   }
 
   const STORAGE_KEY = 'bilm-theme-settings';
+  const INCOGNITO_BACKUP_KEY = 'bilm-incognito-backup';
+  const INCOGNITO_STORAGE_KEYS = [
+    'bilm-search-history',
+    'bilm-watch-history',
+    'bilm-continue-watching',
+    'bilm-favorites',
+    'bilm-watch-later'
+  ];
+  const INCOGNITO_PREFIXES = ['bilm-tv-progress-'];
   const DEFAULT_SETTINGS = {
     accent: '#a855f7',
     background: 'deep',
@@ -93,8 +102,151 @@
     }
   };
 
+  const safeParse = (value, fallback) => {
+    if (!value) return fallback;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  };
+
+  const isIncognitoKey = (key) => {
+    if (!key) return false;
+    if (INCOGNITO_STORAGE_KEYS.includes(key)) return true;
+    return INCOGNITO_PREFIXES.some(prefix => key.startsWith(prefix));
+  };
+
+  const collectIncognitoKeys = () => {
+    const keys = new Set(INCOGNITO_STORAGE_KEYS);
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (isIncognitoKey(key)) {
+          keys.add(key);
+        }
+      }
+    } catch {
+      return [...keys];
+    }
+    return [...keys];
+  };
+
+  const handleIncognitoTransition = (prevSettings, nextSettings) => {
+    const wasIncognito = prevSettings?.incognito === true;
+    const isIncognito = nextSettings?.incognito === true;
+    if (wasIncognito === isIncognito) return;
+
+    if (isIncognito) {
+      let backup = null;
+      try {
+        backup = localStorage.getItem(INCOGNITO_BACKUP_KEY);
+      } catch {
+        backup = null;
+      }
+      if (!backup) {
+        const snapshot = {};
+        const keysToBackup = collectIncognitoKeys();
+        keysToBackup.forEach((key) => {
+          try {
+            const value = localStorage.getItem(key);
+            if (value !== null) snapshot[key] = value;
+          } catch {
+            return;
+          }
+        });
+        try {
+          localStorage.setItem(INCOGNITO_BACKUP_KEY, JSON.stringify(snapshot));
+        } catch {
+          return;
+        }
+      }
+      const keysToClear = collectIncognitoKeys();
+      keysToClear.forEach((key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          return;
+        }
+      });
+    } else {
+      let backup = {};
+      try {
+        backup = safeParse(localStorage.getItem(INCOGNITO_BACKUP_KEY), {});
+      } catch {
+        backup = {};
+      }
+      const keysToRestore = collectIncognitoKeys();
+      keysToRestore.forEach((key) => {
+        try {
+          if (Object.prototype.hasOwnProperty.call(backup, key)) {
+            localStorage.setItem(key, backup[key]);
+          } else {
+            localStorage.removeItem(key);
+          }
+        } catch {
+          return;
+        }
+      });
+      try {
+        localStorage.removeItem(INCOGNITO_BACKUP_KEY);
+      } catch {
+        return;
+      }
+      keysToRestore.forEach((key) => {
+        try {
+          sessionStorage.removeItem(key);
+        } catch {
+          return;
+        }
+      });
+    }
+  };
+
+  let currentSettings = loadSettings();
+
+  const getStorageForKey = (key) => {
+    if (currentSettings?.incognito === true && isIncognitoKey(key)) {
+      return sessionStorage;
+    }
+    return localStorage;
+  };
+
+  const storageAPI = {
+    getItem(key) {
+      try {
+        return getStorageForKey(key).getItem(key);
+      } catch {
+        return null;
+      }
+    },
+    setItem(key, value) {
+      try {
+        getStorageForKey(key).setItem(key, value);
+      } catch {
+        return;
+      }
+    },
+    removeItem(key) {
+      try {
+        getStorageForKey(key).removeItem(key);
+      } catch {
+        return;
+      }
+    },
+    getJSON(key, fallback = null) {
+      const raw = storageAPI.getItem(key);
+      return safeParse(raw, fallback);
+    },
+    setJSON(key, value) {
+      storageAPI.setItem(key, JSON.stringify(value));
+    }
+  };
+
   const saveSettings = (settings) => {
     const next = { ...DEFAULT_SETTINGS, ...settings };
+    handleIncognitoTransition(currentSettings, next);
+    currentSettings = next;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -112,12 +264,15 @@
     applyTheme({ ...DEFAULT_SETTINGS });
   };
 
-  const initial = loadSettings();
-  applyTheme(initial);
+  currentSettings = loadSettings();
+  applyTheme(currentSettings);
 
   window.addEventListener('storage', (event) => {
     if (event.key !== STORAGE_KEY) return;
-    applyTheme(loadSettings());
+    const next = loadSettings();
+    handleIncognitoTransition(currentSettings, next);
+    currentSettings = next;
+    applyTheme(next);
   });
 
   window.bilmTheme = {
@@ -126,6 +281,7 @@
     getSettings: loadSettings,
     setSettings: saveSettings,
     resetTheme,
-    applyTheme
+    applyTheme,
+    storage: storageAPI
   };
 })();

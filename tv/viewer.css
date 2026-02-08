@@ -434,10 +434,12 @@ iframe {
   .group select {
     flex: 1;
     text-align: center;
+    text-align-last: center;
     min-width: 0;
   }
 
   .smallBtn {
+    text-align: center;
     padding: 6px 10px;
   }
 }
