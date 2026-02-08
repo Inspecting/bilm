@@ -16,6 +16,12 @@ const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const watchLaterBtn = document.getElementById('watchLaterBtn');
+const mainContent = document.querySelector('main');
+
+let moreLikeSection = document.getElementById('moreLikeSection');
+let moreLikeBtn = document.getElementById('moreLikeBtn');
+let moreLikeGrid = document.getElementById('moreLikeGrid');
+let moreLikeStatus = document.getElementById('moreLikeStatus');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
@@ -38,6 +44,73 @@ const CONTINUE_WATCHING_DELAY = 15000;
 let continueWatchingReady = false;
 let continueWatchingTimer = null;
 let continueWatchingInterval = null;
+let similarPage = 1;
+let similarLoading = false;
+let similarEnded = false;
+let similarActive = false;
+const similarMovieIds = new Set();
+
+function ensureMoreLikeSection() {
+  const playerWrapper = document.getElementById('playerWrapper');
+  const playerWithControls = document.getElementById('playerWithControls');
+
+  if (!playerWrapper || !playerWithControls) {
+    return;
+  }
+
+  if (!moreLikeSection) {
+    moreLikeSection = document.createElement('section');
+    moreLikeSection.id = 'moreLikeSection';
+    moreLikeSection.className = 'more-like-section';
+    moreLikeSection.setAttribute('aria-live', 'polite');
+
+    const header = document.createElement('div');
+    header.className = 'more-like-header';
+
+    const heading = document.createElement('h2');
+    heading.textContent = 'More Like This';
+
+    moreLikeBtn = document.createElement('button');
+    moreLikeBtn.id = 'moreLikeBtn';
+    moreLikeBtn.className = 'more-like-btn';
+    moreLikeBtn.type = 'button';
+    moreLikeBtn.textContent = 'More like this';
+
+    header.appendChild(heading);
+    header.appendChild(moreLikeBtn);
+
+    moreLikeGrid = document.createElement('div');
+    moreLikeGrid.id = 'moreLikeGrid';
+    moreLikeGrid.className = 'more-like-grid';
+
+    moreLikeStatus = document.createElement('div');
+    moreLikeStatus.id = 'moreLikeStatus';
+    moreLikeStatus.className = 'more-like-status';
+    moreLikeStatus.setAttribute('role', 'status');
+    moreLikeStatus.setAttribute('aria-live', 'polite');
+
+    moreLikeSection.appendChild(header);
+    moreLikeSection.appendChild(moreLikeGrid);
+    moreLikeSection.appendChild(moreLikeStatus);
+
+    playerWrapper.insertBefore(moreLikeSection, playerWrapper.querySelector('#closeBtn') || null);
+  }
+}
+
+ensureMoreLikeSection();
+if (moreLikeStatus && !moreLikeStatus.textContent) {
+  setMoreLikeStatus('Tap "More like this" to load recommendations.');
+}
+
+async function fetchJSON(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 function startContinueWatchingTimer() {
   if (!continueWatchingEnabled || continueWatchingTimer || continueWatchingReady) return;
@@ -129,6 +202,91 @@ function updateWatchLaterButton(isWatchLater) {
   watchLaterBtn.setAttribute('aria-pressed', isWatchLater ? 'true' : 'false');
   watchLaterBtn.title = isWatchLater ? 'Remove from watch later' : 'Add to watch later';
   watchLaterBtn.setAttribute('aria-label', watchLaterBtn.title);
+}
+
+function setMoreLikeStatus(message) {
+  if (!moreLikeStatus) {
+    ensureMoreLikeSection();
+  }
+  if (moreLikeStatus) {
+    moreLikeStatus.textContent = message;
+  }
+}
+
+function createMoreLikeCard(movie) {
+  const card = document.createElement('div');
+  card.className = 'more-like-card';
+  card.dataset.tmdbId = movie.id;
+
+  const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.src = movie.poster_path
+    ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+    : 'https://via.placeholder.com/140x210?text=No+Image';
+  img.alt = movie.title || 'Movie poster';
+  img.onerror = () => {
+    img.onerror = null;
+    img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+  };
+
+  const title = document.createElement('p');
+  title.textContent = `${movie.title || 'Untitled'} (${movie.release_date?.slice(0, 4) || 'N/A'})`;
+
+  card.appendChild(img);
+  card.appendChild(title);
+
+  card.addEventListener('click', () => {
+    window.location.href = `/bilm/movies/viewer.html?id=${movie.id}`;
+  });
+
+  return card;
+}
+
+async function fetchSimilarMovies(page = 1) {
+  if (!contentId) return [];
+  const url = `https://api.themoviedb.org/3/movie/${contentId}/similar?api_key=${TMDB_API_KEY}&page=${page}`;
+  const data = await fetchJSON(url);
+  return data?.results || [];
+}
+
+async function loadMoreLikeMovies() {
+  if (!moreLikeGrid) {
+    ensureMoreLikeSection();
+  }
+  if (!moreLikeGrid || similarLoading || similarEnded) return;
+  similarLoading = true;
+  setMoreLikeStatus('Loading more titles…');
+  if (moreLikeBtn) {
+    moreLikeBtn.disabled = true;
+    moreLikeBtn.textContent = 'Loading…';
+  }
+
+  const movies = await fetchSimilarMovies(similarPage);
+  if (!movies.length) {
+    similarEnded = true;
+    setMoreLikeStatus('No more recommendations right now.');
+    if (moreLikeBtn) {
+      moreLikeBtn.disabled = true;
+      moreLikeBtn.textContent = 'No more results';
+    }
+    similarLoading = false;
+    return;
+  }
+
+  const uniqueMovies = movies.filter(movie => movie.id && movie.id !== Number(contentId) && !similarMovieIds.has(movie.id));
+  uniqueMovies.forEach(movie => {
+    similarMovieIds.add(movie.id);
+    moreLikeGrid.appendChild(createMoreLikeCard(movie));
+  });
+
+  similarPage += 1;
+  setMoreLikeStatus('');
+  if (moreLikeBtn) {
+    moreLikeBtn.disabled = false;
+    moreLikeBtn.textContent = 'Load more';
+  }
+  similarLoading = false;
 }
 
 function toggleFavorite() {
@@ -328,6 +486,27 @@ if (watchLaterBtn) {
     event.stopPropagation();
     toggleWatchLater();
   });
+}
+
+if (moreLikeBtn) {
+  if (!contentId) {
+    moreLikeBtn.disabled = true;
+  }
+  moreLikeBtn.addEventListener('click', () => {
+    if (!similarActive) {
+      similarActive = true;
+    }
+    loadMoreLikeMovies();
+  });
+}
+
+if (mainContent) {
+  mainContent.addEventListener('scroll', () => {
+    if (!similarActive || similarLoading || similarEnded) return;
+    if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 300) {
+      loadMoreLikeMovies();
+    }
+  }, { passive: true });
 }
 
 fullscreenBtn.onclick = () => {
