@@ -118,7 +118,8 @@ iframe {
 
 #fullscreenBtn,
 #serverBtn,
-#favoriteBtn {
+#favoriteBtn,
+#watchLaterBtn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -140,7 +141,8 @@ iframe {
 
 #fullscreenBtn:hover,
 #serverBtn:hover,
-#favoriteBtn:hover {
+#favoriteBtn:hover,
+#watchLaterBtn:hover {
   background-color: var(--accent);
 }
 
@@ -148,8 +150,16 @@ iframe {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+#watchLaterBtn {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
 #favoriteBtn.is-active {
   color: #facc15;
+}
+
+#watchLaterBtn.is-active {
+  color: #38bdf8;
 }
 
 #serverDropdown {
