@@ -16,6 +16,7 @@ const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const watchLaterBtn = document.getElementById('watchLaterBtn');
+const playbackNoteInput = document.getElementById('playbackNote');
 
 const moreLikeBox = document.getElementById('moreLikeBox');
 const moreLikeGrid = document.getElementById('moreLikeGrid');
@@ -36,6 +37,7 @@ const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
 const WATCH_LATER_KEY = 'bilm-watch-later';
+const PLAYBACK_NOTE_KEY = 'bilm-playback-note';
 const storage = window.bilmTheme?.storage || {
   getJSON: (key, fallback = []) => {
     try {
@@ -311,6 +313,47 @@ function updateContinueWatching() {
   upsertHistoryItem(WATCH_HISTORY_KEY, payload);
 }
 
+function loadPlaybackNotes() {
+  try {
+    const raw = localStorage.getItem(PLAYBACK_NOTE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePlaybackNotes(notes) {
+  localStorage.setItem(PLAYBACK_NOTE_KEY, JSON.stringify(notes));
+}
+
+function getPlaybackNoteKey() {
+  return mediaDetails ? `movie-${mediaDetails.id}` : null;
+}
+
+function loadPlaybackNote() {
+  if (!playbackNoteInput) return;
+  const key = getPlaybackNoteKey();
+  if (!key) return;
+  const notes = loadPlaybackNotes();
+  playbackNoteInput.value = notes[key] || '';
+}
+
+function savePlaybackNote() {
+  if (!playbackNoteInput) return;
+  const key = getPlaybackNoteKey();
+  if (!key) return;
+  const notes = loadPlaybackNotes();
+  const value = playbackNoteInput.value.trim();
+  if (value) {
+    notes[key] = value;
+  } else {
+    delete notes[key];
+  }
+  savePlaybackNotes(notes);
+}
+
 async function loadMovieDetails() {
   if (!contentId) {
     mediaTitle.textContent = 'Unknown title';
@@ -352,6 +395,7 @@ async function loadMovieDetails() {
     updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
     const watchLater = loadList(WATCH_LATER_KEY);
     updateWatchLaterButton(watchLater.some(item => item.key === `movie-${contentId}`));
+    loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();
   } catch (error) {
@@ -425,6 +469,12 @@ if (watchLaterBtn) {
   watchLaterBtn.addEventListener('click', (event) => {
     event.stopPropagation();
     toggleWatchLater();
+  });
+}
+
+if (playbackNoteInput) {
+  playbackNoteInput.addEventListener('input', () => {
+    savePlaybackNote();
   });
 }
 
