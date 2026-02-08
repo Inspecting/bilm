@@ -208,6 +208,11 @@ iframe {
   font-size: 0.85rem;
 }
 
+.playback-note label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .playback-note-time {
   display: flex;
   align-items: center;
