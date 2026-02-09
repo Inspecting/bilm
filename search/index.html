@@ -56,6 +56,8 @@
       display: flex;
       gap: 8px;
       justify-content: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
       margin-bottom: 24px;
       flex-wrap: wrap;
     }
@@ -80,32 +82,32 @@
     section {
       margin-bottom: 30px;
     }
-    section h2 {
-      color: var(--text-muted);
-      margin-bottom: 14px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+    .type-filter-btn {
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      padding: 8px 16px;
+      border-radius: 999px;
       font-size: 14px;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+      box-shadow: var(--shadow-sm);
     }
-    .results-row {
-      display: flex;
-      gap: 12px;
-      overflow-x: auto;
-      padding-bottom: 8px;
+    .type-filter-btn.is-active {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
     }
-    .results-row::-webkit-scrollbar {
-      height: 8px;
+    .type-filter-btn:hover {
+      transform: translateY(-1px);
     }
-    .results-row::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.04);
-    }
-    .results-row::-webkit-scrollbar-thumb {
-      background-color: var(--accent);
-      border-radius: 10px;
+    .results-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
     }
     .card {
       flex: 0 0 auto;
-      width: 140px;
+      width: 100%;
       cursor: pointer;
       border-radius: var(--radius-md);
       overflow: hidden;
@@ -137,6 +139,14 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .card-meta {
+      padding: 0 8px 8px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
     .no-results {
       text-align: center;
       color: var(--text-subtle);
@@ -160,6 +170,7 @@
       <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
       <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
     </div>
+    <div class="results-list" id="resultsList"></div>
 
     <section id="moviesSection">
       <h2>Movies</h2>
@@ -183,6 +194,7 @@
     const currentQuery = urlParams.get('q') || '';
 
     const resultsTitle = document.getElementById('resultsTitle');
+    const resultsList = document.getElementById('resultsList');
     const moviesSection = document.getElementById('moviesSection');
     const tvSection = document.getElementById('tvSection');
     const moviesResults = document.getElementById('moviesResults');
@@ -191,6 +203,7 @@
 
     const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
     const queryNormalized = currentQuery.trim();
+    let allResults = [];
 
     function createMovieKey(title, year) {
       return `${(title || '').trim().toLowerCase()}-${year || 'N/A'}`;
@@ -207,6 +220,12 @@
     }
 
     resultsTitle.textContent = `Search Results for "${queryNormalized}"`;
+    function applySearchFilter(filter) {
+      const filteredItems = allResults.filter(item => {
+        if (filter === 'all') return true;
+        return item.type === filter;
+      });
+      renderResults(resultsList, filteredItems);
     moviesSection.dataset.hasResults = 'false';
     tvSection.dataset.hasResults = 'false';
 
@@ -238,7 +257,8 @@
             year: item.y || 'N/A',
             img: item.i?.[0] || NO_IMAGE,
             link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
-            source: 'IMDb-v2'
+            source: 'IMDb-v2',
+            type: 'movie'
           }));
         })
         .catch(() => []);
@@ -258,7 +278,8 @@
               year: show.premiered ? show.premiered.slice(0,4) : 'N/A',
               img: show.image?.medium || NO_IMAGE,
               link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
-              source: 'TVmaze'
+              source: 'TVmaze',
+              type: 'tv'
             };
           });
         })
@@ -285,7 +306,8 @@
               year: item.release_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
               link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
-              source: 'TMDB'
+              source: 'TMDB',
+              type: 'movie'
             });
           }
         });
@@ -298,7 +320,8 @@
               year: item.Year,
               img: item.Poster !== 'N/A' ? item.Poster : NO_IMAGE,
               link: `${BASE_URL}/movies/viewer.html?id=${item.imdbID}`,
-              source: 'OMDB'
+              source: 'OMDB',
+              type: 'movie'
             });
           }
         });
@@ -318,7 +341,8 @@
               year: item.first_air_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
               link: `${BASE_URL}/tv/viewer.html?id=${item.id}`,
-              source: 'TMDB'
+              source: 'TMDB',
+              type: 'tv'
             });
           }
         });
@@ -329,6 +353,12 @@
             tvMap.set(key, item);
           }
         });
+        allResults = [...movieMap.values(), ...tvMap.values()];
+        if (allResults.length > 0) {
+          const activeFilter = searchFilterButtons.find(button => button.classList.contains('is-active'))?.dataset.filter || 'all';
+          applySearchFilter(activeFilter);
+        } else {
+          resultsList.innerHTML = '<p class="no-results">No results found.</p>';
 
         if (movieMap.size > 0) {
           renderResults(moviesResults, Array.from(movieMap.values()));
@@ -349,6 +379,10 @@
       })
       .catch(err => {
         console.error('Search failed', err);
+        resultsList.innerHTML = '<p class="no-results">Failed to load results.</p>';
+      });
+    } else {
+      resultsList.innerHTML = '<p class="no-results">Please enter a search term.</p>';
         moviesSection.innerHTML = '<p class="no-results">Failed to load results.</p>';
         tvSection.innerHTML = '';
         moviesSection.dataset.hasResults = 'true';
@@ -384,6 +418,11 @@
 
         card.appendChild(img);
         card.appendChild(title);
+
+        const meta = document.createElement('div');
+        meta.className = 'card-meta';
+        meta.textContent = item.type === 'tv' ? 'TV Show' : 'Movie';
+        card.appendChild(meta);
 
         card.dataset.source = item.source;
 
