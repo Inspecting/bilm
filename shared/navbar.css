@@ -7,8 +7,9 @@
 }
 
 header {
-  background-color: var(--surface-3);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  background: color-mix(in srgb, var(--surface-3) 90%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.4);
   position: relative;
   z-index: 1000;
   border-bottom: 1px solid var(--border);
@@ -21,6 +22,7 @@ header {
   max-width: 1200px;
   padding: 12px 24px;
   margin: 0 auto;
+  gap: 16px;
 }
 
 .logo-container {
@@ -31,7 +33,7 @@ header {
   display: flex;
   align-items: center;
   color: var(--text-primary);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   text-decoration: none;
   gap: 4px;
@@ -57,31 +59,35 @@ header {
 
 nav {
   display: flex;
-  gap: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 nav button {
-  background: none;
-  border: none;
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 8px;
-  transition: color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
+  padding: 6px 14px;
+  border-radius: 999px;
+  transition: color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 
 nav button:hover {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.06);
   box-shadow: 0 0 12px var(--accent-soft);
+  border-color: var(--accent-soft);
 }
 
 nav button.active {
-  color: var(--accent);
-  background-color: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   box-shadow: 0 0 12px var(--accent-glow);
+  border-color: var(--accent);
 }
 
 .search-wrapper {
@@ -98,11 +104,11 @@ nav button.active {
 
 .search-input {
   width: 100%;
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 8px 32px 8px 36px;
+  border-radius: 999px;
+  padding: 8px 36px 8px 36px;
   font-size: 14px;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
@@ -138,7 +144,7 @@ nav button.active {
 .search-clear {
   position: absolute;
   top: 50%;
-  right: 8px;
+  right: 12px;
   transform: translateY(-50%);
   background: none;
   border: 0;
@@ -158,28 +164,27 @@ nav button.active {
   color: var(--text-primary);
 }
 
-/* Hide header on mobile */
 @media (max-width: 768px) {
   header {
     display: none;
   }
 }
 
-/* Mobile Bottom Navbar (Updated) */
 .mobile-bottom-nav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 64px;
-  padding-top: 4px;
-  background-color: var(--surface-3);
+  height: 70px;
+  padding: 6px 10px 8px;
+  background: color-mix(in srgb, var(--surface-3) 90%, transparent);
   border-top: 1px solid var(--border);
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 -8px 24px rgba(2, 6, 23, 0.5);
   z-index: 1100;
   display: flex;
   justify-content: space-around;
-  align-items: flex-start;
+  align-items: center;
+  gap: 6px;
 }
 
 .mobile-bottom-nav button {
@@ -189,14 +194,14 @@ nav button.active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   gap: 4px;
 }
 
 .mobile-bottom-nav button img {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   filter: brightness(0) invert(1);
 }
 
@@ -209,15 +214,14 @@ nav button.active {
   filter: brightness(1) saturate(3) drop-shadow(0 0 3px var(--accent-glow));
 }
 
-/* Mobile Search Overlay */
 .mobile-search-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  backdrop-filter: blur(8px);
-  background-color: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(10px);
+  background-color: rgba(5, 8, 18, 0.72);
   display: none;
   flex-direction: column;
   align-items: center;
@@ -239,11 +243,11 @@ nav button.active {
   width: 100%;
   padding: 12px 16px 12px 40px;
   font-size: 18px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: none;
   outline: none;
   font-family: 'Poppins', sans-serif;
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
   box-shadow: 0 0 10px var(--accent-soft);
   caret-color: var(--accent);
@@ -252,7 +256,7 @@ nav button.active {
 
 .mobile-search-icon {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
@@ -263,10 +267,9 @@ nav button.active {
   filter: drop-shadow(0 0 4px var(--accent-glow));
 }
 
-/* Clear '×' Button Inside Input (appears only when typing) */
 #mobileSearchCloseBtn {
   position: absolute;
-  right: 12px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
@@ -282,21 +285,20 @@ nav button.active {
   user-select: none;
 }
 
-/* Top-right Close Button */
 #mobileSearchTopCloseBtn {
   position: fixed;
   top: 16px;
   right: 16px;
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: 14px;
   background-color: var(--surface-2);
   border: none;
   font-size: 28px;
   font-weight: bold;
   color: var(--accent);
   cursor: pointer;
-  box-shadow: 0 0 12px 4px var(--accent-glow);
+  box-shadow: 0 0 16px 4px var(--accent-glow);
   z-index: 2000;
   display: flex;
   align-items: center;
@@ -307,10 +309,9 @@ nav button.active {
 }
 
 #mobileSearchTopCloseBtn:hover {
-  box-shadow: 0 0 20px 6px var(--accent-strong);
+  box-shadow: 0 0 22px 6px var(--accent-strong);
 }
 
-/* Hide mobile navbar on desktop */
 @media (min-width: 769px) {
   .mobile-bottom-nav {
     display: none;
