@@ -202,6 +202,12 @@
   });
 
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      if (commandPalette?.classList.contains('active')) {
+        closeCommandPalette();
+      }
+      return;
+    }
     const isCmdK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
     if (!isCmdK) return;
     event.preventDefault();

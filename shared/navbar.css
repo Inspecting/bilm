@@ -179,6 +179,12 @@ nav button.active {
   }
 }
 
+@media (min-width: 821px) {
+  .mobile-bottom-nav {
+    display: none;
+  }
+}
+
 .mobile-bottom-nav {
   position: fixed;
   bottom: 0;
@@ -285,6 +291,22 @@ nav button.active {
   align-items: center;
   justify-content: center;
   z-index: 1300;
+}
+
+.command-palette.active {
+  display: flex;
+}
+
+.command-panel {
+  background: var(--surface-1);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+  width: min(520px, 90%);
+  color: var(--text-primary);
+}
+
 }
 
 .command-palette.active {

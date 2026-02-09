@@ -116,6 +116,13 @@ async function renderSections() {
     container.appendChild(sectionEl);
 
     const items = await fetchItems(section.endpoint);
+    items
+      .filter(item => item.media_type !== 'person')
+      .slice(0, state.itemsPerLoad)
+      .forEach(item => {
+        const itemType = section.type === 'all' ? (item.media_type || 'movie') : section.type;
+        row.appendChild(createCard(item, itemType));
+      });
     items.slice(0, state.itemsPerLoad).forEach(item => {
       const itemType = section.type === 'all' ? (item.media_type || 'movie') : section.type;
       row.appendChild(createCard(item, itemType));
