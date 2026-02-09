@@ -1,11 +1,24 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const BASE_URL = 'https://inspecting.github.io/bilm';
-const showsPerLoad = 15;
-const PRIORITY_SECTION_COUNT = 4;
+const DEFAULT_SHOWS_PER_LOAD = 15;
+const PRIORITY_SECTION_COUNT = 3;
 
 let allGenres = [];
+let showsPerLoad = DEFAULT_SHOWS_PER_LOAD;
 const loadedCounts = {};
 const loadedShowIds = {};
+
+const sortOptions = {
+  trending: { title: 'Trending', endpoint: '/trending/tv/week' },
+  popular: { title: 'Popular', endpoint: '/tv/popular' },
+  top_rated: { title: 'Top Rated', endpoint: '/tv/top_rated' },
+  airing_today: { title: 'Airing Today', endpoint: '/tv/airing_today' }
+};
+
+const state = {
+  sort: 'trending',
+  genre: 'all'
+};
 
 async function fetchJSON(url) {
   try {
@@ -24,20 +37,72 @@ async function fetchGenres() {
   return allGenres;
 }
 
-function getSections() {
-  const staticSections = [
-    { title: 'Trending', endpoint: '/trending/tv/week' },
-    { title: 'Popular', endpoint: '/tv/popular' },
-    { title: 'Top Rated', endpoint: '/tv/top_rated' },
-    { title: 'Airing Today', endpoint: '/tv/airing_today' }
+function buildGenreChips() {
+  const container = document.getElementById('tvGenres');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const allChip = document.createElement('button');
+  allChip.type = 'button';
+  allChip.className = `chip ${state.genre === 'all' ? 'is-active' : ''}`;
+  allChip.dataset.genre = 'all';
+  allChip.textContent = 'All genres';
+  container.appendChild(allChip);
+
+  const quickSorts = [
+    { key: 'trending', label: 'Trending' },
+    { key: 'popular', label: 'Popular' },
+    { key: 'top_rated', label: 'Top Rated' },
+    { key: 'airing_today', label: 'Airing Today' }
   ];
+
+  quickSorts.forEach(sort => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `chip ${state.sort === sort.key ? 'is-active' : ''}`;
+    chip.dataset.sort = sort.key;
+    chip.textContent = sort.label;
+    container.appendChild(chip);
+  });
+
+  allGenres.forEach(genre => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `chip ${state.genre === String(genre.id) ? 'is-active' : ''}`;
+    chip.dataset.genre = String(genre.id);
+    chip.textContent = genre.name;
+    container.appendChild(chip);
+  });
+}
+
+function getSections() {
+  const sections = [];
+  const activeSort = sortOptions[state.sort] || sortOptions.trending;
+  sections.push({
+    title: activeSort.title,
+    endpoint: activeSort.endpoint,
+    key: `sort-${state.sort}`
+  });
+
+  if (state.genre !== 'all') {
+    const genre = allGenres.find(item => String(item.id) === state.genre);
+    if (genre) {
+      sections.push({
+        title: `${genre.name} Spotlight`,
+        endpoint: `/discover/tv?with_genres=${genre.id}`,
+        key: `genre-${genre.id}`
+      });
+    }
+    return sections;
+  }
 
   const genreSections = allGenres.map(genre => ({
     title: genre.name,
-    endpoint: `/discover/tv?with_genres=${genre.id}`
+    endpoint: `/discover/tv?with_genres=${genre.id}`,
+    key: `genre-${genre.id}`
   }));
 
-  return [...staticSections, ...genreSections];
+  return [...sections, ...genreSections];
 }
 
 async function fetchShows(endpoint, page = 1) {
@@ -79,7 +144,7 @@ function createShowCard(show) {
 function createSectionSkeleton(section, container) {
   const sectionEl = document.createElement('div');
   sectionEl.className = 'section';
-  sectionEl.id = `section-${section.title.replace(/\s/g, '')}`;
+  sectionEl.id = `section-${section.key}`;
 
   const titleEl = document.createElement('h2');
   titleEl.className = 'section-title';
@@ -87,7 +152,7 @@ function createSectionSkeleton(section, container) {
 
   const rowEl = document.createElement('div');
   rowEl.className = 'scroll-row';
-  rowEl.id = `row-${section.title.replace(/\s/g, '')}`;
+  rowEl.id = `row-${section.key}`;
 
   sectionEl.appendChild(titleEl);
   sectionEl.appendChild(rowEl);
@@ -95,22 +160,23 @@ function createSectionSkeleton(section, container) {
 }
 
 async function loadShowsForSection(section) {
-  loadedCounts[section.title] ??= 0;
-  loadedShowIds[section.title] ??= new Set();
+  loadedCounts[section.key] ??= 0;
+  loadedShowIds[section.key] ??= new Set();
 
-  const page = Math.floor(loadedCounts[section.title] / showsPerLoad) + 1;
+  const page = Math.floor(loadedCounts[section.key] / showsPerLoad) + 1;
   const shows = await fetchShows(section.endpoint, page);
   if (!shows.length) return false;
 
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.key}`);
+  if (!rowEl) return false;
 
-  const uniqueShows = shows.filter(s => !loadedShowIds[section.title].has(s.id));
+  const uniqueShows = shows.filter(s => !loadedShowIds[section.key].has(s.id));
 
-  for (const show of uniqueShows.slice(0, showsPerLoad)) {
-    loadedShowIds[section.title].add(show.id);
+  uniqueShows.slice(0, showsPerLoad).forEach(show => {
+    loadedShowIds[section.key].add(show.id);
 
     const poster = show.poster_path
-      ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
+      ? `https://image.tmdb.org/t/p/${showsPerLoad < DEFAULT_SHOWS_PER_LOAD ? 'w342' : 'w500'}${show.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image';
 
     const showData = {
@@ -123,14 +189,14 @@ async function loadShowsForSection(section) {
 
     const card = createShowCard(showData);
     rowEl.appendChild(card);
-  }
+  });
 
-  loadedCounts[section.title] += showsPerLoad;
+  loadedCounts[section.key] += showsPerLoad;
   return true;
 }
 
 function setupInfiniteScroll(section) {
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.key}`);
   if (!rowEl) return;
 
   let loading = false;
@@ -144,17 +210,32 @@ function setupInfiniteScroll(section) {
   }, { passive: true });
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+function resetSections() {
   const container = document.getElementById('tvSections');
-  if (!container) {
-    console.error('Missing container with id "tvSections" in HTML');
-    return;
-  }
+  if (!container) return;
+  container.innerHTML = '';
+  Object.keys(loadedCounts).forEach(key => delete loadedCounts[key]);
+  Object.keys(loadedShowIds).forEach(key => delete loadedShowIds[key]);
+}
 
-  await fetchGenres();
+function updateQuickFilterButtons() {
+  document.querySelectorAll('#tvGenres .chip[data-sort]').forEach(button => {
+    button.classList.toggle('is-active', button.dataset.sort === state.sort);
+  });
+}
+
+function updateGenreButtons() {
+  document.querySelectorAll('#tvGenres .chip[data-genre]').forEach(button => {
+    button.classList.toggle('is-active', button.dataset.genre === state.genre);
+  });
+}
+
+async function renderSections() {
+  const container = document.getElementById('tvSections');
+  if (!container) return;
+  resetSections();
 
   const sections = getSections();
-
   sections.forEach(section => createSectionSkeleton(section, container));
 
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
@@ -172,4 +253,44 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   sections.forEach(section => setupInfiniteScroll(section));
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  if (settings.dataSaver) {
+    showsPerLoad = 10;
+  }
+
+  await fetchGenres();
+  buildGenreChips();
+
+  const sortSelect = document.getElementById('tvSort');
+  if (sortSelect) {
+    sortSelect.value = state.sort;
+    sortSelect.addEventListener('change', (event) => {
+      state.sort = event.target.value;
+      updateQuickFilterButtons();
+      renderSections();
+    });
+  }
+
+  document.getElementById('tvGenres')?.addEventListener('click', (event) => {
+    const sortButton = event.target.closest('button[data-sort]');
+    if (sortButton) {
+      state.sort = sortButton.dataset.sort;
+      if (sortSelect) sortSelect.value = state.sort;
+      updateQuickFilterButtons();
+      renderSections();
+      return;
+    }
+    const button = event.target.closest('button[data-genre]');
+    if (!button) return;
+    state.genre = button.dataset.genre;
+    updateGenreButtons();
+    renderSections();
+  });
+
+  updateQuickFilterButtons();
+  updateGenreButtons();
+  await renderSections();
 });

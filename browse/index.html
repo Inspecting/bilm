@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm 💜 - Browse</title>
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0a" />
+
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+  <link rel="stylesheet" href="/bilm/shared/components.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="/bilm/shared/access.js"></script>
+  <script src="/bilm/shared/theme.js"></script>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+
+  <main class="browse">
+    <section class="section-shell browse-hero">
+      <div>
+        <p class="hero-eyebrow">Browse</p>
+        <h1>Movies and TV, side by side.</h1>
+        <p class="hero-subtext">Jump into movies or TV shows with unified sorting and genre filters.</p>
+      </div>
+      <div class="card-grid">
+        <a class="card browse-card" href="/bilm/movies/">
+          <div class="card-header">
+            <h2 class="card-title">Movies</h2>
+            <span class="tag">Trending + genres</span>
+          </div>
+          <p class="card-subtitle">Explore movies with quick access filters and curated genre lanes.</p>
+          <span class="btn btn-soft">Open Movies</span>
+        </a>
+        <a class="card browse-card" href="/bilm/tv/">
+          <div class="card-header">
+            <h2 class="card-title">TV Shows</h2>
+            <span class="tag">Top rated + genres</span>
+          </div>
+          <p class="card-subtitle">Discover TV shows with smart sorting and easy filtering.</p>
+          <span class="btn btn-soft">Open TV</span>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script src="/bilm/shared/navbar.js" defer></script>
+</body>
+</html>

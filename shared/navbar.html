@@ -1,26 +1,23 @@
 <header>
   <nav class="navbar" role="navigation" aria-label="Primary navigation">
-    <!-- Logo -->
     <div class="logo-container">
       <a href="/bilm/home/" class="logo" title="Go to Home">
-        <span class="heart-icon" aria-hidden="true">❤</span>
-        Bilm
-        <span class="heart-icon" aria-hidden="true">❤</span>
+        <img src="/bilm/icon.png" alt="Bilm" />
+        <span>Bilm</span>
       </a>
     </div>
 
-    <!-- Nav Buttons -->
     <div class="nav-center">
       <nav>
         <button data-page="home">Home</button>
-        <button data-page="movies">Movies</button>
-        <button data-page="tv">TV Shows</button>
+        <button data-page="explore">Explore</button>
+        <button data-page="browse">Browse</button>
+        <button data-page="collections">Collections</button>
         <button data-page="games">Games</button>
         <button data-page="settings">Settings</button>
       </nav>
     </div>
 
-    <!-- Desktop Search Bar -->
     <div class="search-wrapper">
       <form id="navbarSearchForm" class="search-input-wrapper" action="/bilm/search/" method="get">
         <input type="text" id="searchInput" name="q" class="search-input" placeholder="Search..." autocomplete="off" spellcheck="false" />
@@ -33,23 +30,25 @@
         </button>
         <button type="button" id="desktopSearchClearBtn" class="search-clear" aria-label="Clear search input">×</button>
       </form>
+      <button class="cmdk-trigger" type="button" aria-label="Open command palette">
+        <span>⌘K</span>
+      </button>
     </div>
   </nav>
 </header>
 
-<!-- Mobile Bottom Navbar -->
 <nav class="mobile-bottom-nav" role="navigation" aria-label="Mobile navigation">
   <button data-page="home" aria-label="Home">
     <img src="https://img.icons8.com/ios-glyphs/30/ffffff/home.png" alt="Home" />
   </button>
-  <button data-page="movies" aria-label="Movies">
-    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/movie-projector.png" alt="Movies" />
+  <button data-page="explore" aria-label="Explore">
+    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/compass.png" alt="Explore" />
   </button>
-  <button data-page="tv" aria-label="TV Shows">
-    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/tv.png" alt="TV Shows" />
+  <button data-page="browse" aria-label="Browse">
+    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/stack.png" alt="Browse" />
   </button>
-  <button data-page="games" aria-label="Games">
-    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/controller.png" alt="Games" />
+  <button data-page="collections" aria-label="Collections">
+    <img src="https://img.icons8.com/ios-glyphs/30/ffffff/list.png" alt="Collections" />
   </button>
   <button data-page="search" id="mobileSearchBtn" aria-label="Search">
     <img src="https://img.icons8.com/ios-glyphs/30/ffffff/search--v1.png" alt="Search" />
@@ -59,12 +58,9 @@
   </button>
 </nav>
 
-<!-- Mobile Search Overlay -->
 <div id="mobileSearchOverlay" class="mobile-search-overlay" role="dialog" aria-modal="true" aria-label="Mobile search overlay">
-  <!-- Top-right Close Button -->
   <button id="mobileSearchTopCloseBtn" aria-label="Close search overlay" title="Close search overlay">×</button>
 
-  <!-- Search Input with Icon -->
   <div class="mobile-search-input-wrapper">
     <input type="text" id="mobileSearchInput" placeholder="Search..." autocomplete="off" spellcheck="false" />
 
@@ -75,7 +71,24 @@
       </svg>
     </div>
 
-    <!-- Clear Search Input Button -->
     <button id="mobileSearchCloseBtn" aria-label="Clear search input">×</button>
+  </div>
+</div>
+
+<div id="commandPalette" class="command-palette" role="dialog" aria-modal="true" aria-label="Quick commands">
+  <div class="command-panel">
+    <div class="command-header">
+      <h3>Quick access</h3>
+      <button type="button" class="command-close" aria-label="Close command palette">×</button>
+    </div>
+    <p>Jump to a destination or start a new search.</p>
+    <div class="command-actions">
+      <button data-command="home">Home</button>
+      <button data-command="explore">Explore</button>
+      <button data-command="browse">Browse</button>
+      <button data-command="collections">Collections</button>
+      <button data-command="games">Games</button>
+      <button data-command="settings">Settings</button>
+    </div>
   </div>
 </div>

@@ -350,6 +350,39 @@
           <span></span>
         </label>
       </div>
+
+      <div class="control-row">
+        <div>
+          <label>Data Saver</label>
+          <small>Load fewer images and lighter poster sizes.</small>
+        </div>
+        <label class="toggle">
+          <input id="dataSaverToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Compact Cards</label>
+          <small>Reduce poster sizes for denser browsing.</small>
+        </div>
+        <label class="toggle">
+          <input id="compactCardsToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Show Sources</label>
+          <small>Display data sources in search results.</small>
+        </div>
+        <label class="toggle">
+          <input id="showSourcesToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
     </section>
 
     <section class="settings-card">
@@ -416,6 +449,9 @@
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
+  const dataSaverToggle = document.getElementById('dataSaverToggle');
+  const compactCardsToggle = document.getElementById('compactCardsToggle');
+  const showSourcesToggle = document.getElementById('showSourcesToggle');
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
@@ -436,6 +472,9 @@
     customBackgroundRow.hidden = (settings.background || 'deep') !== 'custom';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
+    dataSaverToggle.checked = settings.dataSaver === true;
+    compactCardsToggle.checked = settings.compactCards === true;
+    showSourcesToggle.checked = settings.showSources === true;
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
@@ -476,6 +515,18 @@
 
   particleToggle.addEventListener('change', (event) => {
     applySettings({ particles: event.target.checked });
+  });
+
+  dataSaverToggle.addEventListener('change', (event) => {
+    applySettings({ dataSaver: event.target.checked });
+  });
+
+  compactCardsToggle.addEventListener('change', (event) => {
+    applySettings({ compactCards: event.target.checked });
+  });
+
+  showSourcesToggle.addEventListener('change', (event) => {
+    applySettings({ showSources: event.target.checked });
   });
 
   incognitoToggle.addEventListener('change', (event) => {

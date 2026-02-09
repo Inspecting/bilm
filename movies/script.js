@@ -1,11 +1,24 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const BASE_URL = 'https://inspecting.github.io/bilm';
-const moviesPerLoad = 15;
-const PRIORITY_SECTION_COUNT = 4;
+const DEFAULT_MOVIES_PER_LOAD = 15;
+const PRIORITY_SECTION_COUNT = 3;
 
 let allGenres = [];
+let moviesPerLoad = DEFAULT_MOVIES_PER_LOAD;
 const loadedCounts = {};
 const loadedMovieIds = {};
+
+const sortOptions = {
+  trending: { title: 'Trending', endpoint: '/trending/movie/week' },
+  popular: { title: 'Popular', endpoint: '/movie/popular' },
+  top_rated: { title: 'Top Rated', endpoint: '/movie/top_rated' },
+  now_playing: { title: 'Now Playing', endpoint: '/movie/now_playing' }
+};
+
+const state = {
+  sort: 'trending',
+  genre: 'all'
+};
 
 async function fetchJSON(url) {
   try {
@@ -24,20 +37,72 @@ async function fetchGenres() {
   return allGenres;
 }
 
-function getSections() {
-  const staticSections = [
-    { title: 'Trending', endpoint: '/trending/movie/week' },
-    { title: 'Popular', endpoint: '/movie/popular' },
-    { title: 'Top Rated', endpoint: '/movie/top_rated' },
-    { title: 'Now Playing', endpoint: '/movie/now_playing' }
+function buildGenreChips() {
+  const container = document.getElementById('movieGenres');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const allChip = document.createElement('button');
+  allChip.type = 'button';
+  allChip.className = `chip ${state.genre === 'all' ? 'is-active' : ''}`;
+  allChip.dataset.genre = 'all';
+  allChip.textContent = 'All genres';
+  container.appendChild(allChip);
+
+  const quickSorts = [
+    { key: 'trending', label: 'Trending' },
+    { key: 'popular', label: 'Popular' },
+    { key: 'top_rated', label: 'Top Rated' },
+    { key: 'now_playing', label: 'Now Playing' }
   ];
+
+  quickSorts.forEach(sort => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `chip ${state.sort === sort.key ? 'is-active' : ''}`;
+    chip.dataset.sort = sort.key;
+    chip.textContent = sort.label;
+    container.appendChild(chip);
+  });
+
+  allGenres.forEach(genre => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `chip ${state.genre === String(genre.id) ? 'is-active' : ''}`;
+    chip.dataset.genre = String(genre.id);
+    chip.textContent = genre.name;
+    container.appendChild(chip);
+  });
+}
+
+function getSections() {
+  const sections = [];
+  const activeSort = sortOptions[state.sort] || sortOptions.trending;
+  sections.push({
+    title: activeSort.title,
+    endpoint: activeSort.endpoint,
+    key: `sort-${state.sort}`
+  });
+
+  if (state.genre !== 'all') {
+    const genre = allGenres.find(item => String(item.id) === state.genre);
+    if (genre) {
+      sections.push({
+        title: `${genre.name} Picks`,
+        endpoint: `/discover/movie?with_genres=${genre.id}`,
+        key: `genre-${genre.id}`
+      });
+    }
+    return sections;
+  }
 
   const genreSections = allGenres.map(genre => ({
     title: genre.name,
-    endpoint: `/discover/movie?with_genres=${genre.id}`
+    endpoint: `/discover/movie?with_genres=${genre.id}`,
+    key: `genre-${genre.id}`
   }));
 
-  return [...staticSections, ...genreSections];
+  return [...sections, ...genreSections];
 }
 
 async function fetchMovies(endpoint, page = 1) {
@@ -79,7 +144,7 @@ function createMovieCard(movie) {
 function createSectionSkeleton(section, container) {
   const sectionEl = document.createElement('div');
   sectionEl.className = 'section';
-  sectionEl.id = `section-${section.title.replace(/\s/g, '')}`;
+  sectionEl.id = `section-${section.key}`;
 
   const titleEl = document.createElement('h2');
   titleEl.className = 'section-title';
@@ -87,7 +152,7 @@ function createSectionSkeleton(section, container) {
 
   const rowEl = document.createElement('div');
   rowEl.className = 'scroll-row';
-  rowEl.id = `row-${section.title.replace(/\s/g, '')}`;
+  rowEl.id = `row-${section.key}`;
 
   sectionEl.appendChild(titleEl);
   sectionEl.appendChild(rowEl);
@@ -95,43 +160,43 @@ function createSectionSkeleton(section, container) {
 }
 
 async function loadMoviesForSection(section) {
-  loadedCounts[section.title] ??= 0;
-  loadedMovieIds[section.title] ??= new Set();
+  loadedCounts[section.key] ??= 0;
+  loadedMovieIds[section.key] ??= new Set();
 
-  const page = Math.floor(loadedCounts[section.title] / moviesPerLoad) + 1;
+  const page = Math.floor(loadedCounts[section.key] / moviesPerLoad) + 1;
   const movies = await fetchMovies(section.endpoint, page);
   if (!movies.length) return false;
 
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.key}`);
+  if (!rowEl) return false;
 
-  // Filter to unique movies
-  const uniqueMovies = movies.filter(m => !loadedMovieIds[section.title].has(m.id));
+  const uniqueMovies = movies.filter(m => !loadedMovieIds[section.key].has(m.id));
 
-  for (const movie of uniqueMovies.slice(0, moviesPerLoad)) {
-    loadedMovieIds[section.title].add(movie.id);
+  uniqueMovies.slice(0, moviesPerLoad).forEach(movie => {
+    loadedMovieIds[section.key].add(movie.id);
 
-    const poster = movie.poster_path
-      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+    const posterBase = movie.poster_path
+      ? `https://image.tmdb.org/t/p/${moviesPerLoad < DEFAULT_MOVIES_PER_LOAD ? 'w342' : 'w500'}${movie.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image';
 
     const movieData = {
       tmdbId: movie.id,
       title: movie.title,
       year: movie.release_date?.slice(0, 4) || 'N/A',
-      img: poster,
+      img: posterBase,
       link: `${BASE_URL}/movies/viewer.html?id=${movie.id}`
     };
 
     const card = createMovieCard(movieData);
     rowEl.appendChild(card);
-  }
+  });
 
-  loadedCounts[section.title] += moviesPerLoad;
+  loadedCounts[section.key] += moviesPerLoad;
   return true;
 }
 
 function setupInfiniteScroll(section) {
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.key}`);
   if (!rowEl) return;
 
   let loading = false;
@@ -145,21 +210,34 @@ function setupInfiniteScroll(section) {
   }, { passive: true });
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+function resetSections() {
   const container = document.getElementById('movieSections');
-  if (!container) {
-    console.error('Missing container with id "movieSections" in HTML');
-    return;
-  }
+  if (!container) return;
+  container.innerHTML = '';
+  Object.keys(loadedCounts).forEach(key => delete loadedCounts[key]);
+  Object.keys(loadedMovieIds).forEach(key => delete loadedMovieIds[key]);
+}
 
-  await fetchGenres();
+function updateQuickFilterButtons() {
+  document.querySelectorAll('#movieGenres .chip[data-sort]').forEach(button => {
+    button.classList.toggle('is-active', button.dataset.sort === state.sort);
+  });
+}
+
+function updateGenreButtons() {
+  document.querySelectorAll('#movieGenres .chip[data-genre]').forEach(button => {
+    button.classList.toggle('is-active', button.dataset.genre === state.genre);
+  });
+}
+
+async function renderSections() {
+  const container = document.getElementById('movieSections');
+  if (!container) return;
+  resetSections();
 
   const sections = getSections();
-
-  // Create section skeletons immediately for stable layout
   sections.forEach(section => createSectionSkeleton(section, container));
 
-  // Prioritize above-the-fold sections first for faster perceived load
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
   const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
   await Promise.all(prioritySections.map(section => loadMoviesForSection(section)));
@@ -175,4 +253,44 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   sections.forEach(section => setupInfiniteScroll(section));
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  if (settings.dataSaver) {
+    moviesPerLoad = 10;
+  }
+
+  await fetchGenres();
+  buildGenreChips();
+
+  const sortSelect = document.getElementById('movieSort');
+  if (sortSelect) {
+    sortSelect.value = state.sort;
+    sortSelect.addEventListener('change', (event) => {
+      state.sort = event.target.value;
+      updateQuickFilterButtons();
+      renderSections();
+    });
+  }
+
+  document.getElementById('movieGenres')?.addEventListener('click', (event) => {
+    const sortButton = event.target.closest('button[data-sort]');
+    if (sortButton) {
+      state.sort = sortButton.dataset.sort;
+      if (sortSelect) sortSelect.value = state.sort;
+      updateQuickFilterButtons();
+      renderSections();
+      return;
+    }
+    const button = event.target.closest('button[data-genre]');
+    if (!button) return;
+    state.genre = button.dataset.genre;
+    updateGenreButtons();
+    renderSections();
+  });
+
+  updateQuickFilterButtons();
+  updateGenreButtons();
+  await renderSections();
 });

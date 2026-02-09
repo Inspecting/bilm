@@ -10,7 +10,7 @@ body {
   color: var(--text-primary);
 }
 
-.library {
+.explore {
   padding: 24px 24px 96px;
   max-width: var(--max-content);
   margin: 0 auto;
@@ -19,7 +19,7 @@ body {
   gap: 24px;
 }
 
-.library-hero {
+.explore-hero {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -37,7 +37,7 @@ body {
   max-width: 560px;
 }
 
-.library-controls {
+.explore-controls {
   display: grid;
   gap: 16px;
 }
@@ -48,28 +48,12 @@ body {
   gap: 8px;
 }
 
-.control-block label,
 .control-block span {
   font-size: 0.9rem;
   color: var(--text-muted);
 }
 
-select {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  font-family: inherit;
-}
-
-select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 12px var(--accent-soft);
-}
-
-.library-sections {
+.explore-sections {
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -95,7 +79,7 @@ select:focus {
   padding-bottom: 10px;
 }
 
-.movie-card {
+.media-card {
   flex: 0 0 auto;
   width: 160px;
   background-color: var(--surface-2);
@@ -110,13 +94,13 @@ select:focus {
   border: 1px solid transparent;
 }
 
-.movie-card:hover {
+.media-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 0 18px var(--accent-glow);
   border-color: var(--accent-soft);
 }
 
-.movie-card img {
+.media-card img {
   width: 100%;
   height: 220px;
   object-fit: cover;
@@ -124,15 +108,15 @@ select:focus {
   background: rgba(255, 255, 255, 0.05);
 }
 
-:root[data-compact='on'] .movie-card {
+:root[data-compact='on'] .media-card {
   width: 140px;
 }
 
-:root[data-compact='on'] .movie-card img {
+:root[data-compact='on'] .media-card img {
   height: 200px;
 }
 
-.movie-card p {
+.media-card p {
   padding: 8px;
   font-size: 0.85rem;
   font-weight: 600;
@@ -140,8 +124,14 @@ select:focus {
   text-align: left;
 }
 
+.media-card span {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  padding: 0 8px 8px;
+}
+
 @media (max-width: 720px) {
-  .library {
+  .explore {
     padding: 20px 16px 96px;
   }
 }
