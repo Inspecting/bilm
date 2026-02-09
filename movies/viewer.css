@@ -166,6 +166,7 @@ main {
   position: relative;
   background: black;
   overflow: hidden;
+  border-radius: 20px;
 }
 
 iframe {
@@ -173,6 +174,7 @@ iframe {
   height: 100%;
   border: none;
   display: block;
+  border-radius: 20px;
 }
 
 #clickShield {
@@ -184,6 +186,7 @@ iframe {
   z-index: 5;
   pointer-events: none;
   background: transparent;
+  border-radius: 20px;
 }
 
 #playexBar {
