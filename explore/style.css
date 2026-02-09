@@ -108,6 +108,14 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
+:root[data-compact='on'] .media-card {
+  width: 140px;
+}
+
+:root[data-compact='on'] .media-card img {
+  height: 200px;
+}
+
 .media-card p {
   padding: 8px;
   font-size: 0.85rem;

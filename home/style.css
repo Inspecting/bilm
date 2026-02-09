@@ -148,6 +148,11 @@ body {
   object-fit: cover;
 }
 
+:root[data-compact='on'] .movie-card {
+  min-width: 140px;
+  max-width: 160px;
+}
+
 .movie-card p {
   font-size: 0.85rem;
   color: var(--text-muted);

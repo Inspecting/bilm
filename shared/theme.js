@@ -36,6 +36,9 @@
     searchHistory: true,
     continueWatching: true,
     incognito: false,
+    dataSaver: false,
+    compactCards: false,
+    showSources: false
     dataSaver: false
   };
 
@@ -78,6 +81,7 @@
     root.dataset.background = settings.background || DEFAULT_SETTINGS.background;
     root.dataset.motion = settings.motion === false ? 'off' : 'on';
     root.dataset.dataSaver = settings.dataSaver ? 'on' : 'off';
+    root.dataset.compact = settings.compactCards ? 'on' : 'off';
 
     if (root.dataset.background === 'custom') {
       root.style.setProperty('--bg-custom', settings.customBackground || DEFAULT_SETTINGS.customBackground);

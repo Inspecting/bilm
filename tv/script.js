@@ -49,6 +49,52 @@ function buildGenreChips() {
   allChip.textContent = 'All genres';
   container.appendChild(allChip);
 
+  const quickSorts = [
+    { key: 'trending', label: 'Trending' },
+    { key: 'popular', label: 'Popular' },
+    { key: 'top_rated', label: 'Top Rated' },
+    { key: 'airing_today', label: 'Airing Today' }
+  ];
+  allGenres.forEach(genre => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `chip ${state.genre === String(genre.id) ? 'is-active' : ''}`;
+    chip.dataset.genre = String(genre.id);
+    chip.textContent = genre.name;
+    container.appendChild(chip);
+  });
+}
+
+function getSections() {
+  const sections = [];
+  const activeSort = sortOptions[state.sort] || sortOptions.trending;
+  sections.push({
+    title: activeSort.title,
+    endpoint: activeSort.endpoint,
+    key: `sort-${state.sort}`
+  });
+
+  if (state.genre !== 'all') {
+    const genre = allGenres.find(item => String(item.id) === state.genre);
+    if (genre) {
+      sections.push({
+        title: `${genre.name} Spotlight`,
+        endpoint: `/discover/tv?with_genres=${genre.id}`,
+        key: `genre-${genre.id}`
+      });
+    }
+    return sections;
+  }
+
+  quickSorts.forEach(sort => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `chip ${state.sort === sort.key ? 'is-active' : ''}`;
+    chip.dataset.sort = sort.key;
+    chip.textContent = sort.label;
+    container.appendChild(chip);
+  });
+
   allGenres.forEach(genre => {
     const chip = document.createElement('button');
     chip.type = 'button';
@@ -203,12 +249,14 @@ function resetSections() {
 }
 
 function updateQuickFilterButtons() {
+  document.querySelectorAll('#tvGenres .chip[data-sort]').forEach(button => {
   document.querySelectorAll('#tvQuickFilters .chip').forEach(button => {
     button.classList.toggle('is-active', button.dataset.sort === state.sort);
   });
 }
 
 function updateGenreButtons() {
+  document.querySelectorAll('#tvGenres .chip[data-genre]').forEach(button => {
   document.querySelectorAll('#tvGenres .chip').forEach(button => {
     button.classList.toggle('is-active', button.dataset.genre === state.genre);
   });
@@ -258,6 +306,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  document.getElementById('tvGenres')?.addEventListener('click', (event) => {
+    const sortButton = event.target.closest('button[data-sort]');
+    if (sortButton) {
+      state.sort = sortButton.dataset.sort;
+      if (sortSelect) sortSelect.value = state.sort;
+      updateQuickFilterButtons();
+      renderSections();
+      return;
+    }
   document.getElementById('tvQuickFilters')?.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-sort]');
     if (!button) return;
