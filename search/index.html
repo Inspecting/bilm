@@ -58,6 +58,29 @@
       justify-content: center;
       margin-bottom: 20px;
       flex-wrap: wrap;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .type-filter-btn {
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+      box-shadow: var(--shadow-sm);
+    }
+    .type-filter-btn.is-active {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .type-filter-btn:hover {
+      transform: translateY(-1px);
+    }
+    section {
+      margin-bottom: 30px;
     }
     .type-filter-btn {
       border: 1px solid var(--border);
@@ -148,6 +171,16 @@
       <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
     </div>
     <div class="results-list" id="resultsList"></div>
+
+    <section id="moviesSection">
+      <h2>Movies</h2>
+      <div class="results-row" id="moviesResults"></div>
+    </section>
+
+    <section id="tvSection">
+      <h2>TV Shows</h2>
+      <div class="results-row" id="tvResults"></div>
+    </section>
   </main>
 
   <script src="/bilm/shared/navbar.js" defer></script>
@@ -162,6 +195,10 @@
 
     const resultsTitle = document.getElementById('resultsTitle');
     const resultsList = document.getElementById('resultsList');
+    const moviesSection = document.getElementById('moviesSection');
+    const tvSection = document.getElementById('tvSection');
+    const moviesResults = document.getElementById('moviesResults');
+    const tvResults = document.getElementById('tvResults');
     const searchFilterButtons = [...document.querySelectorAll('#searchFilters .type-filter-btn')];
 
     const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
@@ -189,6 +226,14 @@
         return item.type === filter;
       });
       renderResults(resultsList, filteredItems);
+    moviesSection.dataset.hasResults = 'false';
+    tvSection.dataset.hasResults = 'false';
+
+    function applySearchFilter(filter) {
+      const showMovies = filter === 'all' || filter === 'movie';
+      const showTv = filter === 'all' || filter === 'tv';
+      moviesSection.style.display = showMovies && moviesSection.dataset.hasResults === 'true' ? 'block' : 'none';
+      tvSection.style.display = showTv && tvSection.dataset.hasResults === 'true' ? 'block' : 'none';
     }
 
     searchFilterButtons.forEach(button => {
@@ -314,7 +359,23 @@
           applySearchFilter(activeFilter);
         } else {
           resultsList.innerHTML = '<p class="no-results">No results found.</p>';
+
+        if (movieMap.size > 0) {
+          renderResults(moviesResults, Array.from(movieMap.values()));
+          moviesSection.dataset.hasResults = 'true';
+        } else {
+          moviesSection.dataset.hasResults = 'false';
         }
+
+        if (tvMap.size > 0) {
+          renderResults(tvResults, Array.from(tvMap.values()));
+          tvSection.dataset.hasResults = 'true';
+        } else {
+          tvSection.dataset.hasResults = 'false';
+        }
+
+        const activeFilter = searchFilterButtons.find(button => button.classList.contains('is-active'))?.dataset.filter || 'all';
+        applySearchFilter(activeFilter);
       })
       .catch(err => {
         console.error('Search failed', err);
@@ -322,6 +383,18 @@
       });
     } else {
       resultsList.innerHTML = '<p class="no-results">Please enter a search term.</p>';
+        moviesSection.innerHTML = '<p class="no-results">Failed to load results.</p>';
+        tvSection.innerHTML = '';
+        moviesSection.dataset.hasResults = 'true';
+        tvSection.dataset.hasResults = 'false';
+        applySearchFilter('movie');
+      });
+    } else {
+      moviesSection.innerHTML = '<p class="no-results">Please enter a search term.</p>';
+      tvSection.innerHTML = '';
+      moviesSection.dataset.hasResults = 'true';
+      tvSection.dataset.hasResults = 'false';
+      applySearchFilter('movie');
     }
 
     function renderResults(container, items) {
