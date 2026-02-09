@@ -128,7 +128,7 @@ main {
   width: 100%;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-glow);
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   background: rgba(26, 22, 40, 0.9);
