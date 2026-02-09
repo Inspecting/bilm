@@ -39,6 +39,7 @@
     dataSaver: false,
     compactCards: false,
     showSources: false
+    dataSaver: false
   };
 
   const backgroundColors = {

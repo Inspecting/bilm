@@ -123,6 +123,10 @@ async function renderSections() {
         const itemType = section.type === 'all' ? (item.media_type || 'movie') : section.type;
         row.appendChild(createCard(item, itemType));
       });
+    items.slice(0, state.itemsPerLoad).forEach(item => {
+      const itemType = section.type === 'all' ? (item.media_type || 'movie') : section.type;
+      row.appendChild(createCard(item, itemType));
+    });
   }
 }
 
