@@ -131,14 +131,10 @@
   <main>
     <h1 id="resultsTitle">Search Results for ""</h1>
 
-    <section id="moviesSection">
-      <h2>Movies</h2>
-      <div class="results-row" id="moviesResults"></div>
-    </section>
-
-    <section id="tvSection">
-      <h2>TV Shows</h2>
-      <div class="results-row" id="tvResults"></div>
+    <section id="combinedSection">
+      <h2>Results</h2>
+      <p class="no-results" id="resultsMessage" hidden></p>
+      <div class="results-row" id="combinedResults"></div>
     </section>
   </main>
 
@@ -153,10 +149,9 @@
     const currentQuery = urlParams.get('q') || '';
 
     const resultsTitle = document.getElementById('resultsTitle');
-    const moviesSection = document.getElementById('moviesSection');
-    const tvSection = document.getElementById('tvSection');
-    const moviesResults = document.getElementById('moviesResults');
-    const tvResults = document.getElementById('tvResults');
+    const combinedSection = document.getElementById('combinedSection');
+    const resultsMessage = document.getElementById('resultsMessage');
+    const combinedResults = document.getElementById('combinedResults');
 
     const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
     const queryNormalized = currentQuery.trim();
@@ -282,28 +277,32 @@
           }
         });
 
-        if (movieMap.size > 0) {
-          renderResults(moviesResults, Array.from(movieMap.values()));
-          moviesSection.style.display = 'block';
-        } else {
-          moviesSection.style.display = 'none';
-        }
+        const combinedItems = [
+          ...Array.from(movieMap.values()),
+          ...Array.from(tvMap.values())
+        ];
 
-        if (tvMap.size > 0) {
-          renderResults(tvResults, Array.from(tvMap.values()));
-          tvSection.style.display = 'block';
+        if (combinedItems.length > 0) {
+          renderResults(combinedResults, combinedItems);
+          resultsMessage.hidden = true;
+          combinedSection.style.display = 'block';
         } else {
-          tvSection.style.display = 'none';
+          combinedResults.innerHTML = '';
+          resultsMessage.textContent = 'No results found.';
+          resultsMessage.hidden = false;
+          combinedSection.style.display = 'block';
         }
       })
       .catch(err => {
         console.error('Search failed', err);
-        moviesSection.innerHTML = '<p class="no-results">Failed to load results.</p>';
-        tvSection.innerHTML = '';
+        combinedResults.innerHTML = '';
+        resultsMessage.textContent = 'Failed to load results.';
+        resultsMessage.hidden = false;
       });
     } else {
-      moviesSection.innerHTML = '<p class="no-results">Please enter a search term.</p>';
-      tvSection.innerHTML = '';
+      combinedResults.innerHTML = '';
+      resultsMessage.textContent = 'Please enter a search term.';
+      resultsMessage.hidden = false;
     }
 
     function renderResults(container, items) {
