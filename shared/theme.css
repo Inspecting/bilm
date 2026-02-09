@@ -20,6 +20,10 @@
   --radius-sm: 10px;
   --transition-fast: 160ms ease;
   --transition-base: 240ms ease;
+  --content-max: 1200px;
+  --card-width: 170px;
+  --card-height: 230px;
+  --card-gap: 14px;
   --bg-deep: #0b0f1a;
   --bg-midnight: #05060d;
   --bg-velvet: #140b1d;
@@ -78,6 +82,18 @@
   --bg-tint: color-mix(in srgb, var(--bg-custom) 78%, transparent);
   --surface-1: color-mix(in srgb, var(--bg-custom) 72%, #ffffff 8%);
   --surface-2: color-mix(in srgb, var(--bg-custom) 68%, #ffffff 12%);
+}
+
+:root[data-density='compact'] {
+  --card-width: 145px;
+  --card-height: 200px;
+  --card-gap: 10px;
+}
+
+:root[data-density='comfort'] {
+  --card-width: 175px;
+  --card-height: 235px;
+  --card-gap: 14px;
 }
 
 html,

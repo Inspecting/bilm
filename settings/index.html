@@ -20,6 +20,264 @@
   <link rel="stylesheet" href="/bilm/shared/theme.css" />
 
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    main {
+      flex: 1;
+      width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+    }
+
+    .settings-content {
+      max-width: var(--content-max);
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 22px 90px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-gutter: stable;
+    }
+
+    .page-header {
+      display: grid;
+      gap: 8px;
+      margin: 20px 0 28px;
+      padding: 20px 24px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(140deg, rgba(139, 92, 246, 0.15), transparent 60%),
+        var(--surface-1);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
+    }
+
+    .page-header h1 {
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      color: var(--text-primary);
+    }
+
+    .page-header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    .settings-card {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .settings-card h2 {
+      font-size: 1.1rem;
+      color: var(--text-primary);
+    }
+
+    .settings-card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+      flex-wrap: wrap;
+    }
+
+    .control-row:hover {
+      border-color: var(--accent-soft);
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .control-row label {
+      font-size: 0.95rem;
+      color: var(--text-primary);
+    }
+
+    .control-row > div {
+      min-width: 180px;
+      flex: 1 1 auto;
+    }
+
+    .control-row small {
+      display: block;
+      color: var(--text-subtle);
+      font-size: 0.75rem;
+    }
+
+    select,
+    input[type=\"color\"] {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-family: inherit;
+    }
+
+    select:focus,
+    input[type=\"color\"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 10px var(--accent-soft);
+    }
+
+    .toggle {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      flex: 0 0 auto;
+      margin-left: auto;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle span {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      transition: background var(--transition-fast);
+      cursor: pointer;
+    }
+
+    .toggle span::after {
+      content: \"\";
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--text-primary);
+      transition: transform var(--transition-fast);
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .toggle input:checked + span {
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .toggle input:checked + span::after {
+      transform: translateX(20px);
+    }
+
+    .preset-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+      transition: transform var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .preset-btn:hover {
+      transform: scale(1.08);
+      border-color: var(--text-primary);
+    }
+
+    .actions-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      box-shadow: 0 10px 20px rgba(79, 70, 229, 0.35);
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(79, 70, 229, 0.45);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      box-shadow: none;
+      text-decoration: none;
+    }
+
+    .btn-outline:hover {
+      box-shadow: 0 0 12px var(--accent-soft);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
+    }
+
+    @media (max-width: 720px) {
+      .settings-content {
+        padding: 20px 16px 80px;
+      }
+
+      .control-row {
+        align-items: flex-start;
+      }
+    }
+  </style>
     * {\n      margin: 0;\n      padding: 0;\n      box-sizing: border-box;\n    }\n\n    html,\n    body {\n      height: 100%;\n      font-family: 'Poppins', sans-serif;\n      background-color: var(--bg-main);\n      color: var(--text-primary);\n      overflow: hidden;\n    }\n\n    body {\n      display: flex;\n      flex-direction: column;\n    }\n\n    main {\n      flex: 1;\n      width: 100%;\n      overflow-y: auto;\n      overflow-x: hidden;\n      scrollbar-gutter: stable;\n      padding: 0;\n      display: flex;\n      justify-content: center;\n    }\n\n    .settings-content {\n      max-width: 1180px;\n      width: 100%;\n      margin: 0 auto;\n      padding: 32px 22px 90px;\n      overflow-y: auto;\n      overflow-x: hidden;\n      scrollbar-gutter: stable;\n    }\n\n    .page-header {\n      display: grid;\n      gap: 8px;\n      margin: 20px 0 28px;\n      padding: 20px 24px;\n      border-radius: var(--radius-lg);\n      background: linear-gradient(140deg, rgba(139, 92, 246, 0.15), transparent 60%),\n        var(--surface-1);\n      border: 1px solid var(--border);\n      box-shadow: var(--shadow-md);\n    }\n\n    .page-header h1 {\n      font-size: clamp(1.8rem, 3vw, 2.6rem);\n      color: var(--text-primary);\n    }\n\n    .page-header p {\n      color: var(--text-muted);\n      font-size: 1rem;\n    }\n\n    .settings-grid {\n      display: grid;\n      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));\n      gap: 20px;\n    }\n\n    .settings-card {\n      background: var(--surface-1);\n      border: 1px solid var(--border);\n      border-radius: var(--radius-lg);\n      padding: 20px;\n      box-shadow: var(--shadow-md);\n      display: flex;\n      flex-direction: column;\n      gap: 16px;\n    }\n\n    .settings-card h2 {\n      font-size: 1.1rem;\n      color: var(--text-primary);\n    }\n\n    .settings-card p {\n      font-size: 0.9rem;\n      color: var(--text-muted);\n      line-height: 1.5;\n    }\n\n    .control-row {\n      display: flex;\n      align-items: center;\n      justify-content: space-between;\n      gap: 16px;\n      padding: 12px 14px;\n      border-radius: var(--radius-md);\n      background: var(--surface-2);\n      border: 1px solid transparent;\n      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);\n      flex-wrap: wrap;\n    }\n\n    .control-row:hover {\n      border-color: var(--accent-soft);\n      box-shadow: 0 0 12px var(--accent-soft);\n    }\n\n    .control-row label {\n      font-size: 0.95rem;\n      color: var(--text-primary);\n    }\n\n    .control-row > div {\n      min-width: 180px;\n      flex: 1 1 auto;\n    }\n\n    .control-row small {\n      display: block;\n      color: var(--text-subtle);\n      font-size: 0.75rem;\n    }\n\n    select,\n    input[type=\"color\"] {\n      background: rgba(255, 255, 255, 0.06);\n      border: 1px solid var(--border);\n      color: var(--text-primary);\n      border-radius: var(--radius-sm);\n      padding: 8px 10px;\n      font-family: inherit;\n    }\n\n    select:focus,\n    input[type=\"color\"]:focus {\n      outline: none;\n      border-color: var(--accent);\n      box-shadow: 0 0 10px var(--accent-soft);\n    }\n\n    .toggle {\n      position: relative;\n      width: 48px;\n      height: 26px;\n      flex: 0 0 auto;\n      margin-left: auto;\n    }\n\n    .toggle input {\n      opacity: 0;\n      width: 0;\n      height: 0;\n    }\n\n    .toggle span {\n      position: absolute;\n      inset: 0;\n      background: rgba(255, 255, 255, 0.1);\n      border-radius: 999px;\n      transition: background var(--transition-fast);\n      cursor: pointer;\n    }\n\n    .toggle span::after {\n      content: \"\";\n      position: absolute;\n      top: 3px;\n      left: 4px;\n      width: 20px;\n      height: 20px;\n      border-radius: 50%;\n      background: var(--text-primary);\n      transition: transform var(--transition-fast);\n      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);\n    }\n\n    .toggle input:checked + span {\n      background: linear-gradient(135deg, var(--accent), #4f46e5);\n      box-shadow: 0 0 12px var(--accent-glow);\n    }\n\n    .toggle input:checked + span::after {\n      transform: translateX(20px);\n    }\n\n    .preset-row {\n      display: flex;\n      gap: 10px;\n      flex-wrap: wrap;\n    }\n\n    .preset-btn {\n      width: 30px;\n      height: 30px;\n      border-radius: 50%;\n      border: 2px solid transparent;\n      cursor: pointer;\n      box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);\n      transition: transform var(--transition-fast), border-color var(--transition-fast);\n    }\n\n    .preset-btn:hover {\n      transform: scale(1.08);\n      border-color: var(--text-primary);\n    }\n\n    .actions-row {\n      display: flex;\n      gap: 12px;\n      flex-wrap: wrap;\n    }\n\n    .btn {\n      padding: 10px 16px;\n      border-radius: var(--radius-sm);\n      border: none;\n      cursor: pointer;\n      font-weight: 600;\n      color: white;\n      background: linear-gradient(135deg, var(--accent), #4f46e5);\n      box-shadow: 0 10px 20px rgba(79, 70, 229, 0.35);\n      transition: transform var(--transition-fast), box-shadow var(--transition-fast);\n    }\n\n    .btn:hover {\n      transform: translateY(-1px);\n      box-shadow: 0 14px 26px rgba(79, 70, 229, 0.45);\n    }\n\n    .btn-outline {\n      background: transparent;\n      color: var(--text-primary);\n      border: 1px solid var(--border);\n      box-shadow: none;\n      text-decoration: none;\n    }\n\n    .btn-outline:hover {\n      box-shadow: 0 0 12px var(--accent-soft);\n    }\n\n    .btn-danger {\n      background: linear-gradient(135deg, #ef4444, #b91c1c);\n      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);\n    }\n\n    @media (max-width: 720px) {\n      .settings-content {\n        padding: 20px 16px 80px;\n      }\n\n      .control-row {\n        align-items: flex-start;\n      }\n    }\n  </style>
 
   <script src="/bilm/shared/access.js"></script>
@@ -104,6 +362,44 @@
     </section>
 
     <section class="settings-card">
+      <h2>Performance & Layout</h2>
+      <p>Fine tune poster density and reduce data usage on slower connections.</p>
+
+      <div class="control-row">
+        <div>
+          <label for="densitySelect">Layout Density</label>
+          <small>Control how many cards fit per row.</small>
+        </div>
+        <select id="densitySelect">
+          <option value="comfort">Comfort</option>
+          <option value="compact">Compact</option>
+        </select>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label for="imageQualitySelect">Image Quality</label>
+          <small>Lower quality loads faster on mobile data.</small>
+        </div>
+        <select id="imageQualitySelect">
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Data Saver</label>
+          <small>Reduce items per section and limit background activity.</small>
+        </div>
+        <label class="toggle">
+          <input id="dataSaverToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="settings-card">
       <h2>Playback Defaults</h2>
       <p>Choose the default server for your viewer pages.</p>
 
@@ -167,6 +463,9 @@
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
+  const densitySelect = document.getElementById('densitySelect');
+  const imageQualitySelect = document.getElementById('imageQualitySelect');
+  const dataSaverToggle = document.getElementById('dataSaverToggle');
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
@@ -187,6 +486,9 @@
     customBackgroundRow.hidden = (settings.background || 'deep') !== 'custom';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
+    densitySelect.value = settings.density || 'comfort';
+    imageQualitySelect.value = settings.imageQuality || 'high';
+    dataSaverToggle.checked = settings.dataSaver === true;
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
@@ -227,6 +529,18 @@
 
   particleToggle.addEventListener('change', (event) => {
     applySettings({ particles: event.target.checked });
+  });
+
+  densitySelect.addEventListener('change', (event) => {
+    applySettings({ density: event.target.value });
+  });
+
+  imageQualitySelect.addEventListener('change', (event) => {
+    applySettings({ imageQuality: event.target.value });
+  });
+
+  dataSaverToggle.addEventListener('change', (event) => {
+    applySettings({ dataSaver: event.target.checked });
   });
 
   incognitoToggle.addEventListener('change', (event) => {

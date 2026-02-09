@@ -35,6 +35,7 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: min(var(--content-max), 95vw);
   width: min(980px, 95vw);
   position: relative;
   gap: 16px;

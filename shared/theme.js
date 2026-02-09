@@ -32,6 +32,9 @@
     customBackground: '#0b0f1a',
     motion: true,
     particles: true,
+    density: 'comfort',
+    dataSaver: false,
+    imageQuality: 'high',
     defaultServer: 'vidsrc',
     searchHistory: true,
     continueWatching: true,
@@ -76,6 +79,7 @@
     applyAccent(root, settings.accent);
     root.dataset.background = settings.background || DEFAULT_SETTINGS.background;
     root.dataset.motion = settings.motion === false ? 'off' : 'on';
+    root.dataset.density = settings.density || DEFAULT_SETTINGS.density;
 
     if (root.dataset.background === 'custom') {
       root.style.setProperty('--bg-custom', settings.customBackground || DEFAULT_SETTINGS.customBackground);
