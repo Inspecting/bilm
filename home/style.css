@@ -62,6 +62,7 @@ main.visible {
 .quick-actions,
 .section {
   width: min(var(--content-max), 100%);
+  width: min(1200px, 100%);
   position: relative;
   z-index: 1;
 }
@@ -80,6 +81,16 @@ main.visible {
     var(--surface-1);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
+}
+
+.hero-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.32em;
+  font-size: 12px;
+  color: var(--text-subtle);
+  margin-bottom: 12px;
+}
+
 }
 
 .hero-kicker {
@@ -277,6 +288,9 @@ button.search-btn:hover {
   display: block;
   font-size: 1.8rem;
   margin: 6px 0 4px;
+.stat-card h3 {
+  font-size: 1rem;
+  margin-bottom: 6px;
 }
 
 .stat-card p {
@@ -394,6 +408,7 @@ button.search-btn:hover {
   display: flex;
   overflow-x: auto;
   gap: var(--card-gap);
+  gap: 14px;
   padding-bottom: 8px;
   scroll-behavior: smooth;
   width: 100%;
@@ -403,6 +418,8 @@ button.search-btn:hover {
   flex: 0 0 auto;
   width: var(--card-width);
   height: calc(var(--card-height) + 40px);
+  width: 150px;
+  height: 230px;
   background-color: var(--surface-2);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
@@ -425,6 +442,7 @@ button.search-btn:hover {
 .movie-card img {
   width: 100%;
   height: var(--card-height);
+  height: 190px;
   object-fit: cover;
   border-radius: 14px 14px 0 0;
   background: rgba(255, 255, 255, 0.05);
@@ -479,6 +497,7 @@ button.search-btn:hover {
   flex: 0 0 auto;
   width: 90px;
   height: calc(var(--card-height) + 40px);
+  height: 230px;
   display: flex;
   justify-content: center;
   align-items: center;

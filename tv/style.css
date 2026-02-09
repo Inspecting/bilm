@@ -110,6 +110,8 @@ main > * {
 
 #tvSections {
   width: 100%;
+#tvSections {
+  width: min(1200px, 100%);
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -131,6 +133,7 @@ main > * {
   display: flex;
   overflow-x: auto;
   gap: var(--card-gap);
+  gap: 14px;
   padding-bottom: 8px;
   scroll-behavior: smooth;
   width: 100%;
@@ -139,6 +142,7 @@ main > * {
 .movie-card {
   flex: 0 0 auto;
   width: var(--card-width);
+  width: 160px;
   height: auto;
   background-color: var(--surface-2);
   border-radius: var(--radius-md);
@@ -161,6 +165,7 @@ main > * {
 .movie-card img {
   width: 100%;
   height: var(--card-height);
+  height: 210px;
   object-fit: cover;
   border-radius: 14px 14px 0 0;
   background: rgba(255, 255, 255, 0.05);
