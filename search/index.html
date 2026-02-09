@@ -52,6 +52,34 @@
       text-align: center;
       font-weight: 700;
     }
+    .filter-bar {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-button {
+      background: var(--surface-2);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+    }
+    .filter-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 14px var(--accent-glow);
+      border-color: var(--accent-soft);
+    }
+    .filter-button.active {
+      background: var(--accent);
+      color: var(--text-inverse);
+      border-color: var(--accent);
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
     section {
       margin-bottom: 30px;
     }
@@ -62,25 +90,13 @@
       text-transform: uppercase;
       font-size: 14px;
     }
-    .results-row {
-      display: flex;
-      gap: 12px;
-      overflow-x: auto;
-      padding-bottom: 8px;
-    }
-    .results-row::-webkit-scrollbar {
-      height: 8px;
-    }
-    .results-row::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.04);
-    }
-    .results-row::-webkit-scrollbar-thumb {
-      background-color: var(--accent);
-      border-radius: 10px;
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
     }
     .card {
-      flex: 0 0 auto;
-      width: 140px;
+      width: 100%;
       cursor: pointer;
       border-radius: var(--radius-md);
       overflow: hidden;
@@ -130,11 +146,16 @@
 
   <main>
     <h1 id="resultsTitle">Search Results for ""</h1>
+    <div class="filter-bar" role="tablist" aria-label="Search filters">
+      <button class="filter-button active" type="button" data-filter="all" role="tab" aria-selected="true">All</button>
+      <button class="filter-button" type="button" data-filter="movies" role="tab" aria-selected="false">Movies</button>
+      <button class="filter-button" type="button" data-filter="tv" role="tab" aria-selected="false">TV Shows</button>
+    </div>
 
     <section id="combinedSection">
       <h2>Results</h2>
       <p class="no-results" id="resultsMessage" hidden></p>
-      <div class="results-row" id="combinedResults"></div>
+      <div class="results-grid" id="combinedResults"></div>
     </section>
   </main>
 
@@ -152,9 +173,13 @@
     const combinedSection = document.getElementById('combinedSection');
     const resultsMessage = document.getElementById('resultsMessage');
     const combinedResults = document.getElementById('combinedResults');
+    const filterButtons = Array.from(document.querySelectorAll('.filter-button'));
 
     const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
     const queryNormalized = currentQuery.trim();
+    let cachedMovies = [];
+    let cachedTvShows = [];
+    let cachedAll = [];
 
     function createMovieKey(title, year) {
       return `${(title || '').trim().toLowerCase()}-${year || 'N/A'}`;
@@ -277,21 +302,11 @@
           }
         });
 
-        const combinedItems = [
-          ...Array.from(movieMap.values()),
-          ...Array.from(tvMap.values())
-        ];
+        cachedMovies = Array.from(movieMap.values());
+        cachedTvShows = Array.from(tvMap.values());
+        cachedAll = [...cachedMovies, ...cachedTvShows];
 
-        if (combinedItems.length > 0) {
-          renderResults(combinedResults, combinedItems);
-          resultsMessage.hidden = true;
-          combinedSection.style.display = 'block';
-        } else {
-          combinedResults.innerHTML = '';
-          resultsMessage.textContent = 'No results found.';
-          resultsMessage.hidden = false;
-          combinedSection.style.display = 'block';
-        }
+        updateResults('all');
       })
       .catch(err => {
         console.error('Search failed', err);
@@ -303,6 +318,40 @@
       combinedResults.innerHTML = '';
       resultsMessage.textContent = 'Please enter a search term.';
       resultsMessage.hidden = false;
+    }
+
+    filterButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const filter = button.dataset.filter;
+        updateResults(filter);
+        filterButtons.forEach(btn => {
+          const isActive = btn === button;
+          btn.classList.toggle('active', isActive);
+          btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+      });
+    });
+
+    function updateResults(filter) {
+      let items = [];
+      if (filter === 'movies') {
+        items = cachedMovies;
+      } else if (filter === 'tv') {
+        items = cachedTvShows;
+      } else {
+        items = cachedAll;
+      }
+
+      if (items.length > 0) {
+        renderResults(combinedResults, items);
+        resultsMessage.hidden = true;
+        combinedSection.style.display = 'block';
+      } else {
+        combinedResults.innerHTML = '';
+        resultsMessage.textContent = 'No results found.';
+        resultsMessage.hidden = false;
+        combinedSection.style.display = 'block';
+      }
     }
 
     function renderResults(container, items) {
