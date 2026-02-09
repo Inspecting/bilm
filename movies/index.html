@@ -5,37 +5,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bilm 💜 - Movies</title>
 
-  <!-- PWA & iOS fullscreen support -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0a0a0a" />
 
-  <!-- Manifest & App Icon -->
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icon.png" />
 
-  <!-- Fonts & Styles -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/bilm/shared/theme.css" />
+  <link rel="stylesheet" href="/bilm/shared/components.css" />
   <link rel="stylesheet" href="./style.css" />
   <script src="/bilm/shared/access.js"></script>
   <script src="/bilm/shared/theme.js"></script>
 </head>
 <body>
+  <div id="navbarContainer"></div>
 
-<!-- Navbar placeholder -->
-<div id="navbarContainer"></div>
+  <main class="library">
+    <section class="section-shell library-hero">
+      <div>
+        <p class="hero-eyebrow">Movies</p>
+        <h1>Browse with smarter filters.</h1>
+        <p class="hero-subtext">Use quick access sorts and genre filters to jump into exactly what you want.</p>
+      </div>
+      <div class="library-controls">
+        <div class="control-block">
+          <label for="movieSort">Sort by</label>
+          <select id="movieSort">
+            <option value="trending">Trending</option>
+            <option value="popular">Popular</option>
+            <option value="top_rated">Top rated</option>
+            <option value="now_playing">Now playing</option>
+          </select>
+        </div>
+        <div class="control-block">
+          <span>Quick access</span>
+          <div class="chip-row" id="movieQuickFilters">
+            <button class="chip is-active" type="button" data-sort="trending">Trending</button>
+            <button class="chip" type="button" data-sort="popular">Popular</button>
+            <button class="chip" type="button" data-sort="top_rated">Top Rated</button>
+            <button class="chip" type="button" data-sort="now_playing">Now Playing</button>
+          </div>
+        </div>
+        <div class="control-block">
+          <span>Filter by genre</span>
+          <div class="chip-row" id="movieGenres"></div>
+        </div>
+      </div>
+    </section>
 
-<!-- Movie sections rendered here -->
-<main>
-  <div id="movieSections"></div>
-</main>
+    <div id="movieSections" class="library-sections"></div>
+  </main>
 
-<script src="/bilm/shared/navbar.js" defer></script>
-
-<!-- Load movies logic -->
-<script src="./script.js"></script>
-
+  <script src="/bilm/shared/navbar.js" defer></script>
+  <script src="./script.js"></script>
 </body>
 </html>
