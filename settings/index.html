@@ -26,7 +26,8 @@
       box-sizing: border-box;
     }
 
-    html, body {
+    html,
+    body {
       height: 100%;
       font-family: 'Poppins', sans-serif;
       background-color: var(--bg-main);
@@ -46,23 +47,30 @@
       overflow-x: hidden;
       scrollbar-gutter: stable;
       padding: 0;
+      display: flex;
+      justify-content: center;
     }
 
     .settings-content {
-      max-width: 1200px;
+      max-width: var(--content-max);
       width: 100%;
       margin: 0 auto;
-      padding: 28px 22px 80px;
+      padding: 32px 22px 90px;
       overflow-y: auto;
       overflow-x: hidden;
       scrollbar-gutter: stable;
     }
 
     .page-header {
-      display: flex;
-      flex-direction: column;
+      display: grid;
       gap: 8px;
-      margin: 20px 0 26px;
+      margin: 20px 0 28px;
+      padding: 20px 24px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(140deg, rgba(139, 92, 246, 0.15), transparent 60%),
+        var(--surface-1);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-md);
     }
 
     .page-header h1 {
@@ -108,7 +116,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 10px 12px;
+      padding: 12px 14px;
       border-radius: var(--radius-md);
       background: var(--surface-2);
       border: 1px solid transparent;
@@ -138,7 +146,7 @@
     }
 
     select,
-    input[type="color"] {
+    input[type=\"color\"] {
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid var(--border);
       color: var(--text-primary);
@@ -148,7 +156,7 @@
     }
 
     select:focus,
-    input[type="color"]:focus {
+    input[type=\"color\"]:focus {
       outline: none;
       border-color: var(--accent);
       box-shadow: 0 0 10px var(--accent-soft);
@@ -178,7 +186,7 @@
     }
 
     .toggle span::after {
-      content: "";
+      content: \"\";
       position: absolute;
       top: 3px;
       left: 4px;
@@ -191,7 +199,7 @@
     }
 
     .toggle input:checked + span {
-      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
       box-shadow: 0 0 12px var(--accent-glow);
     }
 
@@ -233,14 +241,14 @@
       cursor: pointer;
       font-weight: 600;
       color: white;
-      background: linear-gradient(135deg, var(--accent), #7c3aed);
-      box-shadow: 0 10px 20px rgba(124, 58, 237, 0.35);
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      box-shadow: 0 10px 20px rgba(79, 70, 229, 0.35);
       transition: transform var(--transition-fast), box-shadow var(--transition-fast);
     }
 
     .btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
+      box-shadow: 0 14px 26px rgba(79, 70, 229, 0.45);
     }
 
     .btn-outline {
@@ -353,6 +361,44 @@
     </section>
 
     <section class="settings-card">
+      <h2>Performance & Layout</h2>
+      <p>Fine tune poster density and reduce data usage on slower connections.</p>
+
+      <div class="control-row">
+        <div>
+          <label for="densitySelect">Layout Density</label>
+          <small>Control how many cards fit per row.</small>
+        </div>
+        <select id="densitySelect">
+          <option value="comfort">Comfort</option>
+          <option value="compact">Compact</option>
+        </select>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label for="imageQualitySelect">Image Quality</label>
+          <small>Lower quality loads faster on mobile data.</small>
+        </div>
+        <select id="imageQualitySelect">
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Data Saver</label>
+          <small>Reduce items per section and limit background activity.</small>
+        </div>
+        <label class="toggle">
+          <input id="dataSaverToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="settings-card">
       <h2>Playback Defaults</h2>
       <p>Choose the default server for your viewer pages.</p>
 
@@ -409,13 +455,16 @@
 <script src="/bilm/shared/navbar.js" defer></script>
 
 <script>
-  const accentPresets = ['#a855f7', '#c084fc', '#7c3aed', '#ec4899', '#38bdf8'];
+  const accentPresets = ['#8b5cf6', '#6366f1', '#22d3ee', '#f472b6', '#f59e0b'];
   const accentPicker = document.getElementById('accentPicker');
   const backgroundSelect = document.getElementById('backgroundSelect');
   const customBackgroundRow = document.getElementById('customBackgroundRow');
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
+  const densitySelect = document.getElementById('densitySelect');
+  const imageQualitySelect = document.getElementById('imageQualitySelect');
+  const dataSaverToggle = document.getElementById('dataSaverToggle');
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
@@ -430,12 +479,15 @@
 
   function syncUI() {
     const settings = window.bilmTheme?.getSettings?.() || {};
-    accentPicker.value = settings.accent || '#a855f7';
+    accentPicker.value = settings.accent || '#8b5cf6';
     backgroundSelect.value = settings.background || 'deep';
-    customBackgroundPicker.value = settings.customBackground || '#0b0b14';
+    customBackgroundPicker.value = settings.customBackground || '#0b0f1a';
     customBackgroundRow.hidden = (settings.background || 'deep') !== 'custom';
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
+    densitySelect.value = settings.density || 'comfort';
+    imageQualitySelect.value = settings.imageQuality || 'high';
+    dataSaverToggle.checked = settings.dataSaver === true;
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
@@ -476,6 +528,18 @@
 
   particleToggle.addEventListener('change', (event) => {
     applySettings({ particles: event.target.checked });
+  });
+
+  densitySelect.addEventListener('change', (event) => {
+    applySettings({ density: event.target.value });
+  });
+
+  imageQualitySelect.addEventListener('change', (event) => {
+    applySettings({ imageQuality: event.target.value });
+  });
+
+  dataSaverToggle.addEventListener('change', (event) => {
+    applySettings({ dataSaver: event.target.checked });
   });
 
   incognitoToggle.addEventListener('change', (event) => {

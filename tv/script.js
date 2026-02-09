@@ -1,7 +1,7 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const BASE_URL = 'https://inspecting.github.io/bilm';
-const showsPerLoad = 15;
-const PRIORITY_SECTION_COUNT = 4;
+const DEFAULT_PER_LOAD = 15;
+const DEFAULT_PRIORITY_COUNT = 4;
 
 let allGenres = [];
 const loadedCounts = {};
@@ -94,11 +94,36 @@ function createSectionSkeleton(section, container) {
   container.appendChild(sectionEl);
 }
 
-async function loadShowsForSection(section) {
+function getThemeSettings() {
+  return window.bilmTheme?.getSettings?.() || {};
+}
+
+function getLoadConfig(settings) {
+  const dataSaver = settings.dataSaver === true;
+  const imageQuality = settings.imageQuality || 'high';
+  return {
+    perLoad: dataSaver ? 8 : DEFAULT_PER_LOAD,
+    priorityCount: dataSaver ? 2 : DEFAULT_PRIORITY_COUNT,
+    imageSize: imageQuality === 'low' ? 'w342' : 'w500'
+  };
+}
+
+function createNavButton(section, container) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = section.title;
+  button.addEventListener('click', () => {
+    const target = document.getElementById(`section-${section.title.replace(/\s/g, '')}`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  container.appendChild(button);
+}
+
+async function loadShowsForSection(section, config) {
   loadedCounts[section.title] ??= 0;
   loadedShowIds[section.title] ??= new Set();
 
-  const page = Math.floor(loadedCounts[section.title] / showsPerLoad) + 1;
+  const page = Math.floor(loadedCounts[section.title] / config.perLoad) + 1;
   const shows = await fetchShows(section.endpoint, page);
   if (!shows.length) return false;
 
@@ -106,11 +131,11 @@ async function loadShowsForSection(section) {
 
   const uniqueShows = shows.filter(s => !loadedShowIds[section.title].has(s.id));
 
-  for (const show of uniqueShows.slice(0, showsPerLoad)) {
+  for (const show of uniqueShows.slice(0, config.perLoad)) {
     loadedShowIds[section.title].add(show.id);
 
     const poster = show.poster_path
-      ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
+      ? `https://image.tmdb.org/t/p/${config.imageSize}${show.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image';
 
     const showData = {
@@ -125,11 +150,11 @@ async function loadShowsForSection(section) {
     rowEl.appendChild(card);
   }
 
-  loadedCounts[section.title] += showsPerLoad;
+  loadedCounts[section.title] += config.perLoad;
   return true;
 }
 
-function setupInfiniteScroll(section) {
+function setupInfiniteScroll(section, config) {
   const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
   if (!rowEl) return;
 
@@ -138,7 +163,7 @@ function setupInfiniteScroll(section) {
     if (loading) return;
     if (rowEl.scrollLeft + rowEl.clientWidth >= rowEl.scrollWidth - 300) {
       loading = true;
-      await loadShowsForSection(section);
+      await loadShowsForSection(section, config);
       loading = false;
     }
   }, { passive: true });
@@ -146,23 +171,38 @@ function setupInfiniteScroll(section) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const container = document.getElementById('tvSections');
+  const statusEl = document.getElementById('tvStatus');
+  const navEl = document.getElementById('tvNav');
   if (!container) {
     console.error('Missing container with id "tvSections" in HTML');
     return;
   }
+
+  const settings = getThemeSettings();
+  const config = getLoadConfig(settings);
 
   await fetchGenres();
 
   const sections = getSections();
 
   sections.forEach(section => createSectionSkeleton(section, container));
+  if (navEl) {
+    navEl.innerHTML = '';
+    sections.slice(0, 10).forEach(section => createNavButton(section, navEl));
+  }
 
-  const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
-  const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
-  await Promise.all(prioritySections.map(section => loadShowsForSection(section)));
+  const prioritySections = sections.slice(0, config.priorityCount);
+  const deferredSections = sections.slice(config.priorityCount);
+  await Promise.all(prioritySections.map(section => loadShowsForSection(section, config)));
+  if (statusEl) {
+    statusEl.textContent = `Loaded ${prioritySections.length} sections`;
+  }
 
   const loadDeferredSections = async () => {
-    await Promise.all(deferredSections.map(section => loadShowsForSection(section)));
+    await Promise.all(deferredSections.map(section => loadShowsForSection(section, config)));
+    if (statusEl) {
+      statusEl.textContent = `Loaded ${sections.length} sections`;
+    }
   };
 
   if ('requestIdleCallback' in window) {
@@ -171,5 +211,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(loadDeferredSections, 0);
   }
 
-  sections.forEach(section => setupInfiniteScroll(section));
+  sections.forEach(section => setupInfiniteScroll(section, config));
 });

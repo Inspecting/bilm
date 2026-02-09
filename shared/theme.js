@@ -27,11 +27,14 @@
   ];
   const INCOGNITO_PREFIXES = ['bilm-tv-progress-'];
   const DEFAULT_SETTINGS = {
-    accent: '#a855f7',
+    accent: '#8b5cf6',
     background: 'deep',
-    customBackground: '#0b0b14',
+    customBackground: '#0b0f1a',
     motion: true,
     particles: true,
+    density: 'comfort',
+    dataSaver: false,
+    imageQuality: 'high',
     defaultServer: 'vidsrc',
     searchHistory: true,
     continueWatching: true,
@@ -39,12 +42,12 @@
   };
 
   const backgroundColors = {
-    deep: '#0b0b14',
-    midnight: '#05050b',
-    velvet: '#120818',
-    aurora: '#062a2a',
-    slate: '#111827',
-    sunset: '#2a1326'
+    deep: '#0b0f1a',
+    midnight: '#05060d',
+    velvet: '#140b1d',
+    aurora: '#062a2f',
+    slate: '#0f172a',
+    sunset: '#2b1020'
   };
 
   const hexToRgb = (hex) => {
@@ -76,6 +79,7 @@
     applyAccent(root, settings.accent);
     root.dataset.background = settings.background || DEFAULT_SETTINGS.background;
     root.dataset.motion = settings.motion === false ? 'off' : 'on';
+    root.dataset.density = settings.density || DEFAULT_SETTINGS.density;
 
     if (root.dataset.background === 'custom') {
       root.style.setProperty('--bg-custom', settings.customBackground || DEFAULT_SETTINGS.customBackground);

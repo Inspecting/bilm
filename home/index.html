@@ -35,19 +35,72 @@
   <div id="navbar-placeholder"></div>
 
   <main>
-    <div class="search-container">
-      <h1>
-        <span class="heart-icon" aria-hidden="true">❤</span>
-        Bilm
-        <span class="heart-icon" aria-hidden="true">❤</span>
-      </h1>
-      <form id="homeSearchForm" action="/bilm/search/" method="get">
-        <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
-        <div class="button-row">
-          <button class="search-btn" id="searchBtn" type="submit">Search</button>
+    <section class="hero">
+      <div class="hero-text">
+        <p class="hero-kicker">Your cinematic command center</p>
+        <h1>
+          <span class="heart-icon" aria-hidden="true">❤</span>
+          Bilm
+          <span class="heart-icon" aria-hidden="true">❤</span>
+        </h1>
+        <p class="hero-subtitle">Search across movies, TV, and favorites with a faster, cleaner control panel.</p>
+      </div>
+      <div class="hero-panel">
+        <form id="homeSearchForm" action="/bilm/search/" method="get">
+          <label class="search-label" for="searchInput">Search the library</label>
+          <div class="search-input-row">
+            <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
+            <button class="search-btn" id="searchBtn" type="submit">Search</button>
+          </div>
+          <div class="helper-row">
+            <span>Try: “Dune” or “The Bear”.</span>
+            <a href="/bilm/settings/">Tweak your theme →</a>
+          </div>
+        </form>
+        <div class="hero-tiles" aria-label="Quick actions">
+          <a class="hero-tile" href="/bilm/movies/">
+            <span>Browse Movies</span>
+            <small>Explore new releases</small>
+          </a>
+          <a class="hero-tile" href="/bilm/tv/">
+            <span>Top TV Shows</span>
+            <small>Pick up your series</small>
+          </a>
+          <a class="hero-tile" href="/bilm/games/">
+            <span>Play Games</span>
+            <small>Quick breaks</small>
+          </a>
+          <a class="hero-tile" href="/bilm/settings/">
+            <span>Customize</span>
+            <small>Glow, motion, servers</small>
+          </a>
         </div>
-      </form>
-    </div>
+      </div>
+    </section>
+
+    <section class="quick-actions" aria-label="Quick highlights">
+      <div class="quick-copy">
+        <h2>Everything organized for you</h2>
+        <p>Track what you love, keep momentum on current shows, and store tomorrow’s picks in one polished hub.</p>
+      </div>
+      <div class="quick-stats">
+        <div class="stat-card">
+          <span class="stat-label">Continue Watching</span>
+          <strong class="stat-value" id="continueCount">0</strong>
+          <p>Pick up exactly where you left off.</p>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Favorites</span>
+          <strong class="stat-value" id="favoritesCount">0</strong>
+          <p>Keep the must-watch list close.</p>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Watch Later</span>
+          <strong class="stat-value" id="watchLaterCount">0</strong>
+          <p>Save future picks with one tap.</p>
+        </div>
+      </div>
+    </section>
 
     <section class="section" id="continueWatchingSection">
       <div class="section-header">

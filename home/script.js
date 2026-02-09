@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const favoritesRemoveBtn = document.getElementById('favoritesRemoveBtn');
   const watchLaterEditBtn = document.getElementById('watchLaterEditBtn');
   const watchLaterRemoveBtn = document.getElementById('watchLaterRemoveBtn');
+  const continueCount = document.getElementById('continueCount');
+  const favoritesCount = document.getElementById('favoritesCount');
+  const watchLaterCount = document.getElementById('watchLaterCount');
 
   const CONTINUE_KEY = 'bilm-continue-watching';
   const FAVORITES_KEY = 'bilm-favorites';
@@ -264,6 +267,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const continueItems = sortByRecent(loadList(CONTINUE_KEY));
     const favoriteItems = sortByRecent(loadList(FAVORITES_KEY));
     const watchLaterItems = sortByRecent(loadList(WATCH_LATER_KEY));
+
+    if (continueCount) continueCount.textContent = continueItems.length;
+    if (favoritesCount) favoritesCount.textContent = favoriteItems.length;
+    if (watchLaterCount) watchLaterCount.textContent = watchLaterItems.length;
 
     const continueFilteredItems = applyTypeFilter(continueItems, sectionState.continue.filter);
     const favoritesFilteredItems = applyTypeFilter(favoriteItems, sectionState.favorites.filter);
