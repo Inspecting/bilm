@@ -80,7 +80,6 @@
     window.location.href = `/bilm/search/?q=${encodeURIComponent(trimmedQuery)}`;
   }
 
-  // Desktop nav buttons
   const buttons = shadow.querySelectorAll('nav.navbar button[data-page]');
   buttons.forEach(btn => {
     if (btn.dataset.page === page) {
@@ -92,7 +91,6 @@
     };
   });
 
-  // Mobile nav buttons
   const mobileButtons = shadow.querySelectorAll('nav.mobile-bottom-nav button[data-page]');
   mobileButtons.forEach(btn => {
     if (btn.dataset.page === page || (isSearchPage && btn.dataset.page === 'search')) {
@@ -137,7 +135,6 @@
     }
   }
 
-  // Mobile search overlay handlers (no changes here)
   const overlay = shadow.getElementById('mobileSearchOverlay');
   if (overlay) {
     const input = shadow.getElementById('mobileSearchInput');
@@ -174,4 +171,50 @@
       }
     });
   }
+
+  const commandPalette = shadow.getElementById('commandPalette');
+  const commandTrigger = shadow.querySelector('.cmdk-trigger');
+  const commandClose = shadow.querySelector('.command-close');
+
+  const closeCommandPalette = () => {
+    if (!commandPalette) return;
+    commandPalette.classList.remove('active');
+    document.body.style.overflow = '';
+  };
+
+  const openCommandPalette = () => {
+    if (!commandPalette) return;
+    commandPalette.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  };
+
+  commandTrigger?.addEventListener('click', openCommandPalette);
+  commandClose?.addEventListener('click', closeCommandPalette);
+  commandPalette?.addEventListener('click', (event) => {
+    if (event.target === commandPalette) closeCommandPalette();
+  });
+
+  commandPalette?.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-command]');
+    if (!button) return;
+    const target = button.dataset.command;
+    window.location.href = `/bilm/${target === 'home' ? 'home' : target}/`;
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      if (commandPalette?.classList.contains('active')) {
+        closeCommandPalette();
+      }
+      return;
+    }
+    const isCmdK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
+    if (!isCmdK) return;
+    event.preventDefault();
+    if (commandPalette?.classList.contains('active')) {
+      closeCommandPalette();
+    } else {
+      openCommandPalette();
+    }
+  });
 })();

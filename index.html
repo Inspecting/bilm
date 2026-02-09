@@ -5,246 +5,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bilm 💜</title>
 
-  <!-- PWA + iOS fullscreen support -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#000000" />
 
-  <!-- PWA Manifest and Icon -->
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icon.png" />
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/bilm/shared/theme.css" />
+  <link rel="stylesheet" href="/bilm/shared/components.css" />
+  <link rel="stylesheet" href="/bilm/shared/landing.css" />
 
   <script src="/bilm/shared/access.js"></script>
   <script src="/bilm/shared/theme.js"></script>
-
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    html, body {
-      height: 100%;
-      width: 100%;
-      background-color: var(--bg-main);
-      font-family: 'Poppins', sans-serif;
-      color: var(--text-primary);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      position: relative;
-    }
-
-    #fadeWrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      transition: opacity 1s ease;
-      opacity: 1;
-      z-index: 2;
-    }
-
-    #introOverlay {
-      font-weight: 600;
-      font-size: clamp(2.5rem, 8vw, 6rem);
-      background: linear-gradient(90deg, var(--accent), #c084fc, var(--accent));
-      background-size: 300% 100%;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      animation: pulse 1.2s infinite ease-in-out, gradientSlide 4s infinite linear;
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .heart-icon {
-      width: 1.2em;
-      height: 1.2em;
-      user-select: none;
-      pointer-events: none;
-      filter: drop-shadow(0 0 6px var(--accent-glow));
-      animation: pulse 1.5s infinite ease-in-out;
-    }
-
-    #subtext {
-      margin-top: 16px;
-      font-size: clamp(1rem, 2.5vw, 1.5rem);
-      color: var(--text-muted);
-      opacity: 0;
-      animation: fadeIn 1.2s ease forwards 0.8s;
-      transition: opacity 1s ease;
-    }
-
-    .fade-out {
-      opacity: 0 !important;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.05); opacity: 0.85; }
-    }
-
-    @keyframes fadeIn { to { opacity: 1; } }
-
-    @keyframes gradientSlide {
-      0% { background-position: 0% 50%; }
-      100% { background-position: 100% 50%; }
-    }
-
-    #bgCanvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 100%;
-      z-index: 0;
-      pointer-events: none;
-      opacity: 0.6;
-      transition: opacity 1s ease;
-    }
-  </style>
 </head>
 <body>
   <canvas id="bgCanvas" aria-hidden="true"></canvas>
 
-  <div id="fadeWrapper">
-    <div id="introOverlay">
-      <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" />
-      Bilm
-      <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" />
-    </div>
-    <div id="subtext">Loading your experience...</div>
+  <div class="landing">
+    <header class="landing-header">
+      <a class="brand" href="/bilm/home/">
+        <img src="/bilm/icon.png" alt="Bilm logo" />
+        <span>Bilm</span>
+      </a>
+      <div class="hero-actions">
+        <a class="btn btn-outline" href="/bilm/explore/">Explore</a>
+        <a class="btn" href="/bilm/home/">Open Bilm</a>
+      </div>
+    </header>
+
+    <main class="landing-main">
+      <section class="hero">
+        <div>
+          <h1>Discover your next obsession, faster.</h1>
+          <p>Browse movies, series, and curated collections in one polished space. Save favorites, build lists, and jump back into what you love in seconds.</p>
+        </div>
+        <div class="hero-actions">
+          <a class="btn" href="/bilm/home/">Start exploring</a>
+          <a class="btn btn-soft" href="/bilm/collections/">Create a collection</a>
+        </div>
+        <div class="hero-meta">
+          <span class="tag">Personalized discovery</span>
+          <span class="tag">Fast search</span>
+          <span class="tag">Custom themes</span>
+        </div>
+      </section>
+
+      <section class="hero-panel">
+        <div>
+          <h2 class="card-title">Jump in instantly</h2>
+          <p class="card-subtitle">Search across movies and TV shows, or pick a quick category.</p>
+        </div>
+        <form class="search-field" action="/bilm/search/" method="get">
+          <input name="q" type="search" placeholder="Search movies or TV shows..." />
+          <button class="btn btn-ghost" type="submit">Search</button>
+        </form>
+        <div class="chip-row">
+          <a class="chip" href="/bilm/movies/">Movies</a>
+          <a class="chip" href="/bilm/tv/">TV Shows</a>
+          <a class="chip" href="/bilm/explore/">Explore</a>
+          <a class="chip" href="/bilm/games/">Games</a>
+        </div>
+        <div class="hero-stats">
+          <div class="stat">
+            <h3>Smart filters</h3>
+            <p>Sort by trending, top rated, genre, and more.</p>
+          </div>
+          <div class="stat">
+            <h3>Quick access</h3>
+            <p>Resume watching and open favorites instantly.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="landing-footer">
+      Built for fast discovery. Sync your theme, control motion, and keep everything organized in one place.
+    </footer>
   </div>
 
+  <script src="/bilm/shared/particles.js"></script>
   <script>
-    const canvas = document.getElementById('bgCanvas');
-    const ctx = canvas.getContext('2d');
-    let dots = [];
-    const dotCount = 80;
-    let animationId = null;
-    let particlesEnabled = true;
-    let motionEnabled = true;
-
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-
-    function initDots() {
-      dots = [];
-      for (let i = 0; i < dotCount; i++) {
-        dots.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          r: Math.random() * 2 + 1,
-          dx: (Math.random() - 0.5) * 0.7,
-          dy: (Math.random() - 0.5) * 0.7,
-        });
-      }
-    }
-
-    function renderFrame(shouldMove = true) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c084fc';
-      ctx.shadowBlur = 8;
-
-      for (let dot of dots) {
-        ctx.beginPath();
-        ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(193, 132, 252, 0.9)';
-        ctx.fill();
-
-        if (shouldMove) {
-          dot.x += dot.dx;
-          dot.y += dot.dy;
-
-          if (dot.x < 0 || dot.x > canvas.width) dot.dx *= -1;
-          if (dot.y < 0 || dot.y > canvas.height) dot.dy *= -1;
-        }
-      }
-
-      ctx.shadowBlur = 0;
-    }
-
-    function animate() {
-      renderFrame(true);
-      animationId = requestAnimationFrame(animate);
-    }
-
-    function stopAnimation() {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-      }
-    }
-
-    function applyParticleSettings(settings) {
-      particlesEnabled = settings?.particles !== false;
-      motionEnabled = settings?.motion !== false;
-      canvas.style.display = particlesEnabled ? 'block' : 'none';
-
-      stopAnimation();
-      if (!particlesEnabled) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-      }
-
-      resize();
-      initDots();
-
-      if (motionEnabled) {
-        animate();
-      } else {
-        renderFrame(false);
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      applyParticleSettings(window.bilmTheme?.getSettings?.());
-    });
-
-    window.addEventListener('resize', () => {
-      if (!particlesEnabled) return;
-      resize();
-      initDots();
-      if (!motionEnabled) renderFrame(false);
-    });
-
-    window.addEventListener('bilm:theme-changed', (event) => {
-      applyParticleSettings(event.detail);
-    });
-
-    function fadeOutAndRedirect() {
-      document.getElementById('fadeWrapper').classList.add('fade-out');
-      document.getElementById('bgCanvas').classList.add('fade-out');
-
-      setTimeout(() => {
-        window.location.href = '/bilm/home/';
-      }, 1000);
-    }
-
-    setTimeout(fadeOutAndRedirect, 3000);
+    window.bilmParticles?.({ canvasId: 'bgCanvas', count: 70 });
   </script>
 
   <script>
-    // Register service worker for PWA support
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then(() => console.log('Service Worker registered'))
         .catch(err => console.error('Service Worker registration failed:', err));
     }
   </script>
-
-  <noscript>
-    <style>
-      #subtext { opacity: 1; color: #f44; margin-top: 20px; }
-    </style>
-    <div id="subtext">Please enable JavaScript to continue.</div>
-  </noscript>
 </body>
 </html>
