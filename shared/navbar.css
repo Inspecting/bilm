@@ -307,6 +307,22 @@ nav button.active {
   color: var(--text-primary);
 }
 
+}
+
+.command-palette.active {
+  display: flex;
+}
+
+.command-panel {
+  background: var(--surface-1);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+  width: min(520px, 90%);
+  color: var(--text-primary);
+}
+
 .command-header {
   display: flex;
   justify-content: space-between;
