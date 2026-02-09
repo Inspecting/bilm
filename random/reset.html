@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reset &amp; Return</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background-color: #0b1220;
+      color: #e8eef8;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    main {
+      max-width: 420px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 22px;
+      color: #f6b90f;
+    }
+    p {
+      margin: 0 0 24px;
+      color: #9fb2cc;
+      line-height: 1.4;
+    }
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      background: #f6b90f;
+      color: #101623;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Reset &amp; return home</h1>
+    <p>Pressing reset will clear this session and send you back to the homepage.</p>
+    <button id="resetButton" type="button">Reset</button>
+  </main>
+
+  <script>
+    const resetButton = document.getElementById('resetButton');
+
+    resetButton.addEventListener('click', () => {
+      const confirmed = window.confirm('Are you sure you want to reset? This will clear saved data.');
+      if (!confirmed) return;
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = '/index.html';
+    });
+  </script>
+</body>
+</html>
