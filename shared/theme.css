@@ -28,6 +28,7 @@
   --bg-custom: #0b0b14;
   --bg-main: var(--bg-deep);
   --bg-tint: rgba(14, 10, 28, 0.7);
+  --focus-ring: 0 0 0 3px rgba(168, 85, 247, 0.35);
 }
 
 :root[data-background='deep'] {
@@ -90,6 +91,14 @@ body {
   background-image: radial-gradient(circle at top, rgba(168, 85, 247, 0.08), transparent 55%),
     radial-gradient(circle at 20% 20%, rgba(168, 85, 247, 0.06), transparent 50%);
   background-attachment: fixed;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 html[data-motion='off'] * {

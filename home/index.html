@@ -5,209 +5,166 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bilm 💜</title>
 
-  <!-- PWA & iOS fullscreen meta tags -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0a0a0a" />
 
-  <!-- Manifest & Apple Touch Icon -->
   <link rel="manifest" href="/bilm/manifest.json" />
   <link rel="apple-touch-icon" href="/bilm/icon.png" />
 
-  <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
 
-  <!-- Theme styles -->
   <link rel="stylesheet" href="/bilm/shared/theme.css" />
-
-  <!-- Your existing home page styles -->
+  <link rel="stylesheet" href="/bilm/shared/components.css" />
   <link rel="stylesheet" href="/bilm/home/style.css" />
 
   <script src="/bilm/shared/access.js"></script>
   <script src="/bilm/shared/theme.js"></script>
 </head>
 <body>
-
   <canvas id="bgCanvas" aria-hidden="true"></canvas>
 
-  <!-- Navbar placeholder (same ID as search.html) -->
   <div id="navbar-placeholder"></div>
 
-  <main>
-    <div class="search-container">
-      <h1>
-        <span class="heart-icon" aria-hidden="true">❤</span>
-        Bilm
-        <span class="heart-icon" aria-hidden="true">❤</span>
-      </h1>
-      <form id="homeSearchForm" action="/bilm/search/" method="get">
-        <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
-        <div class="button-row">
-          <button class="search-btn" id="searchBtn" type="submit">Search</button>
+  <main class="home">
+    <section class="hero-card section-shell">
+      <div class="hero-content">
+        <div>
+          <p class="hero-eyebrow">Welcome back</p>
+          <h1>Ready to watch something unforgettable?</h1>
+          <p class="hero-subtext">Search across movies and TV shows, save what you love, and jump back in instantly.</p>
         </div>
-      </form>
-    </div>
-
-    <section class="section" id="continueWatchingSection">
-      <div class="section-header">
-        <div class="section-title-row">
-          <h2 class="section-title">Continue Watching</h2>
-          <div class="section-actions">
-            <button class="section-btn section-btn-compact" id="continueEditBtn" type="button">Edit</button>
-            <button class="section-btn section-btn-danger" id="continueRemoveBtn" type="button" disabled hidden>Remove selected</button>
-          </div>
+        <form id="homeSearchForm" class="hero-search" action="/bilm/search/" method="get">
+          <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
+          <button class="btn" id="searchBtn" type="submit">Search</button>
+        </form>
+        <div class="chip-row quick-access">
+          <a class="chip" href="/bilm/explore/">Explore</a>
+          <a class="chip" href="/bilm/movies/">Movies</a>
+          <a class="chip" href="/bilm/tv/">TV Shows</a>
+          <a class="chip" href="/bilm/collections/">Collections</a>
+          <a class="chip" href="/bilm/settings/">Settings</a>
         </div>
       </div>
-      <div class="section-filters" id="continueFilters" role="group" aria-label="Continue watching type">
-        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
-        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
-        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+      <div class="hero-metrics">
+        <div class="metric-card">
+          <h3>Quick filters</h3>
+          <p>Sort by trending, top rated, or genre in one tap.</p>
+        </div>
+        <div class="metric-card">
+          <h3>Smart lists</h3>
+          <p>Favorites, watch later, and collections all in sync.</p>
+        </div>
+        <div class="metric-card">
+          <h3>Fast resume</h3>
+          <p>Jump to continue watching with a single click.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-shell" id="quickLinks">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Quick access</h2>
+          <p class="section-description">Open your most-used destinations and saved picks.</p>
+        </div>
+      </div>
+      <div class="card-grid">
+        <a class="card quick-card" href="/bilm/movies/">
+          <div class="card-header">
+            <h3 class="card-title">Movies hub</h3>
+            <span class="tag">Trending</span>
+          </div>
+          <p class="card-subtitle">Browse movies with new filters and category sorting.</p>
+        </a>
+        <a class="card quick-card" href="/bilm/tv/">
+          <div class="card-header">
+            <h3 class="card-title">TV hub</h3>
+            <span class="tag">On air</span>
+          </div>
+          <p class="card-subtitle">Jump into TV with top-rated and genre lanes.</p>
+        </a>
+        <a class="card quick-card" href="/bilm/explore/">
+          <div class="card-header">
+            <h3 class="card-title">Explore</h3>
+            <span class="tag">Curated</span>
+          </div>
+          <p class="card-subtitle">Discover curated lists, new releases, and mood picks.</p>
+        </a>
+        <a class="card quick-card" href="/bilm/collections/">
+          <div class="card-header">
+            <h3 class="card-title">Collections</h3>
+            <span class="tag">Personal</span>
+          </div>
+          <p class="card-subtitle">Build custom lists and share your watch plans.</p>
+        </a>
+      </div>
+    </section>
+
+    <section class="section-shell" id="continueWatchingSection">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Continue Watching</h2>
+          <p class="section-description">Pick up right where you left off.</p>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-soft" id="continueEditBtn" type="button">Edit</button>
+          <button class="btn btn-outline" id="continueRemoveBtn" type="button" disabled hidden>Remove selected</button>
+        </div>
+      </div>
+      <div class="chip-row" id="continueFilters" role="group" aria-label="Continue watching type">
+        <button class="chip is-active" type="button" data-filter="all">All</button>
+        <button class="chip" type="button" data-filter="movie">Movies</button>
+        <button class="chip" type="button" data-filter="tv">TV Shows</button>
       </div>
       <div class="scroll-row" id="continueItems"></div>
     </section>
 
-    <section class="section" id="favoritesSection">
+    <section class="section-shell" id="favoritesSection">
       <div class="section-header">
-        <div class="section-title-row">
+        <div>
           <h2 class="section-title">Favorites</h2>
-          <div class="section-actions">
-            <button class="section-btn section-btn-compact" id="favoritesEditBtn" type="button">Edit</button>
-            <button class="section-btn section-btn-danger" id="favoritesRemoveBtn" type="button" disabled hidden>Remove selected</button>
-          </div>
+          <p class="section-description">Your top picks, always within reach.</p>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-soft" id="favoritesEditBtn" type="button">Edit</button>
+          <button class="btn btn-outline" id="favoritesRemoveBtn" type="button" disabled hidden>Remove selected</button>
         </div>
       </div>
-      <div class="section-filters" id="favoritesFilters" role="group" aria-label="Favorites type">
-        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
-        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
-        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+      <div class="chip-row" id="favoritesFilters" role="group" aria-label="Favorites type">
+        <button class="chip is-active" type="button" data-filter="all">All</button>
+        <button class="chip" type="button" data-filter="movie">Movies</button>
+        <button class="chip" type="button" data-filter="tv">TV Shows</button>
       </div>
       <div class="scroll-row" id="favoriteItems"></div>
     </section>
 
-    <section class="section" id="watchLaterSection">
+    <section class="section-shell" id="watchLaterSection">
       <div class="section-header">
-        <div class="section-title-row">
+        <div>
           <h2 class="section-title">Watch Later</h2>
-          <div class="section-actions">
-            <button class="section-btn section-btn-compact" id="watchLaterEditBtn" type="button">Edit</button>
-            <button class="section-btn section-btn-danger" id="watchLaterRemoveBtn" type="button" disabled hidden>Remove selected</button>
-          </div>
+          <p class="section-description">Keep your queue polished and ready.</p>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-soft" id="watchLaterEditBtn" type="button">Edit</button>
+          <button class="btn btn-outline" id="watchLaterRemoveBtn" type="button" disabled hidden>Remove selected</button>
         </div>
       </div>
-      <div class="section-filters" id="watchLaterFilters" role="group" aria-label="Watch later type">
-        <button class="type-filter-btn is-active" type="button" data-filter="all">All</button>
-        <button class="type-filter-btn" type="button" data-filter="movie">Movies</button>
-        <button class="type-filter-btn" type="button" data-filter="tv">TV Shows</button>
+      <div class="chip-row" id="watchLaterFilters" role="group" aria-label="Watch later type">
+        <button class="chip is-active" type="button" data-filter="all">All</button>
+        <button class="chip" type="button" data-filter="movie">Movies</button>
+        <button class="chip" type="button" data-filter="tv">TV Shows</button>
       </div>
       <div class="scroll-row" id="watchLaterItems"></div>
     </section>
   </main>
 
   <script src="/bilm/shared/navbar.js" defer></script>
-
+  <script src="/bilm/shared/particles.js"></script>
   <script src="/bilm/home/script.js"></script>
-
-  <!-- Particle effect -->
   <script>
-    const canvas = document.getElementById('bgCanvas');
-    const ctx = canvas.getContext('2d');
-    const dotCount = 80;
-    let dots = [];
-    let animationId = null;
-    let particlesEnabled = true;
-    let motionEnabled = true;
-
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-
-    function initDots() {
-      dots = [];
-      for (let i = 0; i < dotCount; i++) {
-        dots.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          r: Math.random() * 2 + 1,
-          dx: (Math.random() - 0.5) * 0.7,
-          dy: (Math.random() - 0.5) * 0.7,
-        });
-      }
-    }
-
-    function renderFrame(shouldMove = true) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c084fc';
-      ctx.shadowBlur = 8;
-
-      for (let dot of dots) {
-        ctx.beginPath();
-        ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(193, 132, 252, 0.9)';
-        ctx.fill();
-
-        if (shouldMove) {
-          dot.x += dot.dx;
-          dot.y += dot.dy;
-
-          if (dot.x < 0 || dot.x > canvas.width) dot.dx *= -1;
-          if (dot.y < 0 || dot.y > canvas.height) dot.dy *= -1;
-        }
-      }
-
-      ctx.shadowBlur = 0;
-    }
-
-    function animate() {
-      renderFrame(true);
-      animationId = requestAnimationFrame(animate);
-    }
-
-    function stopAnimation() {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-      }
-    }
-
-    function applyParticleSettings(settings) {
-      particlesEnabled = settings?.particles !== false;
-      motionEnabled = settings?.motion !== false;
-      canvas.style.display = particlesEnabled ? 'block' : 'none';
-
-      stopAnimation();
-      if (!particlesEnabled) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-      }
-
-      resize();
-      initDots();
-
-      if (motionEnabled) {
-        animate();
-      } else {
-        renderFrame(false);
-      }
-    }
-
-    window.addEventListener('resize', () => {
-      if (!particlesEnabled) return;
-      resize();
-      initDots();
-      if (!motionEnabled) renderFrame(false);
-    });
-
-    window.addEventListener('bilm:theme-changed', (event) => {
-      applyParticleSettings(event.detail);
-    });
-
-    window.addEventListener('DOMContentLoaded', () => {
-      const settings = window.bilmTheme?.getSettings?.();
-      applyParticleSettings(settings);
-    });
+    window.bilmParticles?.({ canvasId: 'bgCanvas', count: 65 });
   </script>
-
 </body>
 </html>

@@ -4,67 +4,102 @@
   box-sizing: border-box;
 }
 
-html, body {
-  height: 100%;
+body {
   font-family: 'Poppins', sans-serif;
   background-color: var(--bg-main);
   color: var(--text-primary);
 }
 
-body {
+.library {
+  padding: 24px 24px 96px;
+  max-width: var(--max-content);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
+  gap: 24px;
 }
 
-main {
-  flex: 1;
-  overflow-y: auto;
-  width: 100vw;
-  height: calc(100vh - 60px);
-  padding: 24px 18px 80px;
-  box-sizing: border-box;
+.library-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hero-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.85rem;
+  color: var(--text-subtle);
+}
+
+.hero-subtext {
+  color: var(--text-muted);
+  max-width: 560px;
+}
+
+.library-controls {
+  display: grid;
+  gap: 16px;
+}
+
+.control-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-block label,
+.control-block span {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-family: inherit;
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-soft);
+}
+
+.library-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
 
 .section {
-  margin-bottom: 30px;
+  background: var(--surface-1);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
 }
 
 .section-title {
-  font-size: 26px;
-  font-weight: 700;
-  margin-bottom: 16px;
-  color: var(--text-primary);
-  letter-spacing: 0.01em;
+  font-size: 1.3rem;
+  margin-bottom: 12px;
 }
 
 .scroll-row {
   display: flex;
+  gap: 14px;
   overflow-x: auto;
-  gap: 12px;
-  padding-bottom: 6px;
-  scroll-behavior: smooth;
-  width: 100%;
-}
-
-.scroll-row::-webkit-scrollbar {
-  height: 8px;
-}
-
-.scroll-row::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.scroll-row::-webkit-scrollbar-thumb {
-  background-color: var(--accent);
-  border-radius: 10px;
+  padding-bottom: 10px;
 }
 
 .movie-card {
   flex: 0 0 auto;
-  width: 140px;
-  height: auto;
+  width: 160px;
   background-color: var(--surface-2);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   overflow: hidden;
   cursor: pointer;
@@ -76,27 +111,29 @@ main {
 }
 
 .movie-card:hover {
-  transform: translateY(-4px) scale(1.04);
+  transform: translateY(-4px);
   box-shadow: 0 0 18px var(--accent-glow);
   border-color: var(--accent-soft);
 }
 
 .movie-card img {
-  width: 140px;
-  height: 180px;
+  width: 100%;
+  height: 220px;
   object-fit: cover;
   border-radius: 12px 12px 0 0;
   background: rgba(255, 255, 255, 0.05);
 }
 
 .movie-card p {
-  padding: 6px 8px;
-  font-size: 14px;
+  padding: 8px;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-primary);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .library {
+    padding: 20px 16px 96px;
+  }
 }
