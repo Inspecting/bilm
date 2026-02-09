@@ -131,7 +131,7 @@ main {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(26, 22, 40, 0.9);
   position: relative;
 }
 
@@ -163,8 +163,9 @@ main {
   width: 100%;
   aspect-ratio: 16 / 9;
   position: relative;
-  background: black;
+  background: rgba(26, 22, 40, 0.9);
   overflow: hidden;
+  border-radius: 20px;
 }
 
 iframe {
@@ -172,6 +173,7 @@ iframe {
   height: 100%;
   border: none;
   display: block;
+  border-radius: 20px;
 }
 
 #clickShield {
@@ -183,6 +185,7 @@ iframe {
   z-index: 5;
   pointer-events: none;
   background: transparent;
+  border-radius: 20px;
 }
 
 #playexBar {
