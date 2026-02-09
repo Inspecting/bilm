@@ -39,15 +39,6 @@
       position: relative;
     }
 
-    body::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at top, rgba(139, 92, 246, 0.15), transparent 55%),
-        radial-gradient(circle at 10% 20%, rgba(45, 212, 191, 0.1), transparent 60%);
-      z-index: 0;
-    }
-
     #fadeWrapper {
       display: flex;
       flex-direction: column;
@@ -89,23 +80,6 @@
       transition: opacity 1s ease;
     }
 
-    .skip-btn {
-      margin-top: 24px;
-      padding: 10px 18px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: var(--surface-2);
-      color: var(--text-primary);
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-    }
-
-    .skip-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 0 12px var(--accent-soft);
-    }
-
     .fade-out {
       opacity: 0 !important;
     }
@@ -145,7 +119,6 @@
       <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" />
     </div>
     <div id="subtext">Loading your experience...</div>
-    <button class="skip-btn" id="skipIntroBtn" type="button">Skip intro</button>
   </div>
 
   <script>
@@ -254,8 +227,6 @@
         window.location.href = '/bilm/home/';
       }, 1000);
     }
-
-    document.getElementById('skipIntroBtn').addEventListener('click', fadeOutAndRedirect);
 
     setTimeout(fadeOutAndRedirect, 3000);
   </script>
