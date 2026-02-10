@@ -49,6 +49,7 @@
   --ring-accent: color-mix(in srgb, var(--accent) 28%, transparent);
   --surface-1: rgba(21, 18, 34, 0.92);
   --surface-2: rgba(28, 22, 42, 0.92);
+  --surface-3: rgba(18, 16, 28, 0.92);
 }
 
 :root[data-background='midnight'] {
@@ -56,6 +57,7 @@
   --bg-tint: rgba(8, 7, 18, 0.74);
   --surface-1: rgba(16, 14, 28, 0.94);
   --surface-2: rgba(22, 18, 36, 0.94);
+  --surface-3: rgba(12, 10, 22, 0.95);
 }
 
 :root[data-background='velvet'] {
@@ -63,6 +65,7 @@
   --bg-tint: rgba(22, 10, 34, 0.72);
   --surface-1: rgba(26, 14, 40, 0.92);
   --surface-2: rgba(34, 18, 48, 0.94);
+  --surface-3: rgba(22, 12, 34, 0.94);
 }
 
 
@@ -71,6 +74,7 @@
   --bg-tint: rgba(6, 42, 42, 0.72);
   --surface-1: rgba(8, 48, 48, 0.9);
   --surface-2: rgba(10, 58, 58, 0.92);
+  --surface-3: rgba(8, 40, 40, 0.93);
 }
 
 :root[data-background='slate'] {
@@ -78,6 +82,7 @@
   --bg-tint: rgba(17, 24, 39, 0.72);
   --surface-1: rgba(21, 31, 52, 0.9);
   --surface-2: rgba(27, 39, 65, 0.92);
+  --surface-3: rgba(19, 28, 47, 0.93);
 }
 
 :root[data-background='sunset'] {
@@ -85,6 +90,7 @@
   --bg-tint: rgba(42, 19, 38, 0.72);
   --surface-1: rgba(54, 21, 46, 0.9);
   --surface-2: rgba(68, 26, 56, 0.92);
+  --surface-3: rgba(48, 20, 42, 0.93);
 }
 
 :root[data-background='custom'] {
@@ -92,6 +98,7 @@
   --bg-tint: color-mix(in srgb, var(--bg-custom) 78%, transparent);
   --surface-1: color-mix(in srgb, var(--bg-custom) 72%, #ffffff 8%);
   --surface-2: color-mix(in srgb, var(--bg-custom) 68%, #ffffff 12%);
+  --surface-3: color-mix(in srgb, var(--bg-custom) 76%, #000000 24%);
 }
 
 html,
