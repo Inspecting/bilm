@@ -123,7 +123,9 @@
 
     const toggleDesktopClear = () => {
       if (!desktopClearBtn) return;
-      desktopClearBtn.style.display = searchInput.value.trim().length > 0 ? 'flex' : 'none';
+      const hasText = searchInput.value.trim().length > 0;
+      desktopClearBtn.hidden = !hasText;
+      desktopClearBtn.style.display = hasText ? 'flex' : 'none';
     };
 
     toggleDesktopClear();
