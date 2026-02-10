@@ -28,11 +28,25 @@
   --bg-custom: #0b0b14;
   --bg-main: var(--bg-deep);
   --bg-tint: rgba(14, 10, 28, 0.7);
+  --surface-input: color-mix(in srgb, var(--surface-2) 86%, #ffffff 8%);
+  --surface-input-soft: color-mix(in srgb, var(--surface-2) 78%, transparent);
+  --surface-overlay: color-mix(in srgb, var(--bg-main) 76%, transparent);
+  --surface-player: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  --surface-player-header-start: color-mix(in srgb, var(--surface-2) 96%, transparent);
+  --surface-player-header-end: color-mix(in srgb, var(--surface-1) 92%, var(--accent-soft));
+  --ring-accent: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 :root[data-background='deep'] {
   --bg-main: var(--bg-deep);
   --bg-tint: rgba(14, 10, 28, 0.7);
+  --surface-input: color-mix(in srgb, var(--surface-2) 86%, #ffffff 8%);
+  --surface-input-soft: color-mix(in srgb, var(--surface-2) 78%, transparent);
+  --surface-overlay: color-mix(in srgb, var(--bg-main) 76%, transparent);
+  --surface-player: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  --surface-player-header-start: color-mix(in srgb, var(--surface-2) 96%, transparent);
+  --surface-player-header-end: color-mix(in srgb, var(--surface-1) 92%, var(--accent-soft));
+  --ring-accent: color-mix(in srgb, var(--accent) 28%, transparent);
   --surface-1: rgba(21, 18, 34, 0.92);
   --surface-2: rgba(28, 22, 42, 0.92);
 }
