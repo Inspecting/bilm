@@ -121,10 +121,17 @@
       submitSearch(searchInput.value);
     });
 
+    const toggleDesktopClear = () => {
+      if (!desktopClearBtn) return;
+      desktopClearBtn.style.display = searchInput.value.trim().length > 0 ? 'flex' : 'none';
+    };
+
+    toggleDesktopClear();
+    searchInput.addEventListener('input', toggleDesktopClear);
     if (desktopClearBtn) {
-      desktopClearBtn.style.display = 'flex';
       desktopClearBtn.addEventListener('click', () => {
         searchInput.value = '';
+        toggleDesktopClear();
         searchInput.focus();
       });
     }
