@@ -282,7 +282,7 @@ button.search-btn:hover {
 .movie-card {
   flex: 0 0 auto;
   width: 140px;
-  height: 210px;
+  height: 248px;
   background-color: var(--surface-2);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
@@ -304,13 +304,19 @@ button.search-btn:hover {
 
 .movie-card img {
   width: 140px;
-  height: 180px;
+  height: 188px;
   object-fit: cover;
   border-radius: 12px 12px 0 0;
   background: rgba(255, 255, 255, 0.05);
 }
 
 .card-meta {
+  padding: 8px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 58px;
+  justify-content: center;
   padding: 6px 8px 8px;
   display: flex;
   flex-direction: column;
@@ -326,6 +332,11 @@ button.search-btn:hover {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card-subtitle {
+  font-size: 12px;
   -webkit-line-clamp: 1;
 }
 
@@ -375,7 +386,7 @@ button.search-btn:hover {
 .show-more-card {
   flex: 0 0 auto;
   width: 80px;
-  height: 210px;
+  height: 248px;
   display: flex;
   justify-content: center;
   align-items: center;

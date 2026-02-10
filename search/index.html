@@ -118,14 +118,30 @@
       object-fit: cover;
       border-radius: 12px 12px 0 0;
     }
-    .card p {
-      padding: 6px 8px;
-      font-weight: 600;
-      font-size: 14px;
+    .card-meta {
+      padding: 8px 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 58px;
+      justify-content: center;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
       color: var(--text-primary);
-      text-align: center;
-      white-space: nowrap;
       overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-subtle);
+      line-height: 1.2;
+      overflow: hidden;
+      white-space: nowrap;
       text-overflow: ellipsis;
     }
     .no-results {
@@ -210,7 +226,8 @@
             year: item.y || 'N/A',
             img: item.i?.[0] || NO_IMAGE,
             link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
-            source: 'IMDb-v2'
+            source: 'IMDb-v2',
+            type: 'movie'
           }));
         })
         .catch(() => []);
@@ -230,7 +247,8 @@
               year: show.premiered ? show.premiered.slice(0,4) : 'N/A',
               img: show.image?.medium || NO_IMAGE,
               link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
-              source: 'TVmaze'
+              source: 'TVmaze',
+              type: 'tv'
             };
           });
         })
@@ -257,7 +275,8 @@
               year: item.release_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
               link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
-              source: 'TMDB'
+              source: 'TMDB',
+              type: 'movie'
             });
           }
         });
@@ -270,7 +289,8 @@
               year: item.Year,
               img: item.Poster !== 'N/A' ? item.Poster : NO_IMAGE,
               link: `${BASE_URL}/movies/viewer.html?id=${item.imdbID}`,
-              source: 'OMDB'
+              source: 'OMDB',
+              type: 'movie'
             });
           }
         });
@@ -290,7 +310,8 @@
               year: item.first_air_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
               link: `${BASE_URL}/tv/viewer.html?id=${item.id}`,
-              source: 'TMDB'
+              source: 'TMDB',
+              type: 'tv'
             });
           }
         });
@@ -370,11 +391,27 @@
           img.src = NO_IMAGE;
         };
 
+        const cardMeta = document.createElement('div');
+        cardMeta.className = 'card-meta';
+
         const title = document.createElement('p');
-        title.textContent = `${item.title} (${item.year})`;
+        title.className = 'card-title';
+        title.textContent = item.title;
+
+        const subtitle = document.createElement('p');
+        subtitle.className = 'card-subtitle';
+        const typeLabel = item.type === 'movie'
+          ? 'Movie'
+          : item.type === 'tv'
+            ? 'TV Show'
+            : 'Unknown';
+        subtitle.textContent = `${item.year || 'N/A'} • ${typeLabel}`;
+
+        cardMeta.appendChild(title);
+        cardMeta.appendChild(subtitle);
 
         card.appendChild(img);
-        card.appendChild(title);
+        card.appendChild(cardMeta);
 
         card.dataset.source = item.source;
 
