@@ -206,9 +206,25 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = 'https://via.placeholder.com/140x210?text=No+Image';
       };
 
+      const cardMeta = document.createElement('div');
+      cardMeta.className = 'card-meta';
+
       const title = document.createElement('p');
+      title.className = 'card-title';
       const yearLabel = item.year || toYear(item.date);
-      title.textContent = `${item.title} (${yearLabel || 'N/A'})`;
+      title.textContent = item.title;
+
+      const subtitle = document.createElement('p');
+      subtitle.className = 'card-subtitle';
+      const typeLabel = item.type === 'movie'
+        ? 'Movie'
+        : item.type === 'tv'
+          ? 'TV Show'
+          : 'Unknown';
+      subtitle.textContent = `${yearLabel || 'N/A'} • ${typeLabel}`;
+
+      cardMeta.appendChild(title);
+      cardMeta.appendChild(subtitle);
 
       const actionBtn = document.createElement('button');
       actionBtn.type = 'button';
@@ -229,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       card.appendChild(img);
       card.appendChild(actionBtn);
-      card.appendChild(title);
+      card.appendChild(cardMeta);
 
       card.onclick = () => {
         if (state.editing) {
