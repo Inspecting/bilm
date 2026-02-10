@@ -8,7 +8,7 @@
 
 header {
   background-color: var(--surface-3);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--bg-main) 45%, transparent);
   position: relative;
   z-index: 1000;
   border-bottom: 1px solid var(--border);
@@ -74,13 +74,13 @@ nav button {
 
 nav button:hover {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: var(--surface-input-soft);
   box-shadow: 0 0 12px var(--accent-soft);
 }
 
 nav button.active {
   color: var(--accent);
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: var(--surface-input-soft);
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
@@ -98,7 +98,7 @@ nav button.active {
 
 .search-input {
   width: 100%;
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: var(--surface-input);
   color: var(--text-primary);
   border: 1px solid transparent;
   border-radius: 6px;
@@ -217,7 +217,7 @@ nav button.active {
   right: 0;
   bottom: 0;
   backdrop-filter: blur(8px);
-  background-color: rgba(0, 0, 0, 0.68);
+  background-color: var(--surface-overlay);
   display: none;
   flex-direction: column;
   align-items: center;

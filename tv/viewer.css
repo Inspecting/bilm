@@ -131,7 +131,7 @@ main {
   overflow: visible;
   display: flex;
   flex-direction: column;
-  background: rgba(26, 22, 40, 0.9);
+  background: var(--surface-player);
   position: relative;
 }
 
@@ -140,7 +140,7 @@ main {
   flex-direction: column;
   gap: 4px;
   padding: 14px 20px 10px;
-  background: linear-gradient(90deg, rgba(26, 22, 40, 0.98), rgba(32, 20, 48, 0.95));
+  background: linear-gradient(90deg, var(--surface-player-header-start), var(--surface-player-header-end));
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   border-bottom: 1px solid var(--border);
 }
@@ -163,7 +163,7 @@ main {
   width: 100%;
   aspect-ratio: 16 / 9;
   position: relative;
-  background: rgba(26, 22, 40, 0.9);
+  background: var(--surface-player);
   overflow: hidden;
   border-radius: 20px;
 }
@@ -189,7 +189,7 @@ iframe {
 }
 
 #playexBar {
-  background: rgba(26, 22, 40, 0.9);
+  background: var(--surface-player);
   padding: 10px 20px;
   display: flex;
   align-items: center;
@@ -214,7 +214,7 @@ iframe {
 .playback-note-time {
   display: flex;
   align-items: center;
-  background: rgba(10, 10, 14, 0.75);
+  background: var(--surface-overlay);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -243,7 +243,7 @@ iframe {
 
 .playback-note-time:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.25);
+  box-shadow: 0 0 0 2px var(--ring-accent);
 }
 
 #fullscreenBtn,
@@ -339,7 +339,7 @@ iframe {
   justify-content: center;
   gap: 12px;
   align-items: center;
-  background: rgba(26, 22, 40, 0.9);
+  background: var(--surface-player);
   padding: 12px 30px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-glow);
@@ -389,7 +389,7 @@ iframe {
 
 .smallBtn {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   color: var(--text-primary);
   padding: 8px 12px;
   border-radius: 8px;
@@ -404,7 +404,7 @@ iframe {
 }
 
 .smallBtn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-input-soft);
 }
 
 .smallBtn:disabled {
@@ -425,7 +425,7 @@ iframe {
   right: 0;
   z-index: 100;
   background: transparent;
-  color: white;
+  color: var(--text-primary);
   border: none;
   width: 48px;
   height: 48px;
