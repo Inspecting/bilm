@@ -63,11 +63,22 @@ function createShowCard(show) {
     img.src = 'https://via.placeholder.com/140x210?text=No+Image';
   };
 
-  const p = document.createElement('p');
-  p.textContent = `${show.title} (${show.year || 'N/A'})`;
+  const cardMeta = document.createElement('div');
+  cardMeta.className = 'card-meta';
+
+  const title = document.createElement('p');
+  title.className = 'card-title';
+  title.textContent = show.title;
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'card-subtitle';
+  subtitle.textContent = `${show.year || 'N/A'}`;
+
+  cardMeta.appendChild(title);
+  cardMeta.appendChild(subtitle);
 
   card.appendChild(img);
-  card.appendChild(p);
+  card.appendChild(cardMeta);
 
   card.onclick = () => {
     window.location.href = show.link || '#';

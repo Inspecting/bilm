@@ -63,11 +63,22 @@ function createMovieCard(movie) {
     img.src = 'https://via.placeholder.com/140x210?text=No+Image';
   };
 
-  const p = document.createElement('p');
-  p.textContent = `${movie.title} (${movie.year || 'N/A'})`;
+  const cardMeta = document.createElement('div');
+  cardMeta.className = 'card-meta';
+
+  const title = document.createElement('p');
+  title.className = 'card-title';
+  title.textContent = movie.title;
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'card-subtitle';
+  subtitle.textContent = `${movie.year || 'N/A'}`;
+
+  cardMeta.appendChild(title);
+  cardMeta.appendChild(subtitle);
 
   card.appendChild(img);
-  card.appendChild(p);
+  card.appendChild(cardMeta);
 
   card.onclick = () => {
     window.location.href = movie.link || '#';
