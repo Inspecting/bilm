@@ -310,13 +310,29 @@ button.search-btn:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.movie-card p {
-  padding: 6px 8px;
-  font-size: 14px;
-  font-weight: 600;
+.card-meta {
+  padding: 6px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 30px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
   color: var(--text-primary);
-  text-align: center;
-  flex-grow: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.card-subtitle {
+  font-size: 11px;
+  color: var(--text-subtle);
+  line-height: 1.2;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
