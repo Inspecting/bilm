@@ -62,7 +62,7 @@ main {
 .movie-card {
   flex: 0 0 auto;
   width: 140px;
-  height: auto;
+  height: 248px;
   background-color: var(--surface-2);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
@@ -89,14 +89,31 @@ main {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.movie-card p {
-  padding: 6px 8px;
-  font-size: 14px;
-  font-weight: 600;
+.card-meta {
+  padding: 8px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 58px;
+  justify-content: center;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
   color: var(--text-primary);
-  text-align: center;
-  white-space: nowrap;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card-subtitle {
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.2;
+  overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
