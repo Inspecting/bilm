@@ -98,6 +98,7 @@ nav button.active {
 .search-input-wrapper {
   position: relative;
   width: clamp(132px, 16vw, 168px);
+  width: clamp(150px, 18vw, 184px);
 }
 
 .search-input {
@@ -166,6 +167,7 @@ nav button.active {
 @media (min-width: 1280px) {
   .search-input-wrapper {
     width: 182px;
+    width: 196px;
   }
 }
 
@@ -185,6 +187,7 @@ nav button.active {
 
   .search-input-wrapper {
     width: clamp(124px, 15vw, 150px);
+    width: clamp(138px, 16vw, 164px);
   }
 }
 
