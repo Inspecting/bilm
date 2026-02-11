@@ -56,6 +56,7 @@ function createMovieCard(movie) {
   const sourceBadge = document.createElement('span');
   sourceBadge.className = 'source-badge-overlay';
   sourceBadge.textContent = String(movie.source || 'Other').toUpperCase();
+  sourceBadge.textContent = movie.source || 'TMDB';
 
   const img = document.createElement('img');
   img.loading = 'lazy';

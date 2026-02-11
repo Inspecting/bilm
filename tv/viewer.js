@@ -173,6 +173,7 @@ function createMoreLikeCard(show) {
   const sourceBadge = document.createElement('span');
   sourceBadge.className = 'source-badge-overlay';
   sourceBadge.textContent = String(show.source || 'TMDB').toUpperCase();
+  sourceBadge.textContent = 'TMDB';
 
   const title = document.createElement('p');
   title.textContent = `${show.name || 'Untitled'} (${show.first_air_date?.slice(0, 4) || 'N/A'})`;

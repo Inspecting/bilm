@@ -190,6 +190,7 @@ function createMoreLikeCard(movie) {
   const sourceBadge = document.createElement('span');
   sourceBadge.className = 'source-badge-overlay';
   sourceBadge.textContent = String(movie.source || 'TMDB').toUpperCase();
+  sourceBadge.textContent = 'TMDB';
 
   const title = document.createElement('p');
   title.textContent = `${movie.title || 'Untitled'} (${movie.release_date?.slice(0, 4) || 'N/A'})`;
