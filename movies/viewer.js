@@ -192,11 +192,16 @@ function createMoreLikeCard(movie) {
   sourceBadge.textContent = String(movie.source || 'TMDB').toUpperCase();
   sourceBadge.textContent = 'TMDB';
 
+  const typeBadge = document.createElement('span');
+  typeBadge.className = 'type-badge-overlay';
+  typeBadge.textContent = 'Movie';
+
   const title = document.createElement('p');
   title.textContent = `${movie.title || 'Untitled'} (${movie.release_date?.slice(0, 4) || 'N/A'})`;
 
   card.appendChild(img);
   card.appendChild(sourceBadge);
+  card.appendChild(typeBadge);
   card.appendChild(title);
 
   card.addEventListener('click', () => {

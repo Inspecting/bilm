@@ -175,11 +175,16 @@ function createMoreLikeCard(show) {
   sourceBadge.textContent = String(show.source || 'TMDB').toUpperCase();
   sourceBadge.textContent = 'TMDB';
 
+  const typeBadge = document.createElement('span');
+  typeBadge.className = 'type-badge-overlay';
+  typeBadge.textContent = 'TV Show';
+
   const title = document.createElement('p');
   title.textContent = `${show.name || 'Untitled'} (${show.first_air_date?.slice(0, 4) || 'N/A'})`;
 
   card.appendChild(img);
   card.appendChild(sourceBadge);
+  card.appendChild(typeBadge);
   card.appendChild(title);
 
   card.addEventListener('click', () => {

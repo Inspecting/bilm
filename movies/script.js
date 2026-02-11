@@ -100,6 +100,7 @@ async function loadMoviesForSection(section) {
     const movieData = {
       tmdbId: movie.id,
       title: movie.title,
+      type: 'movie',
       year: movie.release_date?.slice(0, 4) || 'N/A',
       img: poster,
       link: `${BASE_URL}/movies/viewer.html?id=${movie.id}`,
