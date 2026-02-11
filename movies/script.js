@@ -53,6 +53,10 @@ function createMovieCard(movie) {
   card.className = 'movie-card';
   card.dataset.tmdbId = movie.tmdbId;
 
+  const sourceBadge = document.createElement('span');
+  sourceBadge.className = 'source-badge-overlay';
+  sourceBadge.textContent = String(movie.source || 'Other').toUpperCase();
+
   const img = document.createElement('img');
   img.loading = 'lazy';
   img.decoding = 'async';
@@ -78,6 +82,7 @@ function createMovieCard(movie) {
   cardMeta.appendChild(subtitle);
 
   card.appendChild(img);
+  card.appendChild(sourceBadge);
   card.appendChild(cardMeta);
 
   card.onclick = () => {
@@ -130,7 +135,8 @@ async function loadMoviesForSection(section) {
       title: movie.title,
       year: movie.release_date?.slice(0, 4) || 'N/A',
       img: poster,
-      link: `${BASE_URL}/movies/viewer.html?id=${movie.id}`
+      link: `${BASE_URL}/movies/viewer.html?id=${movie.id}`,
+      source: 'TMDB'
     };
 
     const card = createMovieCard(movieData);

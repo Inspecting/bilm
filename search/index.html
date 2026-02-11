@@ -144,6 +144,46 @@
       white-space: nowrap;
       text-overflow: ellipsis;
     }
+    .sort-bar {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: -8px 0 20px;
+      flex-wrap: wrap;
+    }
+    .sort-button {
+      background: var(--surface-2);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sort-button.active {
+      background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .source-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 3;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-inverse);
+      background: color-mix(in srgb, var(--accent) 75%, #1f2937 25%);
+      padding: 2px 6px;
+      border-radius: 999px;
+      pointer-events: none;
+      max-width: calc(100% - 16px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .no-results {
       text-align: center;
       color: var(--text-subtle);
@@ -166,6 +206,10 @@
       <button class="filter-button active" type="button" data-filter="all" role="tab" aria-selected="true">All</button>
       <button class="filter-button" type="button" data-filter="movies" role="tab" aria-selected="false">Movies</button>
       <button class="filter-button" type="button" data-filter="tv" role="tab" aria-selected="false">TV Shows</button>
+    </div>
+    <div class="sort-bar" role="group" aria-label="Sort search results">
+      <button class="sort-button active" type="button" data-sort="relevance" aria-pressed="true">Sort: Relevance</button>
+      <button class="sort-button" type="button" data-sort="year" aria-pressed="false">Sort: Year</button>
     </div>
 
     <section id="combinedSection">
@@ -190,25 +234,130 @@
     const resultsMessage = document.getElementById('resultsMessage');
     const combinedResults = document.getElementById('combinedResults');
     const filterButtons = Array.from(document.querySelectorAll('.filter-button'));
+    const sortButtons = Array.from(document.querySelectorAll('.sort-button'));
 
     const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
     const queryNormalized = currentQuery.trim();
     let cachedMovies = [];
     let cachedTvShows = [];
     let cachedAll = [];
+    let activeFilter = 'all';
+    let activeSort = 'relevance';
+
+    function normalizeTitle(value) {
+      return (value || '').trim().toLowerCase();
+    }
 
     function createMovieKey(title, year) {
-      return `${(title || '').trim().toLowerCase()}-${year || 'N/A'}`;
+      return `${normalizeTitle(title)}-${year || 'N/A'}`;
     }
 
     function createTvKey(title, year) {
-      return `${(title || '').trim().toLowerCase()}-${year || 'N/A'}`;
+      return `${normalizeTitle(title)}-${year || 'N/A'}`;
     }
 
     async function fetchJSON(url) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
+    }
+
+    function getYearValue(item) {
+      const parsed = Number.parseInt(item.year, 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function createTypeLabel(type) {
+      return type === 'movie' ? 'Movie' : type === 'tv' ? 'TV Show' : 'Unknown';
+    }
+
+    function titleSimilarityScore(title, query) {
+      const normalizedTitle = normalizeTitle(title);
+      const normalizedQuery = normalizeTitle(query);
+      if (!normalizedTitle || !normalizedQuery) return 0;
+      if (normalizedTitle === normalizedQuery) return 120;
+      if (normalizedTitle.startsWith(normalizedQuery)) return 80;
+      if (normalizedTitle.includes(normalizedQuery)) return 60;
+      return 0;
+    }
+
+    function createRelevanceScore(item) {
+      const sourceWeight = {
+        TMDB: 45,
+        OMDB: 25,
+        'IMDb-v2': 20,
+        TVmaze: 20
+      };
+      const queryYear = Number.parseInt(queryNormalized.match(/\b(19|20)\d{2}\b/)?.[0], 10);
+      const itemYear = getYearValue(item);
+      const yearPenalty = Number.isFinite(queryYear) && itemYear ? Math.abs(queryYear - itemYear) : 0;
+      const hasTmdbIdBonus = item.tmdbId ? 30 : -80;
+      return titleSimilarityScore(item.title, queryNormalized)
+        + (sourceWeight[item.source] || 0)
+        + hasTmdbIdBonus
+        + (item.popularity || 0) * 0.05
+        - yearPenalty;
+    }
+
+    function sortItems(items) {
+      const sorted = [...items];
+      if (activeSort === 'year') {
+        sorted.sort((a, b) => getYearValue(b) - getYearValue(a) || createRelevanceScore(b) - createRelevanceScore(a));
+        return sorted;
+      }
+      sorted.sort((a, b) => createRelevanceScore(b) - createRelevanceScore(a));
+      return sorted;
+    }
+
+    async function resolveMovieTmdbId({ imdbId, title, year }) {
+      if (imdbId) {
+        try {
+          const found = await fetchJSON(`https://api.themoviedb.org/3/find/${encodeURIComponent(imdbId)}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
+          const byExternal = found?.movie_results?.[0]?.id;
+          if (byExternal) return byExternal;
+        } catch {
+          // fallback below
+        }
+      }
+      try {
+        const query = encodeURIComponent(title || '');
+        const yearQuery = year && year !== 'N/A' ? `&year=${encodeURIComponent(year)}` : '';
+        const searchData = await fetchJSON(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${query}${yearQuery}`);
+        return searchData?.results?.[0]?.id || null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function resolveTvTmdbId({ title, year }) {
+      try {
+        const query = encodeURIComponent(title || '');
+        const firstAirDateYear = year && year !== 'N/A' ? `&first_air_date_year=${encodeURIComponent(year)}` : '';
+        const searchData = await fetchJSON(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}${firstAirDateYear}`);
+        return searchData?.results?.[0]?.id || null;
+      } catch {
+        return null;
+      }
+    }
+
+    async function normalizeMovieEntries(entries, limit = 10) {
+      const nextEntries = [...entries];
+      const unresolved = nextEntries.filter(item => !item.tmdbId).slice(0, limit);
+      await Promise.all(unresolved.map(async (item) => {
+        item.tmdbId = await resolveMovieTmdbId(item);
+        item.link = item.tmdbId ? `${BASE_URL}/movies/viewer.html?id=${item.tmdbId}` : '';
+      }));
+      return nextEntries;
+    }
+
+    async function normalizeTvEntries(entries, limit = 10) {
+      const nextEntries = [...entries];
+      const unresolved = nextEntries.filter(item => !item.tmdbId).slice(0, limit);
+      await Promise.all(unresolved.map(async (item) => {
+        item.tmdbId = await resolveTvTmdbId(item);
+        item.link = item.tmdbId ? `${BASE_URL}/tv/viewer.html?id=${item.tmdbId}` : '';
+      }));
+      return nextEntries;
     }
 
     resultsTitle.textContent = `Search Results for "${queryNormalized}"`;
@@ -225,9 +374,12 @@
             title: item.l,
             year: item.y || 'N/A',
             img: item.i?.[0] || NO_IMAGE,
-            link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
+            imdbId: item.id,
+            tmdbId: null,
             source: 'IMDb-v2',
-            type: 'movie'
+            popularity: item.rank || 0,
+            type: 'movie',
+            link: ''
           }));
         })
         .catch(() => []);
@@ -246,9 +398,11 @@
               title: show.name,
               year: show.premiered ? show.premiered.slice(0,4) : 'N/A',
               img: show.image?.medium || NO_IMAGE,
-              link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
+              tmdbId: null,
               source: 'TVmaze',
-              type: 'tv'
+              popularity: show.weight || 0,
+              type: 'tv',
+              link: ''
             };
           });
         })
@@ -263,7 +417,7 @@
         fetchImdbMovies(queryNormalized),
         fetchTvmazeShows(queryNormalized)
       ])
-      .then(([tmdbMovies, tmdbTV, omdbMovies, imdbMovies, tvmazeShows]) => {
+      .then(async ([tmdbMovies, tmdbTV, omdbMovies, imdbMovies, tvmazeShows]) => {
         const movieMap = new Map();
         const tvMap = new Map();
 
@@ -274,8 +428,10 @@
               title: item.title,
               year: item.release_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
+              tmdbId: item.id,
               link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
               source: 'TMDB',
+              popularity: item.popularity || 0,
               type: 'movie'
             });
           }
@@ -288,8 +444,11 @@
               title: item.Title,
               year: item.Year,
               img: item.Poster !== 'N/A' ? item.Poster : NO_IMAGE,
-              link: `${BASE_URL}/movies/viewer.html?id=${item.imdbID}`,
+              imdbId: item.imdbID,
+              tmdbId: null,
+              link: '',
               source: 'OMDB',
+              popularity: 0,
               type: 'movie'
             });
           }
@@ -309,8 +468,10 @@
               title: item.name,
               year: item.first_air_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
+              tmdbId: item.id,
               link: `${BASE_URL}/tv/viewer.html?id=${item.id}`,
               source: 'TMDB',
+              popularity: item.popularity || 0,
               type: 'tv'
             });
           }
@@ -323,11 +484,11 @@
           }
         });
 
-        cachedMovies = Array.from(movieMap.values());
-        cachedTvShows = Array.from(tvMap.values());
+        cachedMovies = await normalizeMovieEntries(Array.from(movieMap.values()));
+        cachedTvShows = await normalizeTvEntries(Array.from(tvMap.values()));
         cachedAll = [...cachedMovies, ...cachedTvShows];
 
-        updateResults('all');
+        updateResults(activeFilter);
       })
       .catch(err => {
         console.error('Search failed', err);
@@ -343,13 +504,25 @@
 
     filterButtons.forEach(button => {
       button.addEventListener('click', () => {
-        const filter = button.dataset.filter;
-        updateResults(filter);
+        activeFilter = button.dataset.filter;
+        updateResults(activeFilter);
         filterButtons.forEach(btn => {
           const isActive = btn === button;
           btn.classList.toggle('active', isActive);
           btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
         });
+      });
+    });
+
+    sortButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        activeSort = button.dataset.sort;
+        sortButtons.forEach(btn => {
+          const isActive = btn === button;
+          btn.classList.toggle('active', isActive);
+          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+        updateResults(activeFilter);
       });
     });
 
@@ -363,13 +536,16 @@
         items = cachedAll;
       }
 
-      if (items.length > 0) {
-        renderResults(combinedResults, items);
+      const validItems = sortItems(items.filter(item => Boolean(item.link)));
+      if (validItems.length > 0) {
+        renderResults(combinedResults, validItems);
         resultsMessage.hidden = true;
         combinedSection.style.display = 'block';
       } else {
         combinedResults.innerHTML = '';
-        resultsMessage.textContent = 'No results found.';
+        resultsMessage.textContent = items.length > 0
+          ? 'Results were found, but some sources could not be linked yet. Try another query.'
+          : 'No results found.';
         resultsMessage.hidden = false;
         combinedSection.style.display = 'block';
       }
@@ -400,23 +576,21 @@
 
         const subtitle = document.createElement('p');
         subtitle.className = 'card-subtitle';
-        const typeLabel = item.type === 'movie'
-          ? 'Movie'
-          : item.type === 'tv'
-            ? 'TV Show'
-            : 'Unknown';
-        subtitle.textContent = `${item.year || 'N/A'} • ${typeLabel}`;
+        subtitle.textContent = `${item.year || 'N/A'} • ${createTypeLabel(item.type)}`;
+
+        const sourceBadge = document.createElement('span');
+        sourceBadge.className = 'source-badge';
+        sourceBadge.textContent = String(item.source || 'Other').toUpperCase();
 
         cardMeta.appendChild(title);
         cardMeta.appendChild(subtitle);
-
         card.appendChild(img);
+        card.appendChild(sourceBadge);
         card.appendChild(cardMeta);
 
         card.dataset.source = item.source;
 
         card.onclick = () => {
-          console.log(`🟣 Clicked on "${item.title}" from API: ${item.source}`);
           window.location.href = item.link;
         };
 

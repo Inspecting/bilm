@@ -199,6 +199,10 @@ document.addEventListener('DOMContentLoaded', () => {
         card.classList.add('is-selected');
       }
 
+      const sourceBadge = document.createElement('span');
+      sourceBadge.className = 'source-badge-overlay';
+      sourceBadge.textContent = String(item.source || 'Other').toUpperCase();
+
       const img = document.createElement('img');
       img.src = item.poster || 'https://via.placeholder.com/140x210?text=No+Image';
       img.alt = item.title;
@@ -244,6 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       card.appendChild(img);
+      card.appendChild(sourceBadge);
       card.appendChild(actionBtn);
       card.appendChild(cardMeta);
 

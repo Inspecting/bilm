@@ -53,6 +53,10 @@ function createShowCard(show) {
   card.className = 'movie-card';
   card.dataset.tmdbId = show.tmdbId;
 
+  const sourceBadge = document.createElement('span');
+  sourceBadge.className = 'source-badge-overlay';
+  sourceBadge.textContent = String(show.source || 'Other').toUpperCase();
+
   const img = document.createElement('img');
   img.loading = 'lazy';
   img.decoding = 'async';
@@ -78,6 +82,7 @@ function createShowCard(show) {
   cardMeta.appendChild(subtitle);
 
   card.appendChild(img);
+  card.appendChild(sourceBadge);
   card.appendChild(cardMeta);
 
   card.onclick = () => {
@@ -129,7 +134,8 @@ async function loadShowsForSection(section) {
       title: show.name,
       year: show.first_air_date?.slice(0, 4) || 'N/A',
       img: poster,
-      link: `${BASE_URL}/tv/viewer.html?id=${show.id}`
+      link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
+      source: 'TMDB'
     };
 
     const card = createShowCard(showData);
