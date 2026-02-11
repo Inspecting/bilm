@@ -73,6 +73,7 @@ main {
   user-select: none;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   border: 1px solid transparent;
+  position: relative;
 }
 
 .movie-card:hover {
