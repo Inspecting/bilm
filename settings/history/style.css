@@ -12,12 +12,6 @@ body {
   color: var(--text-primary);
 }
 
-#navbarContainer {
-  position: sticky;
-  top: 0;
-  z-index: 9999;
-}
-
 body {
   display: flex;
   flex-direction: column;
@@ -28,10 +22,8 @@ body {
 main {
   flex: 1;
   overflow-y: auto;
-  height: calc(100vh - 60px);
+  min-height: 100vh;
   width: 100%;
-  max-width: 1220px;
-  margin: 0 auto;
   padding: 16px 20px 80px;
 }
 

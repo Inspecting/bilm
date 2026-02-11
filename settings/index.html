@@ -31,7 +31,6 @@
       font-family: 'Poppins', sans-serif;
       background-color: var(--bg-main);
       color: var(--text-primary);
-      overflow: hidden;
     }
 
     body {
@@ -41,10 +40,10 @@
 
     main {
       flex: 1;
-      width: 100%;
+      width: 100vw;
+      min-height: 100vh;
       overflow-y: auto;
       overflow-x: hidden;
-      scrollbar-gutter: stable;
       padding: 0;
     }
 
@@ -55,7 +54,6 @@
       padding: 28px 22px 80px;
       overflow-y: auto;
       overflow-x: hidden;
-      scrollbar-gutter: stable;
     }
 
     .page-header {

@@ -6,6 +6,22 @@
   color: var(--text-primary);
 }
 
+#navbarContainer,
+#navbar-placeholder {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 999;
+}
+
+#navbarContainer + main,
+#navbar-placeholder + main {
+  width: 100vw;
+  min-height: 100vh;
+  padding-top: 84px;
+}
+
 header {
   background-color: var(--surface-3);
   box-shadow: 0 8px 20px color-mix(in srgb, var(--bg-main) 45%, transparent);
@@ -195,6 +211,11 @@ nav button.active {
 @media (max-width: 768px) {
   header {
     display: none;
+  }
+
+  #navbarContainer + main,
+  #navbar-placeholder + main {
+    padding-top: 16px;
   }
 }
 
