@@ -8,6 +8,8 @@ const elements = {
   frame: document.getElementById('gameFrame'),
   poster: document.getElementById('gamePoster'),
   openSource: document.getElementById('openSource'),
+  reloadGame: document.getElementById('reloadGame'),
+  fullscreenGame: document.getElementById('fullscreenGame'),
   empty: document.getElementById('playEmpty'),
   content: document.getElementById('playContent')
 };
@@ -56,6 +58,46 @@ const buildGameFromParams = () => {
   };
 };
 
+const showEmpty = () => {
+  elements.empty.hidden = false;
+  if (elements.content) elements.content.hidden = true;
+};
+
+const attachFrameControls = (openUrl) => {
+  const getFrame = () => elements.frame?.querySelector('iframe');
+
+  if (elements.openSource) {
+    if (openUrl) {
+      elements.openSource.addEventListener('click', () => {
+        window.open(openUrl, '_blank', 'noopener');
+      });
+    } else {
+      elements.openSource.disabled = true;
+    }
+  }
+
+  if (elements.reloadGame) {
+    elements.reloadGame.addEventListener('click', () => {
+      const iframe = getFrame();
+      if (!iframe) return;
+      iframe.src = iframe.src;
+    });
+  }
+
+  if (elements.fullscreenGame) {
+    elements.fullscreenGame.addEventListener('click', async () => {
+      const iframe = getFrame();
+      const target = iframe || elements.frame;
+      if (!target?.requestFullscreen) return;
+      try {
+        await target.requestFullscreen();
+      } catch (error) {
+        console.warn('Fullscreen request failed', error);
+      }
+    });
+  }
+};
+
 const loadGame = () => {
   const params = getQueryParams();
   const gameId = params.get('game');
@@ -63,8 +105,7 @@ const loadGame = () => {
   const game = (gameId && stored[gameId]) || buildGameFromParams();
 
   if (!game) {
-    elements.empty.hidden = false;
-    if (elements.content) elements.content.hidden = true;
+    showEmpty();
     return;
   }
 
@@ -83,15 +124,7 @@ const loadGame = () => {
   }
 
   const openUrl = extractEmbedSrc(embedMarkup) || game.url;
-  if (elements.openSource) {
-    if (openUrl) {
-      elements.openSource.addEventListener('click', () => {
-        window.open(openUrl, '_blank', 'noopener');
-      });
-    } else {
-      elements.openSource.disabled = true;
-    }
-  }
+  attachFrameControls(openUrl);
 };
 
 loadGame();

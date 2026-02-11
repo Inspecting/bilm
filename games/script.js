@@ -6,7 +6,15 @@ const placeholderImage = `data:image/svg+xml,${encodeURIComponent(placeholderSvg
 const elements = {
   status: document.getElementById('gameStatus'),
   sections: document.getElementById('gameSections'),
-  empty: document.getElementById('gameEmpty')
+  empty: document.getElementById('gameEmpty'),
+  search: document.getElementById('gameSearchInput'),
+  clearSearch: document.getElementById('clearSearchBtn'),
+  resultsMeta: document.getElementById('resultsMeta')
+};
+
+const state = {
+  games: [],
+  query: ''
 };
 
 const normalizeGames = (data) => {
@@ -119,7 +127,21 @@ const createCard = (game) => {
   return card;
 };
 
-const renderSections = (games) => {
+const setStatus = (text) => {
+  if (elements.status) elements.status.textContent = text;
+};
+
+const setResultMeta = (shown, total, query) => {
+  if (!elements.resultsMeta) return;
+  if (!query) {
+    elements.resultsMeta.hidden = true;
+    return;
+  }
+  elements.resultsMeta.hidden = false;
+  elements.resultsMeta.textContent = `Showing ${shown} of ${total} games for “${query}”.`;
+};
+
+const renderSections = (games, query = '') => {
   elements.sections.innerHTML = '';
   if (!games.length) {
     elements.empty.hidden = false;
@@ -152,10 +174,38 @@ const renderSections = (games) => {
     section.append(title, grid);
     elements.sections.appendChild(section);
   }
+
+  setResultMeta(games.length, state.games.length, query);
 };
 
-const setStatus = (text) => {
-  if (elements.status) elements.status.textContent = text;
+const filterGames = (query) => {
+  if (!query) return state.games;
+  const lower = query.toLowerCase();
+  return state.games.filter((game) => [game.title, game.category, game.description].join(' ').toLowerCase().includes(lower));
+};
+
+const applySearch = () => {
+  const query = state.query.trim();
+  const filtered = filterGames(query);
+  renderSections(filtered, query);
+  setStatus(`${filtered.length} game${filtered.length === 1 ? '' : 's'} ${query ? 'matched' : 'ready to play'}`);
+};
+
+const wireSearch = () => {
+  if (!elements.search || !elements.clearSearch) return;
+  elements.search.addEventListener('input', () => {
+    state.query = elements.search.value;
+    elements.clearSearch.hidden = !state.query.trim();
+    applySearch();
+  });
+
+  elements.clearSearch.addEventListener('click', () => {
+    state.query = '';
+    elements.search.value = '';
+    elements.clearSearch.hidden = true;
+    applySearch();
+    elements.search.focus();
+  });
 };
 
 const fetchCatalog = async (url) => {
@@ -173,9 +223,10 @@ const loadGames = async () => {
       const data = await fetchCatalog(source);
       const entries = normalizeGames(data).map(normalizeEntry).filter((game) => game.title);
       if (entries.length) {
+        state.games = entries;
         const label = source === catalogUrl ? 'Live catalog' : 'Backup catalog';
         setStatus(`${entries.length} games loaded · ${label}`);
-        renderSections(entries);
+        applySearch();
         return;
       }
       lastError = new Error(`Catalog ${source} returned no games`);
@@ -190,4 +241,5 @@ const loadGames = async () => {
   elements.empty.hidden = false;
 };
 
+wireSearch();
 loadGames();
