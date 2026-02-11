@@ -121,6 +121,26 @@ input#searchInput:focus {
   box-shadow: 0 0 16px var(--accent-glow);
 }
 
+input#searchInput::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text-subtle) 60%, transparent);
+  background:
+    linear-gradient(45deg, transparent 44%, var(--text-primary) 44%, var(--text-primary) 56%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, var(--text-primary) 44%, var(--text-primary) 56%, transparent 56%),
+    color-mix(in srgb, var(--surface-2) 88%, transparent);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+input#searchInput::-webkit-search-cancel-button:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background-color: color-mix(in srgb, var(--surface-2) 75%, var(--accent-soft) 25%);
+}
+
 .button-row {
   display: flex;
   justify-content: center;
