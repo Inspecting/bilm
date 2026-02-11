@@ -106,6 +106,7 @@
       border: 1px solid transparent;
       display: flex;
       flex-direction: column;
+      position: relative;
     }
     .card:hover {
       transform: translateY(-4px) scale(1.04);
@@ -221,6 +222,7 @@
   </main>
 
   <script src="/bilm/shared/navbar.js" defer></script>
+  <script src="/bilm/shared/media-card.js"></script>
 
   <script>
     const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
@@ -555,51 +557,13 @@
     function renderResults(container, items) {
       container.innerHTML = '';
       items.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'card';
-
-        const img = document.createElement('img');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.src = item.img;
-        img.alt = item.title;
-        img.onerror = () => {
-          img.onerror = null;
-          img.src = NO_IMAGE;
-        };
-
-        const cardMeta = document.createElement('div');
-        cardMeta.className = 'card-meta';
-
-        const title = document.createElement('p');
-        title.className = 'card-title';
-        title.textContent = item.title;
-
-        const subtitle = document.createElement('p');
-        subtitle.className = 'card-subtitle';
-        subtitle.textContent = `${item.year || 'N/A'} • ${createTypeLabel(item.type)}`;
-
-        const sourceBadge = document.createElement('span');
-        sourceBadge.className = 'source-badge';
-        sourceBadge.textContent = String(item.source || 'Other').toUpperCase();
-
-        cardMeta.appendChild(title);
-        cardMeta.appendChild(subtitle);
-        sourceBadge.textContent = item.source || 'Unknown';
-
-        cardMeta.appendChild(title);
-        cardMeta.appendChild(subtitle);
-        cardMeta.appendChild(sourceBadge);
-
-        card.appendChild(img);
-        card.appendChild(sourceBadge);
-        card.appendChild(cardMeta);
-
-        card.dataset.source = item.source;
-
-        card.onclick = () => {
-          window.location.href = item.link;
-        };
+        const card = window.BilmMediaCard.createMediaCard({
+          item,
+          className: 'card',
+          badgeClassName: 'source-badge',
+          subtitleText: `${item.year || 'N/A'} • ${createTypeLabel(item.type)}`,
+          dataset: { source: item.source }
+        });
 
         container.appendChild(card);
       });

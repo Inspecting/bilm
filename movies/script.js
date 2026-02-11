@@ -49,49 +49,15 @@ async function fetchMovies(endpoint, page = 1) {
 }
 
 function createMovieCard(movie) {
-  const card = document.createElement('div');
-  card.className = 'movie-card';
-  card.dataset.tmdbId = movie.tmdbId;
-
-  const sourceBadge = document.createElement('span');
-  sourceBadge.className = 'source-badge-overlay';
-  sourceBadge.textContent = String(movie.source || 'Other').toUpperCase();
-  sourceBadge.textContent = movie.source || 'TMDB';
-
-  const img = document.createElement('img');
-  img.loading = 'lazy';
-  img.decoding = 'async';
-  img.src = movie.img || 'https://via.placeholder.com/140x210?text=No+Image';
-  img.alt = movie.title;
-  img.onerror = () => {
-    img.onerror = null;
-    img.src = 'https://via.placeholder.com/140x210?text=No+Image';
-  };
-
-  const cardMeta = document.createElement('div');
-  cardMeta.className = 'card-meta';
-
-  const title = document.createElement('p');
-  title.className = 'card-title';
-  title.textContent = movie.title;
-
-  const subtitle = document.createElement('p');
-  subtitle.className = 'card-subtitle';
-  subtitle.textContent = `${movie.year || 'N/A'}`;
-
-  cardMeta.appendChild(title);
-  cardMeta.appendChild(subtitle);
-
-  card.appendChild(img);
-  card.appendChild(sourceBadge);
-  card.appendChild(cardMeta);
-
-  card.onclick = () => {
-    window.location.href = movie.link || '#';
-  };
-
-  return card;
+  return window.BilmMediaCard.createMediaCard({
+    item: movie,
+    className: 'movie-card',
+    badgeClassName: 'source-badge-overlay',
+    subtitleText: `${movie.year || 'N/A'}`,
+    dataset: { tmdbId: movie.tmdbId }
+  });
 }
+
 
 function createSectionSkeleton(section, container) {
   const sectionEl = document.createElement('div');
