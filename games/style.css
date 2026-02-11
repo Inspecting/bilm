@@ -20,7 +20,7 @@ main {
   flex: 1;
   overflow-y: auto;
   width: 100vw;
-  height: calc(100vh - 60px);
+  min-height: 100vh;
   padding: 24px 18px 80px;
   box-sizing: border-box;
 }
