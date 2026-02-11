@@ -201,6 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const sourceBadge = document.createElement('span');
       sourceBadge.className = 'source-badge-overlay';
+      sourceBadge.textContent = String(item.source || 'Other').toUpperCase();
       sourceBadge.textContent = item.source || 'TMDB';
 
       const img = document.createElement('img');

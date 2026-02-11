@@ -581,6 +581,10 @@
 
         const sourceBadge = document.createElement('span');
         sourceBadge.className = 'source-badge';
+        sourceBadge.textContent = String(item.source || 'Other').toUpperCase();
+
+        cardMeta.appendChild(title);
+        cardMeta.appendChild(subtitle);
         sourceBadge.textContent = item.source || 'Unknown';
 
         cardMeta.appendChild(title);

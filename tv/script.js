@@ -55,6 +55,7 @@ function createShowCard(show) {
 
   const sourceBadge = document.createElement('span');
   sourceBadge.className = 'source-badge-overlay';
+  sourceBadge.textContent = String(show.source || 'Other').toUpperCase();
   sourceBadge.textContent = show.source || 'TMDB';
 
   const img = document.createElement('img');
