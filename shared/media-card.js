@@ -1,6 +1,12 @@
 (function initBilmMediaCard(global) {
   const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
 
+  function getTypeLabel(type) {
+    if (type === 'movie') return 'Movie';
+    if (type === 'tv') return 'TV Show';
+    return '';
+  }
+
   function createMediaCard(config) {
     const {
       item,
@@ -37,6 +43,14 @@
     sourceBadge.className = badgeClassName;
     sourceBadge.textContent = item.source || 'Unknown';
 
+    const typeLabel = getTypeLabel(item.type);
+    if (typeLabel) {
+      const typeBadge = document.createElement('span');
+      typeBadge.className = 'type-badge-overlay';
+      typeBadge.textContent = typeLabel;
+      card.appendChild(typeBadge);
+    }
+
     const cardMeta = document.createElement('div');
     cardMeta.className = metaClassName;
 
@@ -46,7 +60,8 @@
 
     const subtitle = document.createElement('p');
     subtitle.className = subtitleClassName;
-    subtitle.textContent = subtitleText || item.year || 'N/A';
+    const baseSubtitle = subtitleText || item.year || 'N/A';
+    subtitle.textContent = baseSubtitle;
 
     cardMeta.appendChild(title);
     cardMeta.appendChild(subtitle);

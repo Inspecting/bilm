@@ -99,6 +99,7 @@ async function loadShowsForSection(section) {
     const showData = {
       tmdbId: show.id,
       title: show.name,
+      type: 'tv',
       year: show.first_air_date?.slice(0, 4) || 'N/A',
       img: poster,
       link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
