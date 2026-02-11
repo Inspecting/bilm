@@ -113,6 +113,22 @@ body {
   background-attachment: fixed;
 }
 
+@media (min-width: 769px) {
+  body.has-fixed-navbar #navbar-placeholder,
+  body.has-fixed-navbar #navbarContainer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 999;
+  }
+
+  body.has-fixed-navbar main {
+    height: 100vh !important;
+    padding-top: calc(64px + 20px) !important;
+  }
+}
+
 html[data-motion='off'] * {
   transition: none !important;
   animation: none !important;

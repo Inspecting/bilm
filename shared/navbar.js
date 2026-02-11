@@ -2,6 +2,8 @@
   const container = document.getElementById('navbar-placeholder') || document.getElementById('navbarContainer');
   if (!container) return;
 
+  document.body.classList.add('has-fixed-navbar');
+
   const shadow = container.attachShadow({ mode: 'open' });
 
   const [htmlRes, cssRes] = await Promise.all([
