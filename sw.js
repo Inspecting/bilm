@@ -1,10 +1,10 @@
 const cacheName = 'bilm-cache-v1';  // Cache version name — change this to update cache
+const APP_BASE = '/bilm';
 const filesToCache = [
-  '/',                // Cache root page
-  '/index.html',      // Cache main HTML page (adjust path if needed)
-  '/manifest.json',   // Cache manifest file
-  '/icon.png',        // Cache your app icon
-  // Add here any other static assets you want cached (CSS, JS, images, etc.)
+  `${APP_BASE}/`,
+  `${APP_BASE}/index.html`,
+  `${APP_BASE}/manifest.json`,
+  `${APP_BASE}/icon.png`
 ];
 
 self.addEventListener('install', (event) => {

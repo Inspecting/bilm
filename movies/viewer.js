@@ -207,12 +207,58 @@ async function fetchSimilarMovies(page = 1) {
   return data?.results || [];
 }
 
+async function fetchRecommendedMovies(page = 1) {
+  if (!contentId) return [];
+  const url = `https://api.themoviedb.org/3/movie/${contentId}/recommendations?api_key=${TMDB_API_KEY}&page=${page}`;
+  const data = await fetchJSON(url);
+  return data?.results || [];
+}
+
+function getMovieRelevanceScore(movie) {
+  const targetGenres = new Set(mediaDetails?.genreIds || []);
+  const movieGenres = movie.genre_ids || [];
+  const overlap = movieGenres.filter(id => targetGenres.has(id)).length;
+  const targetYear = Number.parseInt(mediaDetails?.year, 10);
+  const movieYear = Number.parseInt(movie.release_date?.slice(0, 4), 10);
+  const yearGap = Number.isFinite(targetYear) && Number.isFinite(movieYear)
+    ? Math.abs(targetYear - movieYear)
+    : 5;
+  const popularity = Number.isFinite(movie.popularity) ? movie.popularity : 0;
+  const voteAverage = Number.isFinite(movie.vote_average) ? movie.vote_average : 0;
+  const voteCount = Number.isFinite(movie.vote_count) ? movie.vote_count : 0;
+  return (overlap * 40)
+    - (yearGap * 3)
+    + (voteAverage * 5)
+    + Math.min(voteCount / 150, 10)
+    + Math.min(popularity / 50, 8);
+}
+
+async function fetchMoreLikeCandidates(page = 1) {
+  const [similar, recommended] = await Promise.all([
+    fetchSimilarMovies(page),
+    fetchRecommendedMovies(page)
+  ]);
+  const merged = [...similar, ...recommended];
+  const deduped = [];
+  const seen = new Set();
+  merged.forEach(movie => {
+    if (!movie?.id || seen.has(movie.id) || movie.id === Number(contentId)) return;
+    seen.add(movie.id);
+    deduped.push(movie);
+  });
+  return deduped.sort((a, b) => getMovieRelevanceScore(b) - getMovieRelevanceScore(a));
+}
+
 async function loadMoreLikeMovies() {
   if (!moreLikeGrid || similarLoading || similarEnded) return;
+  if (!mediaDetails) {
+    setMoreLikeStatus('Loading recommendations…');
+    return;
+  }
   similarLoading = true;
   setMoreLikeStatus('Loading more titles…');
 
-  const movies = await fetchSimilarMovies(similarPage);
+  const movies = await fetchMoreLikeCandidates(similarPage);
   if (!movies.length) {
     similarEnded = true;
     setMoreLikeStatus('No more recommendations right now.');
@@ -417,6 +463,7 @@ async function loadMovieDetails() {
       releaseDate,
       year,
       poster,
+      genreIds: details.genres?.map(genre => genre.id) || [],
       link: `/bilm/movies/viewer.html?id=${contentId}`
     };
 
@@ -427,6 +474,13 @@ async function loadMovieDetails() {
     loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();
+    if (moreLikeGrid) {
+      moreLikeGrid.innerHTML = '';
+      similarMovieIds.clear();
+      similarPage = 1;
+      similarEnded = false;
+      loadMoreLikeMovies();
+    }
   } catch (error) {
     console.error('Error fetching movie details:', error);
     mediaTitle.textContent = 'Unknown title';
@@ -540,7 +594,7 @@ if (moreLikeBox) {
     setMoreLikeStatus('Recommendations unavailable.');
   } else {
     similarActive = true;
-    loadMoreLikeMovies();
+    setMoreLikeStatus('Loading recommendations…');
   }
   moreLikeBox.addEventListener('scroll', () => {
     if (!similarActive || similarLoading || similarEnded) return;

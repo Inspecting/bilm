@@ -190,12 +190,58 @@ async function fetchSimilarShows(page = 1) {
   return data?.results || [];
 }
 
+async function fetchRecommendedShows(page = 1) {
+  if (!tmdbId) return [];
+  const url = `https://api.themoviedb.org/3/tv/${tmdbId}/recommendations?api_key=${TMDB_API_KEY}&page=${page}`;
+  const data = await fetchJSON(url);
+  return data?.results || [];
+}
+
+function getShowRelevanceScore(show) {
+  const targetGenres = new Set(mediaDetails?.genreIds || []);
+  const showGenres = show.genre_ids || [];
+  const overlap = showGenres.filter(id => targetGenres.has(id)).length;
+  const targetYear = Number.parseInt(mediaDetails?.year, 10);
+  const showYear = Number.parseInt(show.first_air_date?.slice(0, 4), 10);
+  const yearGap = Number.isFinite(targetYear) && Number.isFinite(showYear)
+    ? Math.abs(targetYear - showYear)
+    : 5;
+  const popularity = Number.isFinite(show.popularity) ? show.popularity : 0;
+  const voteAverage = Number.isFinite(show.vote_average) ? show.vote_average : 0;
+  const voteCount = Number.isFinite(show.vote_count) ? show.vote_count : 0;
+  return (overlap * 40)
+    - (yearGap * 3)
+    + (voteAverage * 5)
+    + Math.min(voteCount / 150, 10)
+    + Math.min(popularity / 50, 8);
+}
+
+async function fetchMoreLikeCandidates(page = 1) {
+  const [similar, recommended] = await Promise.all([
+    fetchSimilarShows(page),
+    fetchRecommendedShows(page)
+  ]);
+  const merged = [...similar, ...recommended];
+  const deduped = [];
+  const seen = new Set();
+  merged.forEach(show => {
+    if (!show?.id || seen.has(show.id) || show.id === Number(tmdbId)) return;
+    seen.add(show.id);
+    deduped.push(show);
+  });
+  return deduped.sort((a, b) => getShowRelevanceScore(b) - getShowRelevanceScore(a));
+}
+
 async function loadMoreLikeShows() {
   if (!moreLikeGrid || similarLoading || similarEnded) return;
+  if (!mediaDetails) {
+    setMoreLikeStatus('Loading recommendations…');
+    return;
+  }
   similarLoading = true;
   setMoreLikeStatus('Loading more titles…');
 
-  const shows = await fetchSimilarShows(similarPage);
+  const shows = await fetchMoreLikeCandidates(similarPage);
   if (!shows.length) {
     similarEnded = true;
     setMoreLikeStatus('No more recommendations right now.');
@@ -467,7 +513,7 @@ if (moreLikeBox) {
     setMoreLikeStatus('Recommendations unavailable.');
   } else {
     similarActive = true;
-    loadMoreLikeShows();
+    setMoreLikeStatus('Loading recommendations…');
   }
   moreLikeBox.addEventListener('scroll', () => {
     if (!similarActive || similarLoading || similarEnded) return;
@@ -785,6 +831,7 @@ async function fetchTMDBData() {
       firstAirDate,
       year,
       poster,
+      genreIds: details.genres?.map(genre => genre.id) || [],
       link: `/bilm/tv/viewer.html?id=${tmdbId}`
     };
 
@@ -814,6 +861,13 @@ async function fetchTMDBData() {
     updateControls();
     updateIframe();
     startContinueWatchingTimer();
+    if (moreLikeGrid) {
+      moreLikeGrid.innerHTML = '';
+      similarShowIds.clear();
+      similarPage = 1;
+      similarEnded = false;
+      loadMoreLikeShows();
+    }
   } catch (e) {
     console.error('Error fetching TMDB data:', e);
   }
