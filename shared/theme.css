@@ -105,6 +105,7 @@ html,
 body {
   background-color: var(--bg-main);
   color: var(--text-primary);
+  overflow-x: hidden;
 }
 
 body {
