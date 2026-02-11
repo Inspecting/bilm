@@ -32,6 +32,16 @@
       <div class="page-status" id="gameStatus">Loading games…</div>
     </header>
 
+    <section class="page-toolbar" aria-label="Game search and filters">
+      <label class="search-wrap" for="gameSearchInput">
+        <span class="search-label">Search games</span>
+        <input id="gameSearchInput" type="search" placeholder="Search by title, category, or description" autocomplete="off" />
+      </label>
+      <button id="clearSearchBtn" class="toolbar-button" type="button" hidden>Clear</button>
+    </section>
+
+    <p class="results-meta" id="resultsMeta" hidden></p>
+
     <div id="gameSections"></div>
 
     <div class="empty-state" id="gameEmpty" hidden>

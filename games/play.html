@@ -32,7 +32,16 @@
     </header>
 
     <section class="play-content" id="playContent">
-      <div class="play-frame" id="gameFrame"></div>
+      <div class="play-frame-wrap">
+        <div class="play-frame-toolbar">
+          <span class="frame-label">Gameplay</span>
+          <div class="frame-actions">
+            <button class="action-button action-button-alt" id="reloadGame" type="button">Reload</button>
+            <button class="action-button" id="fullscreenGame" type="button">Fullscreen</button>
+          </div>
+        </div>
+        <div class="play-frame" id="gameFrame"></div>
+      </div>
       <aside class="play-panel">
         <img class="play-poster" id="gamePoster" alt="" />
         <div class="play-actions">
