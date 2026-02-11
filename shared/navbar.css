@@ -102,6 +102,7 @@ nav button.active {
 
 .search-input {
   width: 100%;
+  box-sizing: border-box;
   background-color: var(--surface-input);
   color: var(--text-primary);
   border: 1px solid transparent;
