@@ -170,10 +170,15 @@ function createMoreLikeCard(show) {
     img.src = 'https://via.placeholder.com/140x210?text=No+Image';
   };
 
+  const sourceBadge = document.createElement('span');
+  sourceBadge.className = 'source-badge-overlay';
+  sourceBadge.textContent = 'TMDB';
+
   const title = document.createElement('p');
   title.textContent = `${show.name || 'Untitled'} (${show.first_air_date?.slice(0, 4) || 'N/A'})`;
 
   card.appendChild(img);
+  card.appendChild(sourceBadge);
   card.appendChild(title);
 
   card.addEventListener('click', () => {
@@ -283,7 +288,8 @@ function toggleFavorite() {
     link: mediaDetails.link,
     updatedAt: Date.now(),
     season: currentSeason,
-    episode: currentEpisode
+    episode: currentEpisode,
+    source: 'TMDB'
   });
   saveList(FAVORITES_KEY, items);
   updateFavoriteButton(true);
@@ -312,7 +318,8 @@ function toggleWatchLater() {
     link: mediaDetails.link,
     updatedAt: Date.now(),
     season: currentSeason,
-    episode: currentEpisode
+    episode: currentEpisode,
+    source: 'TMDB'
   });
   saveList(WATCH_LATER_KEY, items);
   updateWatchLaterButton(true);
@@ -342,7 +349,8 @@ function updateContinueWatching() {
     link: mediaDetails.link,
     updatedAt: Date.now(),
     season: currentSeason,
-    episode: currentEpisode
+    episode: currentEpisode,
+    source: 'TMDB'
   };
 
   upsertHistoryItem(CONTINUE_KEY, payload);

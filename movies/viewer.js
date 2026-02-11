@@ -187,10 +187,15 @@ function createMoreLikeCard(movie) {
     img.src = 'https://via.placeholder.com/140x210?text=No+Image';
   };
 
+  const sourceBadge = document.createElement('span');
+  sourceBadge.className = 'source-badge-overlay';
+  sourceBadge.textContent = 'TMDB';
+
   const title = document.createElement('p');
   title.textContent = `${movie.title || 'Untitled'} (${movie.release_date?.slice(0, 4) || 'N/A'})`;
 
   card.appendChild(img);
+  card.appendChild(sourceBadge);
   card.appendChild(title);
 
   card.addEventListener('click', () => {
@@ -298,7 +303,8 @@ function toggleFavorite() {
     year: mediaDetails.year,
     poster: mediaDetails.poster,
     link: mediaDetails.link,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    source: 'TMDB'
   });
   saveList(FAVORITES_KEY, items);
   updateFavoriteButton(true);
@@ -325,7 +331,8 @@ function toggleWatchLater() {
     year: mediaDetails.year,
     poster: mediaDetails.poster,
     link: mediaDetails.link,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    source: 'TMDB'
   });
   saveList(WATCH_LATER_KEY, items);
   updateWatchLaterButton(true);
@@ -353,7 +360,8 @@ function updateContinueWatching() {
     year: mediaDetails.year,
     poster: mediaDetails.poster,
     link: mediaDetails.link,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    source: 'TMDB'
   };
 
   upsertHistoryItem(CONTINUE_KEY, payload);

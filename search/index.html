@@ -166,6 +166,10 @@
       box-shadow: 0 0 12px var(--accent-glow);
     }
     .source-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 3;
       align-self: flex-start;
       font-size: 10px;
       font-weight: 700;
@@ -175,6 +179,11 @@
       background: color-mix(in srgb, var(--accent) 75%, #1f2937 25%);
       padding: 2px 6px;
       border-radius: 999px;
+      pointer-events: none;
+      max-width: calc(100% - 16px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .no-results {
       text-align: center;
@@ -579,6 +588,7 @@
         cardMeta.appendChild(sourceBadge);
 
         card.appendChild(img);
+        card.appendChild(sourceBadge);
         card.appendChild(cardMeta);
 
         card.dataset.source = item.source;
