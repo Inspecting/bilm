@@ -6,6 +6,7 @@ function detectBasePath() {
 }
 
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
+const BASE_URL = detectBasePath();
 const showsPerLoad = 15;
 const PRIORITY_SECTION_COUNT = 4;
 
