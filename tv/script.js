@@ -108,7 +108,7 @@ async function loadShowsForSection(section) {
       type: 'tv',
       year: show.first_air_date?.slice(0, 4) || 'N/A',
       img: poster,
-      link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
+      link: `./viewer.html?id=${show.id}`,
       source: 'TMDB'
     };
 

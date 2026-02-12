@@ -109,7 +109,7 @@ async function loadMoviesForSection(section) {
       type: 'movie',
       year: movie.release_date?.slice(0, 4) || 'N/A',
       img: poster,
-      link: `${BASE_URL}/movies/viewer.html?id=${movie.id}`,
+      link: `./viewer.html?id=${movie.id}`,
       source: 'TMDB'
     };
 
