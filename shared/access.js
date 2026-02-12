@@ -14,7 +14,6 @@ function withBase(path) {
   const ACCESS_KEY = 'bilm-site-unlocked';
   const USER_CODE_KEY = 'bilm-user-code';
   const ACCESS_GATE_PATH = withBase('/random/rng.html');
-  const ACCESS_GATE_PATH = '/random/rng.html';
   const path = window.location.pathname;
   const isRngPage = path.includes('/random/rng');
   let hasAccess = false;

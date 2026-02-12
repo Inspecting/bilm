@@ -14,9 +14,7 @@
   <!-- Manifest & Apple Touch Icon -->
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icon.png" />
-  <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/icon.png" />
-
+    
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
 
@@ -25,11 +23,8 @@
 
   <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
-  <link rel="stylesheet" href="/shared/theme.css" />
-
-  <script src="/shared/access.js"></script>
-  <script src="/shared/theme.js"></script>
-
+  
+    
   <style>
     * {
       margin: 0;
@@ -231,13 +226,18 @@
 
   <script src="../shared/navbar.js" defer></script>
   <script src="../shared/media-card.js"></script>
-  <script src="/shared/navbar.js" defer></script>
-  <script src="/shared/media-card.js"></script>
-
+    
   <script>
+    function detectBasePath() {
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+      if (!parts.length || appRoots.has(parts[0])) return '';
+      return `/${parts[0]}`;
+    }
+
     const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
     const OMDB_API_KEY = '9bf8cd26';
-    const BASE_URL = 'https://inspecting.github.io/bilm';
+    const BASE_URL = detectBasePath();
 
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuery = urlParams.get('q') || '';
