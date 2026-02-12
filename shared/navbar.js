@@ -1,3 +1,15 @@
+function detectBasePath() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  if (!parts.length || appRoots.has(parts[0])) return '';
+  return `/${parts[0]}`;
+}
+
+function withBase(path) {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${detectBasePath()}${normalized}`;
+}
+
 (async () => {
   const container = document.getElementById('navbar-placeholder') || document.getElementById('navbarContainer');
   if (!container) return;
@@ -7,8 +19,8 @@
   const shadow = container.attachShadow({ mode: 'open' });
 
   const [htmlRes, cssRes] = await Promise.all([
-    fetch('/bilm/shared/navbar.html'),
-    fetch('/bilm/shared/navbar.css')
+    fetch(withBase('/shared/navbar.html')),
+    fetch(withBase('/shared/navbar.css'))
   ]);
 
   const html = await htmlRes.text();
@@ -22,6 +34,17 @@
   const fileName = pathParts.at(-1) || '';
   const isSearchPage = fileName.startsWith('search');
   let page = section || 'home';
+
+
+  const logoLink = shadow.querySelector('.logo');
+  if (logoLink) {
+    const homeUrl = withBase('/home/');
+    logoLink.setAttribute('href', homeUrl);
+    logoLink.addEventListener('click', (event) => {
+      event.preventDefault();
+      window.location.href = homeUrl;
+    });
+  }
 
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
   const storage = window.bilmTheme?.storage || {
@@ -79,7 +102,7 @@
       }
       document.body.style.overflow = '';
     }
-    window.location.href = `/bilm/search/?q=${encodeURIComponent(trimmedQuery)}`;
+    window.location.href = `${withBase('/search/')}?q=${encodeURIComponent(trimmedQuery)}`;
   }
 
   // Desktop nav buttons
@@ -90,7 +113,7 @@
     }
     btn.onclick = () => {
       const target = btn.dataset.page;
-      window.location.href = `/bilm/${target === 'home' ? 'home' : target}/`;
+      window.location.href = withBase(`/${target === 'home' ? 'home' : target}/`);
     };
   });
 
@@ -110,7 +133,7 @@
         document.body.style.overflow = 'hidden';
         return;
       }
-      window.location.href = `/bilm/${target === 'home' ? 'home' : target}/`;
+      window.location.href = withBase(`/${target === 'home' ? 'home' : target}/`);
     };
   });
 

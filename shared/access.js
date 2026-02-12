@@ -1,7 +1,19 @@
 (() => {
+function detectBasePath() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  if (!parts.length || appRoots.has(parts[0])) return '';
+  return `/${parts[0]}`;
+}
+
+function withBase(path) {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${detectBasePath()}${normalized}`;
+}
+
   const ACCESS_KEY = 'bilm-site-unlocked';
   const USER_CODE_KEY = 'bilm-user-code';
-  const ACCESS_GATE_PATH = '/bilm/random/rng.html';
+  const ACCESS_GATE_PATH = withBase('/random/rng.html');
   const path = window.location.pathname;
   const isRngPage = path.includes('/random/rng');
   let hasAccess = false;

@@ -17,4 +17,4 @@ BILM is built for discovery and convenience, helping users find what to watch wi
 Visit the site here:
 👉 https://inspecting.github.io/bilm
 
-👉 Direct Link: https://inspecting.github.io/bilm/home/
+👉 Direct Link: https://inspecting.github.io/home/

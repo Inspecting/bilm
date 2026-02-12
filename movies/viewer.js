@@ -1,5 +1,17 @@
+function detectBasePath() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  if (!parts.length || appRoots.has(parts[0])) return '';
+  return `/${parts[0]}`;
+}
+
+function withBase(path) {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${detectBasePath()}${normalized}`;
+}
+
 const navbarScript = document.createElement('script');
-navbarScript.src = '/bilm/shared/navbar.js';
+navbarScript.src = withBase('/shared/navbar.js');
 navbarScript.defer = true;
 document.body.appendChild(navbarScript);
 
@@ -180,7 +192,7 @@ function createMoreLikeCard(movie) {
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
-    link: `/bilm/movies/viewer.html?id=${movie.id}`
+    link: `${withBase('/movies/viewer.html')}?id=${movie.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -461,7 +473,7 @@ async function loadMovieDetails() {
       year,
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
-      link: `/bilm/movies/viewer.html?id=${contentId}`
+      link: `${withBase('/movies/viewer.html')}?id=${contentId}`
     };
 
     const favorites = loadList(FAVORITES_KEY);
