@@ -239,13 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (state.activeType === 'search') {
         row.addEventListener('click', () => {
           const query = encodeURIComponent(item.query || '');
-          window.location.href = `/bilm/search/?q=${query}`;
+          window.location.href = `/search/?q=${query}`;
         });
       } else {
         row.addEventListener('click', () => {
           const destination = item.link
-            || (item.type === 'tv' && item.id ? `/bilm/tv/viewer.html?id=${encodeURIComponent(item.id)}` : '')
-            || (item.type === 'movie' && item.id ? `/bilm/movies/viewer.html?id=${encodeURIComponent(item.id)}` : '');
+            || (item.type === 'tv' && item.id ? `/tv/viewer.html?id=${encodeURIComponent(item.id)}` : '')
+            || (item.type === 'movie' && item.id ? `/movies/viewer.html?id=${encodeURIComponent(item.id)}` : '');
           if (!destination) return;
           window.location.href = destination;
         });

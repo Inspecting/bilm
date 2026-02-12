@@ -1,5 +1,5 @@
 const navbarScript = document.createElement('script');
-navbarScript.src = '/bilm/shared/navbar.js';
+navbarScript.src = '/shared/navbar.js';
 navbarScript.defer = true;
 document.body.appendChild(navbarScript);
 
@@ -163,7 +163,7 @@ function createMoreLikeCard(show) {
       ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
-    link: `/bilm/tv/viewer.html?id=${show.id}`
+    link: `/tv/viewer.html?id=${show.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -829,7 +829,7 @@ async function fetchTMDBData() {
       year,
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
-      link: `/bilm/tv/viewer.html?id=${tmdbId}`
+      link: `/tv/viewer.html?id=${tmdbId}`
     };
 
     const favorites = loadList(FAVORITES_KEY);
