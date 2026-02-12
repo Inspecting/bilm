@@ -252,13 +252,12 @@ document.addEventListener('DOMContentLoaded', () => {
         row.addEventListener('click', () => {
           const query = encodeURIComponent(item.query || '');
           window.location.href = `${withBase('/search/')}?q=${query}`;
-          window.location.href = `/search/?q=${query}`;
         });
       } else {
         row.addEventListener('click', () => {
           const destination = item.link
-            || (item.type === 'tv' && item.id ? `/tv/viewer.html?id=${encodeURIComponent(item.id)}` : '')
-            || (item.type === 'movie' && item.id ? `/movies/viewer.html?id=${encodeURIComponent(item.id)}` : '');
+            || (item.type === 'tv' && item.id ? `${withBase('/tv/viewer.html')}?id=${encodeURIComponent(item.id)}` : '')
+            || (item.type === 'movie' && item.id ? `${withBase('/movies/viewer.html')}?id=${encodeURIComponent(item.id)}` : '');
           if (!destination) return;
           window.location.href = destination;
         });
