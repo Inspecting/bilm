@@ -53,7 +53,6 @@ function createShowCard(show) {
     item: show,
     className: 'movie-card',
     badgeClassName: 'source-badge-overlay',
-    subtitleText: `${show.year || 'N/A'}`,
     dataset: { tmdbId: show.tmdbId }
   });
 }

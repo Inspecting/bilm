@@ -123,16 +123,33 @@ main {
   border-radius: 999px;
   pointer-events: none;
 }
-.more-like-card p {
-  padding: 6px 8px;
-  font-size: 14px;
-  font-weight: 600;
+.more-like-card .card-meta {
+  padding: 8px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 58px;
+  justify-content: center;
+}
+
+.more-like-card .card-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
   color: var(--text-primary);
-  text-align: center;
-  white-space: nowrap;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.more-like-card .card-subtitle {
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1.2;
+  overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
 
 .more-like-status {

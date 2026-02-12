@@ -171,44 +171,27 @@ function setMoreLikeStatus(message) {
 }
 
 function createMoreLikeCard(movie) {
-  const card = document.createElement('div');
-  card.className = 'more-like-card';
-  card.dataset.tmdbId = movie.id;
-
-  const img = document.createElement('img');
-  img.loading = 'lazy';
-  img.decoding = 'async';
-  img.src = movie.poster_path
-    ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-    : 'https://via.placeholder.com/140x210?text=No+Image';
-  img.alt = movie.title || 'Movie poster';
-  img.onerror = () => {
-    img.onerror = null;
-    img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+  const cardItem = {
+    tmdbId: movie.id,
+    title: movie.title,
+    year: movie.release_date?.slice(0, 4) || 'N/A',
+    type: 'movie',
+    img: movie.poster_path
+      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+      : 'https://via.placeholder.com/140x210?text=No+Image',
+    source: 'TMDB',
+    link: `/bilm/movies/viewer.html?id=${movie.id}`
   };
 
-  const sourceBadge = document.createElement('span');
-  sourceBadge.className = 'source-badge-overlay';
-  sourceBadge.textContent = String(movie.source || 'TMDB').toUpperCase();
-  sourceBadge.textContent = 'TMDB';
-
-  const typeBadge = document.createElement('span');
-  typeBadge.className = 'type-badge-overlay';
-  typeBadge.textContent = 'Movie';
-
-  const title = document.createElement('p');
-  title.textContent = `${movie.title || 'Untitled'} (${movie.release_date?.slice(0, 4) || 'N/A'})`;
-
-  card.appendChild(img);
-  card.appendChild(sourceBadge);
-  card.appendChild(typeBadge);
-  card.appendChild(title);
-
-  card.addEventListener('click', () => {
-    window.location.href = `/bilm/movies/viewer.html?id=${movie.id}`;
+  return window.BilmMediaCard.createMediaCard({
+    item: cardItem,
+    className: 'more-like-card',
+    badgeClassName: 'source-badge-overlay',
+    metaClassName: 'card-meta',
+    titleClassName: 'card-title',
+    subtitleClassName: 'card-subtitle',
+    dataset: { tmdbId: movie.id }
   });
-
-  return card;
 }
 
 async function fetchSimilarMovies(page = 1) {

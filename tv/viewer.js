@@ -154,44 +154,27 @@ function setMoreLikeStatus(message) {
 }
 
 function createMoreLikeCard(show) {
-  const card = document.createElement('div');
-  card.className = 'more-like-card';
-  card.dataset.tmdbId = show.id;
-
-  const img = document.createElement('img');
-  img.loading = 'lazy';
-  img.decoding = 'async';
-  img.src = show.poster_path
-    ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
-    : 'https://via.placeholder.com/140x210?text=No+Image';
-  img.alt = show.name || 'TV show poster';
-  img.onerror = () => {
-    img.onerror = null;
-    img.src = 'https://via.placeholder.com/140x210?text=No+Image';
+  const cardItem = {
+    tmdbId: show.id,
+    title: show.name,
+    year: show.first_air_date?.slice(0, 4) || 'N/A',
+    type: 'tv',
+    img: show.poster_path
+      ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
+      : 'https://via.placeholder.com/140x210?text=No+Image',
+    source: 'TMDB',
+    link: `/bilm/tv/viewer.html?id=${show.id}`
   };
 
-  const sourceBadge = document.createElement('span');
-  sourceBadge.className = 'source-badge-overlay';
-  sourceBadge.textContent = String(show.source || 'TMDB').toUpperCase();
-  sourceBadge.textContent = 'TMDB';
-
-  const typeBadge = document.createElement('span');
-  typeBadge.className = 'type-badge-overlay';
-  typeBadge.textContent = 'TV Show';
-
-  const title = document.createElement('p');
-  title.textContent = `${show.name || 'Untitled'} (${show.first_air_date?.slice(0, 4) || 'N/A'})`;
-
-  card.appendChild(img);
-  card.appendChild(sourceBadge);
-  card.appendChild(typeBadge);
-  card.appendChild(title);
-
-  card.addEventListener('click', () => {
-    window.location.href = `/bilm/tv/viewer.html?id=${show.id}`;
+  return window.BilmMediaCard.createMediaCard({
+    item: cardItem,
+    className: 'more-like-card',
+    badgeClassName: 'source-badge-overlay',
+    metaClassName: 'card-meta',
+    titleClassName: 'card-title',
+    subtitleClassName: 'card-subtitle',
+    dataset: { tmdbId: show.id }
   });
-
-  return card;
 }
 
 async function fetchSimilarShows(page = 1) {

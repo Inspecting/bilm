@@ -189,47 +189,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     items.forEach(item => {
-      const card = document.createElement('div');
-      card.className = 'movie-card';
       const state = sectionState[section];
+      const card = window.BilmMediaCard.createMediaCard({
+        item: {
+          title: item.title,
+          year: item.year || toYear(item.date) || 'N/A',
+          type: item.type,
+          img: item.poster,
+          source: item.source || 'TMDB',
+          link: item.link
+        },
+        className: 'movie-card',
+        badgeClassName: 'source-badge-overlay',
+        metaClassName: 'card-meta',
+        titleClassName: 'card-title',
+        subtitleClassName: 'card-subtitle'
+      });
+
       if (state.editing) {
         card.classList.add('is-editing');
       }
       if (state.selected.has(item.key)) {
         card.classList.add('is-selected');
       }
-
-      const sourceBadge = document.createElement('span');
-      sourceBadge.className = 'source-badge-overlay';
-      sourceBadge.textContent = String(item.source || 'Other').toUpperCase();
-      sourceBadge.textContent = item.source || 'TMDB';
-
-      const img = document.createElement('img');
-      img.src = item.poster || 'https://via.placeholder.com/140x210?text=No+Image';
-      img.alt = item.title;
-      img.onerror = () => {
-        img.src = 'https://via.placeholder.com/140x210?text=No+Image';
-      };
-
-      const cardMeta = document.createElement('div');
-      cardMeta.className = 'card-meta';
-
-      const title = document.createElement('p');
-      title.className = 'card-title';
-      const yearLabel = item.year || toYear(item.date);
-      title.textContent = item.title;
-
-      const subtitle = document.createElement('p');
-      subtitle.className = 'card-subtitle';
-      const typeLabel = item.type === 'movie'
-        ? 'Movie'
-        : item.type === 'tv'
-          ? 'TV Show'
-          : 'Unknown';
-      subtitle.textContent = `${yearLabel || 'N/A'} • ${typeLabel}`;
-
-      cardMeta.appendChild(title);
-      cardMeta.appendChild(subtitle);
 
       const actionBtn = document.createElement('button');
       actionBtn.type = 'button';
@@ -248,10 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSections();
       });
 
-      card.appendChild(img);
-      card.appendChild(sourceBadge);
       card.appendChild(actionBtn);
-      card.appendChild(cardMeta);
 
       card.onclick = () => {
         if (state.editing) {
