@@ -12,7 +12,6 @@ function withBase(path) {
 
 const navbarScript = document.createElement('script');
 navbarScript.src = withBase('/shared/navbar.js');
-navbarScript.src = '/shared/navbar.js';
 navbarScript.defer = true;
 document.body.appendChild(navbarScript);
 
@@ -194,7 +193,6 @@ function createMoreLikeCard(movie) {
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
     link: `${withBase('/movies/viewer.html')}?id=${movie.id}`
-    link: `/movies/viewer.html?id=${movie.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -476,7 +474,6 @@ async function loadMovieDetails() {
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
       link: `${withBase('/movies/viewer.html')}?id=${contentId}`
-      link: `/movies/viewer.html?id=${contentId}`
     };
 
     const favorites = loadList(FAVORITES_KEY);

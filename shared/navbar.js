@@ -21,8 +21,6 @@ function withBase(path) {
   const [htmlRes, cssRes] = await Promise.all([
     fetch(withBase('/shared/navbar.html')),
     fetch(withBase('/shared/navbar.css'))
-    fetch('/shared/navbar.html'),
-    fetch('/shared/navbar.css')
   ]);
 
   const html = await htmlRes.text();
@@ -105,7 +103,6 @@ function withBase(path) {
       document.body.style.overflow = '';
     }
     window.location.href = `${withBase('/search/')}?q=${encodeURIComponent(trimmedQuery)}`;
-    window.location.href = `/search/?q=${encodeURIComponent(trimmedQuery)}`;
   }
 
   // Desktop nav buttons
@@ -117,7 +114,6 @@ function withBase(path) {
     btn.onclick = () => {
       const target = btn.dataset.page;
       window.location.href = withBase(`/${target === 'home' ? 'home' : target}/`);
-      window.location.href = `/${target === 'home' ? 'home' : target}/`;
     };
   });
 
@@ -138,7 +134,6 @@ function withBase(path) {
         return;
       }
       window.location.href = withBase(`/${target === 'home' ? 'home' : target}/`);
-      window.location.href = `/${target === 'home' ? 'home' : target}/`;
     };
   });
 
