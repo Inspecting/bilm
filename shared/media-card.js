@@ -1,6 +1,13 @@
 (function initBilmMediaCard(global) {
   const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
 
+  function hasUsableImage(imageUrl) {
+    if (!imageUrl) return false;
+    const normalized = String(imageUrl).trim();
+    if (!normalized || normalized === 'N/A') return false;
+    return normalized !== NO_IMAGE;
+  }
+
   function getTypeLabel(type) {
     if (type === 'movie') return 'Movie';
     if (type === 'tv') return 'TV Show';
@@ -32,6 +39,10 @@
       throw new Error('createMediaCard requires an item');
     }
 
+    if (!hasUsableImage(item.img)) {
+      return document.createDocumentFragment();
+    }
+
     const card = document.createElement('div');
     card.className = className;
 
@@ -39,11 +50,10 @@
     if (imageClassName) img.className = imageClassName;
     img.loading = 'lazy';
     img.decoding = 'async';
-    img.src = item.img || NO_IMAGE;
+    img.src = item.img;
     img.alt = item.title || 'Untitled';
     img.onerror = () => {
-      img.onerror = null;
-      img.src = NO_IMAGE;
+      card.remove();
     };
 
     const sourceBadge = document.createElement('span');
