@@ -14,6 +14,8 @@
   <!-- Manifest & Apple Touch Icon -->
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icon.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icon.png" />
 
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
@@ -26,6 +28,13 @@
 
   <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
+  <link rel="stylesheet" href="/shared/theme.css" />
+
+  <!-- Your existing home page styles -->
+  <link rel="stylesheet" href="/home/style.css" />
+
+  <script src="/shared/access.js"></script>
+  <script src="/shared/theme.js"></script>
 </head>
 <body>
 
@@ -42,6 +51,7 @@
         <span class="heart-icon" aria-hidden="true">❤</span>
       </h1>
       <form id="homeSearchForm" action="../search/" method="get">
+      <form id="homeSearchForm" action="/search/" method="get">
         <input id="searchInput" name="q" type="search" placeholder="Search movies or TV shows..." autocomplete="off" />
         <div class="button-row">
           <button class="search-btn" id="searchBtn" type="submit">Search</button>
@@ -108,6 +118,10 @@
 
   <script src="../shared/media-card.js"></script>
   <script src="../home/script.js"></script>
+  <script src="/shared/navbar.js" defer></script>
+
+  <script src="/shared/media-card.js"></script>
+  <script src="/home/script.js"></script>
 
   <!-- Particle effect -->
   <script>

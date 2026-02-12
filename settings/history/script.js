@@ -252,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.addEventListener('click', () => {
           const query = encodeURIComponent(item.query || '');
           window.location.href = `${withBase('/search/')}?q=${query}`;
+          window.location.href = `/search/?q=${query}`;
         });
       } else {
         row.addEventListener('click', () => {

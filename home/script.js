@@ -71,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.location.href = `${withBase('/search/')}?q=${encodeURIComponent(query)}`;
+    window.location.href = `/search/?q=${encodeURIComponent(query)}`;
   }
 
   searchBtn.addEventListener('click', (event) => {
