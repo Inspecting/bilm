@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
       saveList(SEARCH_HISTORY_KEY, next);
     }
 
-    window.location.href = `/bilm/search/?q=${encodeURIComponent(query)}`;
+    window.location.href = `/search/?q=${encodeURIComponent(query)}`;
   }
 
   searchBtn.addEventListener('click', (event) => {

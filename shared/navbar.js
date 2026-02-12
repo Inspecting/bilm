@@ -7,8 +7,8 @@
   const shadow = container.attachShadow({ mode: 'open' });
 
   const [htmlRes, cssRes] = await Promise.all([
-    fetch('/bilm/shared/navbar.html'),
-    fetch('/bilm/shared/navbar.css')
+    fetch('/shared/navbar.html'),
+    fetch('/shared/navbar.css')
   ]);
 
   const html = await htmlRes.text();
@@ -79,7 +79,7 @@
       }
       document.body.style.overflow = '';
     }
-    window.location.href = `/bilm/search/?q=${encodeURIComponent(trimmedQuery)}`;
+    window.location.href = `/search/?q=${encodeURIComponent(trimmedQuery)}`;
   }
 
   // Desktop nav buttons
@@ -90,7 +90,7 @@
     }
     btn.onclick = () => {
       const target = btn.dataset.page;
-      window.location.href = `/bilm/${target === 'home' ? 'home' : target}/`;
+      window.location.href = `/${target === 'home' ? 'home' : target}/`;
     };
   });
 
@@ -110,7 +110,7 @@
         document.body.style.overflow = 'hidden';
         return;
       }
-      window.location.href = `/bilm/${target === 'home' ? 'home' : target}/`;
+      window.location.href = `/${target === 'home' ? 'home' : target}/`;
     };
   });
 

@@ -12,7 +12,7 @@
 
   console.log('[adblock.js] Running on:', hostname);
 
-  const res = await fetch('/bilm/shared/adblock/filters/ads.txt');
+  const res = await fetch('/shared/adblock/filters/ads.txt');
   const txt = await res.text();
   const filters = txt
     .split('\n')

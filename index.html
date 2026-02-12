@@ -12,14 +12,14 @@
   <meta name="theme-color" content="#000000" />
 
   <!-- PWA Manifest and Icon -->
-  <link rel="manifest" href="/bilm/manifest.json" />
-  <link rel="apple-touch-icon" href="/bilm/icon.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icon.png" />
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/bilm/shared/theme.css" />
+  <link rel="stylesheet" href="/shared/theme.css" />
 
-  <script src="/bilm/shared/access.js"></script>
-  <script src="/bilm/shared/theme.js"></script>
+  <script src="/shared/access.js"></script>
+  <script src="/shared/theme.js"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -224,7 +224,7 @@
       document.getElementById('bgCanvas').classList.add('fade-out');
 
       setTimeout(() => {
-        window.location.href = '/bilm/home/';
+        window.location.href = '/home/';
       }, 1000);
     }
 
@@ -234,7 +234,7 @@
   <script>
     // Register service worker for PWA support
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/bilm/sw.js')
+      navigator.serviceWorker.register('/sw.js')
         .then(() => console.log('Service Worker registered'))
         .catch(err => console.error('Service Worker registration failed:', err));
     }
