@@ -4,7 +4,14 @@
   function getTypeLabel(type) {
     if (type === 'movie') return 'Movie';
     if (type === 'tv') return 'TV Show';
-    return '';
+    return 'Unknown';
+  }
+
+  function buildSubtitle(item, explicitSubtitle) {
+    if (explicitSubtitle) return explicitSubtitle;
+    const year = item?.year || 'N/A';
+    const type = getTypeLabel(item?.type);
+    return `${year} • ${type}`;
   }
 
   function createMediaCard(config) {
@@ -43,14 +50,6 @@
     sourceBadge.className = badgeClassName;
     sourceBadge.textContent = item.source || 'Unknown';
 
-    const typeLabel = getTypeLabel(item.type);
-    if (typeLabel) {
-      const typeBadge = document.createElement('span');
-      typeBadge.className = 'type-badge-overlay';
-      typeBadge.textContent = typeLabel;
-      card.appendChild(typeBadge);
-    }
-
     const cardMeta = document.createElement('div');
     cardMeta.className = metaClassName;
 
@@ -60,8 +59,7 @@
 
     const subtitle = document.createElement('p');
     subtitle.className = subtitleClassName;
-    const baseSubtitle = subtitleText || item.year || 'N/A';
-    subtitle.textContent = baseSubtitle;
+    subtitle.textContent = buildSubtitle(item, subtitleText);
 
     cardMeta.appendChild(title);
     cardMeta.appendChild(subtitle);

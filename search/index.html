@@ -272,10 +272,6 @@
       return Number.isFinite(parsed) ? parsed : 0;
     }
 
-    function createTypeLabel(type) {
-      return type === 'movie' ? 'Movie' : type === 'tv' ? 'TV Show' : 'Unknown';
-    }
-
     function titleSimilarityScore(title, query) {
       const normalizedTitle = normalizeTitle(title);
       const normalizedQuery = normalizeTitle(query);
@@ -563,7 +559,6 @@
           item,
           className: 'card',
           badgeClassName: 'source-badge',
-          subtitleText: `${item.year || 'N/A'} • ${createTypeLabel(item.type)}`,
           dataset: { source: item.source }
         });
 
