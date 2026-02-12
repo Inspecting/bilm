@@ -261,6 +261,69 @@
       box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
     }
 
+    .backup-tools {
+      display: grid;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .backup-status {
+      font-size: 0.8rem;
+      color: var(--text-subtle);
+      min-height: 1.1em;
+    }
+
+    .data-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(5, 5, 15, 0.75);
+      backdrop-filter: blur(8px);
+    }
+
+    .data-modal.open {
+      display: flex;
+    }
+
+    .data-modal__panel {
+      width: min(860px, 100%);
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .data-modal__panel h3 {
+      font-size: 1.1rem;
+      color: var(--text-primary);
+    }
+
+    .data-modal__panel p {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .data-code {
+      width: 100%;
+      min-height: 230px;
+      resize: vertical;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-primary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 0.78rem;
+      padding: 10px;
+      line-height: 1.4;
+    }
+
     @media (max-width: 720px) {
       .settings-content {
         padding: 20px 16px 80px;
@@ -395,6 +458,24 @@
     </section>
 
     <section class="settings-card">
+      <h2>Backup & Transfer</h2>
+      <p>Export a full backup code of your local Bilm data or import one from another device.</p>
+
+      <div class="control-row">
+        <div>
+          <label>Data Backup</label>
+          <small>Includes local storage, session storage, and site cookies.</small>
+        </div>
+        <div class="backup-tools">
+          <button class="btn" id="exportDataBtn">Export Data</button>
+          <button class="btn btn-outline" id="importDataBtn">Import Data</button>
+          <input id="importFileInput" type="file" accept="application/json,.json,text/plain" hidden />
+          <span class="backup-status" id="backupStatus" aria-live="polite"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-card">
       <h2>Reset & Maintenance</h2>
       <p>Restore defaults or clear all local data.</p>
 
@@ -406,6 +487,20 @@
   </div>
   </div>
 </main>
+
+<div class="data-modal" id="dataModal" role="dialog" aria-modal="true" aria-labelledby="dataModalTitle">
+  <div class="data-modal__panel">
+    <h3 id="dataModalTitle">Backup Code</h3>
+    <p id="dataModalMessage">Copy or download this backup code. Keep it private.</p>
+    <textarea id="dataCodeField" class="data-code" spellcheck="false"></textarea>
+    <div class="actions-row">
+      <button class="btn" id="copyDataBtn">Copy Code</button>
+      <button class="btn btn-outline" id="downloadDataBtn">Download JSON</button>
+      <button class="btn btn-outline" id="applyImportBtn" hidden>Apply Import</button>
+      <button class="btn btn-outline" id="closeDataModalBtn">Close</button>
+    </div>
+  </div>
+</div>
 
 <script src="../shared/navbar.js" defer></script>
 
@@ -421,8 +516,88 @@
   const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
+  const exportDataBtn = document.getElementById('exportDataBtn');
+  const importDataBtn = document.getElementById('importDataBtn');
+  const importFileInput = document.getElementById('importFileInput');
+  const backupStatus = document.getElementById('backupStatus');
+  const dataModal = document.getElementById('dataModal');
+  const dataModalTitle = document.getElementById('dataModalTitle');
+  const dataModalMessage = document.getElementById('dataModalMessage');
+  const dataCodeField = document.getElementById('dataCodeField');
+  const copyDataBtn = document.getElementById('copyDataBtn');
+  const downloadDataBtn = document.getElementById('downloadDataBtn');
+  const applyImportBtn = document.getElementById('applyImportBtn');
+  const closeDataModalBtn = document.getElementById('closeDataModalBtn');
   const presetsContainer = document.getElementById('accentPresets');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+  let pendingImportPayload = null;
+
+  function readStorage(storage) {
+    return Object.entries(storage).reduce((all, [key, value]) => {
+      all[key] = value;
+      return all;
+    }, {});
+  }
+
+  function collectBackupData() {
+    return {
+      schema: 'bilm-backup-v1',
+      exportedAt: new Date().toISOString(),
+      origin: location.origin,
+      pathname: location.pathname,
+      localStorage: readStorage(localStorage),
+      sessionStorage: readStorage(sessionStorage),
+      cookies: document.cookie
+    };
+  }
+
+  function openDataModal({ title, message, code, importMode = false }) {
+    dataModalTitle.textContent = title;
+    dataModalMessage.textContent = message;
+    dataCodeField.value = code;
+    dataCodeField.readOnly = !importMode;
+    applyImportBtn.hidden = !importMode;
+    dataModal.classList.add('open');
+  }
+
+  function closeDataModal() {
+    dataModal.classList.remove('open');
+    pendingImportPayload = null;
+  }
+
+  function parseBackup(raw) {
+    const payload = JSON.parse(raw);
+    if (!payload || payload.schema !== 'bilm-backup-v1') {
+      throw new Error('Invalid backup schema.');
+    }
+    return payload;
+  }
+
+  function applyBackup(payload) {
+    localStorage.clear();
+    sessionStorage.clear();
+
+    Object.entries(payload.localStorage || {}).forEach(([key, value]) => {
+      localStorage.setItem(key, value);
+    });
+
+    Object.entries(payload.sessionStorage || {}).forEach(([key, value]) => {
+      sessionStorage.setItem(key, value);
+    });
+
+    document.cookie.split(';').forEach(cookie => {
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+      if (name) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      }
+    });
+
+    const importedCookies = String(payload.cookies || '');
+    importedCookies.split(';').map(entry => entry.trim()).filter(Boolean).forEach(cookieEntry => {
+      document.cookie = `${cookieEntry};path=/`;
+    });
+  }
 
   function applySettings(partial) {
     const current = window.bilmTheme?.getSettings?.() || {};
@@ -513,6 +688,74 @@
       console.error('Error clearing data:', err);
       alert('❌ Something went wrong while clearing data.');
     }
+  });
+
+  exportDataBtn.addEventListener('click', () => {
+    const code = JSON.stringify(collectBackupData());
+    openDataModal({
+      title: 'Export Backup Code',
+      message: 'Copy this long code or download it as a JSON file. Keep it private; it contains your site data.',
+      code
+    });
+    backupStatus.textContent = `Export ready (${code.length.toLocaleString()} chars).`;
+  });
+
+  importDataBtn.addEventListener('click', () => {
+    importFileInput.click();
+  });
+
+  importFileInput.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const raw = await file.text();
+    openDataModal({
+      title: 'Import Backup Code',
+      message: 'Review or edit the backup code, then apply import to replace your current local data.',
+      code: raw,
+      importMode: true
+    });
+    backupStatus.textContent = `Loaded ${file.name}.`;
+    importFileInput.value = '';
+  });
+
+  copyDataBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(dataCodeField.value);
+      backupStatus.textContent = 'Backup code copied to clipboard.';
+    } catch (err) {
+      backupStatus.textContent = 'Clipboard blocked. Manually copy from the textbox.';
+    }
+  });
+
+  downloadDataBtn.addEventListener('click', () => {
+    const blob = new Blob([dataCodeField.value], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    backupStatus.textContent = 'Backup JSON downloaded.';
+  });
+
+  applyImportBtn.addEventListener('click', () => {
+    try {
+      pendingImportPayload = parseBackup(dataCodeField.value);
+      if (!confirm('Import this backup now? This will overwrite current local data.')) return;
+      applyBackup(pendingImportPayload);
+      backupStatus.textContent = 'Backup imported. Reloading...';
+      setTimeout(() => location.reload(), 250);
+    } catch (err) {
+      console.error('Import failed:', err);
+      backupStatus.textContent = `Import failed: ${err.message}`;
+    }
+  });
+
+  closeDataModalBtn.addEventListener('click', closeDataModal);
+  dataModal.addEventListener('click', (event) => {
+    if (event.target === dataModal) closeDataModal();
   });
 
   window.addEventListener('DOMContentLoaded', syncUI);
