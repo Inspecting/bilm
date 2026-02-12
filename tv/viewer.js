@@ -1,4 +1,17 @@
+function detectBasePath() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  if (!parts.length || appRoots.has(parts[0])) return '';
+  return `/${parts[0]}`;
+}
+
+function withBase(path) {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${detectBasePath()}${normalized}`;
+}
+
 const navbarScript = document.createElement('script');
+navbarScript.src = withBase('/shared/navbar.js');
 navbarScript.src = '/shared/navbar.js';
 navbarScript.defer = true;
 document.body.appendChild(navbarScript);
@@ -163,6 +176,7 @@ function createMoreLikeCard(show) {
       ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
+    link: `${withBase('/tv/viewer.html')}?id=${show.id}`
     link: `/tv/viewer.html?id=${show.id}`
   };
 
@@ -829,6 +843,7 @@ async function fetchTMDBData() {
       year,
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
+      link: `${withBase('/tv/viewer.html')}?id=${tmdbId}`
       link: `/tv/viewer.html?id=${tmdbId}`
     };
 

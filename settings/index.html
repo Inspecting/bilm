@@ -12,6 +12,12 @@
   <meta name="theme-color" content="#0a0a0a" />
 
   <!-- PWA Manifest and Icon -->
+  <link rel="manifest" href="../manifest.json" />
+  <link rel="apple-touch-icon" href="../icon.png" />
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../shared/theme.css" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icon.png" />
 
@@ -269,6 +275,8 @@
     }
   </style>
 
+  <script src="../shared/access.js"></script>
+  <script src="../shared/theme.js"></script>
   <script src="/shared/access.js"></script>
   <script src="/shared/theme.js"></script>
 </head>
@@ -376,6 +384,7 @@
           <label>View History</label>
           <small>Open your saved search and watch history.</small>
         </div>
+        <a class="btn btn-outline" href="../settings/history">View History</a>
         <a class="btn btn-outline" href="/settings/history">View History</a>
       </div>
 
@@ -404,6 +413,7 @@
   </div>
 </main>
 
+<script src="../shared/navbar.js" defer></script>
 <script src="/shared/navbar.js" defer></script>
 
 <script>

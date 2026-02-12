@@ -1,3 +1,15 @@
+function detectBasePath() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  if (!parts.length || appRoots.has(parts[0])) return '';
+  return `/${parts[0]}`;
+}
+
+function withBase(path) {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${detectBasePath()}${normalized}`;
+}
+
 (async () => {
   // Allow script to run ONLY on embed hosts
   const allowedDomains = ['vidsrc.xyz', 'videocdn.tv'];
@@ -12,6 +24,7 @@
 
   console.log('[adblock.js] Running on:', hostname);
 
+  const res = await fetch(withBase('/shared/adblock/filters/ads.txt'));
   const res = await fetch('/shared/adblock/filters/ads.txt');
   const txt = await res.text();
   const filters = txt

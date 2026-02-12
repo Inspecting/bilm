@@ -12,6 +12,14 @@
   <meta name="theme-color" content="#000000" />
 
   <!-- PWA Manifest and Icon -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon.png" />
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared/theme.css" />
+
+  <script src="shared/access.js"></script>
+  <script src="shared/theme.js"></script>
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icon.png" />
 
@@ -223,7 +231,15 @@
       document.getElementById('fadeWrapper').classList.add('fade-out');
       document.getElementById('bgCanvas').classList.add('fade-out');
 
+      const detectBasePath = () => {
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+        if (!parts.length || appRoots.has(parts[0])) return '';
+        return `/${parts[0]}`;
+      };
+
       setTimeout(() => {
+        window.location.href = `${detectBasePath()}/home/`;
         window.location.href = '/home/';
       }, 1000);
     }
@@ -234,6 +250,7 @@
   <script>
     // Register service worker for PWA support
     if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
       navigator.serviceWorker.register('/sw.js')
         .then(() => console.log('Service Worker registered'))
         .catch(err => console.error('Service Worker registration failed:', err));
