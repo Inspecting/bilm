@@ -286,7 +286,6 @@
       const sourceWeight = {
         TMDB: 45,
         OMDB: 25,
-        'IMDb-v2': 20,
         TVmaze: 20
       };
       const queryYear = Number.parseInt(queryNormalized.match(/\b(19|20)\d{2}\b/)?.[0], 10);
@@ -363,28 +362,7 @@
 
     resultsTitle.textContent = `Search Results for "${queryNormalized}"`;
 
-    function fetchImdbMovies(query) {
-      if (!query) return Promise.resolve([]);
-      const firstChar = query[0].toLowerCase();
-      const url = `https://v2.sg.media-imdb.com/suggestion/${firstChar}/${encodeURIComponent(query)}.json`;
-      return fetch(url)
-        .then(res => res.json())
-        .then(data => {
-          if (!data.d) return [];
-          return data.d.filter(item => item.qid === 'movie').map(item => ({
-            title: item.l,
-            year: item.y || 'N/A',
-            img: item.i?.[0] || NO_IMAGE,
-            imdbId: item.id,
-            tmdbId: null,
-            source: 'IMDb-v2',
-            popularity: item.rank || 0,
-            type: 'movie',
-            link: ''
-          }));
-        })
-        .catch(() => []);
-    }
+
 
     function fetchTvmazeShows(query) {
       if (!query) return Promise.resolve([]);
@@ -415,10 +393,9 @@
         fetchJSON(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(queryNormalized)}`),
         fetchJSON(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(queryNormalized)}`),
         fetchJSON(`https://www.omdbapi.com/?s=${encodeURIComponent(queryNormalized)}&apikey=${OMDB_API_KEY}&type=movie`),
-        fetchImdbMovies(queryNormalized),
         fetchTvmazeShows(queryNormalized)
       ])
-      .then(async ([tmdbMovies, tmdbTV, omdbMovies, imdbMovies, tvmazeShows]) => {
+      .then(async ([tmdbMovies, tmdbTV, omdbMovies, tvmazeShows]) => {
         const movieMap = new Map();
         const tvMap = new Map();
 
@@ -455,12 +432,6 @@
           }
         });
 
-        imdbMovies.forEach(item => {
-          const key = createMovieKey(item.title, item.year);
-          if (!movieMap.has(key)) {
-            movieMap.set(key, item);
-          }
-        });
 
         (tmdbTV.results || []).forEach(item => {
           const key = createTvKey(item.name, item.first_air_date?.slice(0, 4));
