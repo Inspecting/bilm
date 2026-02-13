@@ -213,6 +213,23 @@ main {
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 13px;
+.quick-filters {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-bottom: 18px;
+  padding-bottom: 8px;
+}
+
+.filter-chip {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  text-decoration: none;
 }
 
 .section-header {

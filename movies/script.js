@@ -140,6 +140,7 @@ function setupFiltersDrawer() {
 }
 
 function renderQuickFilters(sections, closeDrawer) {
+function renderQuickFilters(sections) {
   const filtersContainer = document.getElementById('quickFilters');
   if (!filtersContainer) return;
 
@@ -150,6 +151,12 @@ function renderQuickFilters(sections, closeDrawer) {
     item.type = 'button';
     item.textContent = section.title;
     item.addEventListener('click', () => {
+    const chip = document.createElement('a');
+    chip.className = 'filter-chip';
+    chip.href = `#section-${section.slug}`;
+    chip.textContent = section.title;
+    chip.addEventListener('click', (event) => {
+      event.preventDefault();
       const target = document.getElementById(`section-${section.slug}`);
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -157,6 +164,8 @@ function renderQuickFilters(sections, closeDrawer) {
       closeDrawer?.();
     });
     filtersContainer.appendChild(item);
+    });
+    filtersContainer.appendChild(chip);
   });
 }
 
@@ -224,6 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const { closeDrawer } = setupFiltersDrawer();
 
   renderQuickFilters(sections, closeDrawer);
+  renderQuickFilters(sections);
   sections.forEach(section => createSectionSkeleton(section, container));
 
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
