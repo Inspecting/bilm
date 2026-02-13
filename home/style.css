@@ -372,7 +372,7 @@ button.search-btn:hover {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
 .card-subtitle {
@@ -444,23 +444,4 @@ button.search-btn:hover {
 .show-more-card:hover {
   background-color: rgba(255, 255, 255, 0.05);
   box-shadow: 0 0 18px var(--accent-glow);
-}
-
-
-/* Card text compact spacing */
-.card-meta {
-  padding: 6px 8px 8px;
-  gap: 2px;
-  min-height: 44px;
-  justify-content: flex-start;
-}
-
-.card-title {
-  margin: 0;
-  -webkit-line-clamp: 2;
-}
-
-.card-subtitle {
-  margin: 0;
-  line-height: 1.2;
 }
