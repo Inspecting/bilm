@@ -5,40 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bilm 💜 - Movies</title>
 
+  <!-- PWA & iOS fullscreen support -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0a0a0a" />
 
+  <!-- Manifest & App Icon -->
   <link rel="manifest" href="../manifest.json" />
   <link rel="apple-touch-icon" href="../icon.png" />
 
+  <!-- Fonts & Styles -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../shared/theme.css" />
   <link rel="stylesheet" href="./style.css" />
   <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
-</head>
+    
+  <!-- Fonts & Styles -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./style.css" />
+    </head>
 <body>
+
+<!-- Navbar placeholder -->
 <div id="navbarContainer"></div>
 
+<!-- Movie sections rendered here -->
 <main>
-  <button id="filterToggle" class="filter-toggle" type="button" aria-expanded="false" aria-controls="filtersDrawer">Filters</button>
-  <div id="filtersBackdrop" class="filters-backdrop" hidden></div>
-  <aside id="filtersDrawer" class="filters-drawer" aria-hidden="true">
-    <div class="filters-drawer-header">
-      <h2>Movie Categories</h2>
-      <button id="filtersClose" type="button" aria-label="Close filters">✕</button>
-    </div>
-    <div id="quickFilters" class="quick-filters" aria-label="Quick category filters"></div>
-  </aside>
-
   <div id="quickFilters" class="quick-filters" aria-label="Quick category filters"></div>
   <div id="movieSections"></div>
 </main>
 
 <script src="../shared/navbar.js" defer></script>
+
 <script src="../shared/media-card.js"></script>
+
+
+<!-- Load movies logic -->
 <script src="./script.js"></script>
+
 </body>
 </html>
