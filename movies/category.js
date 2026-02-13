@@ -102,7 +102,28 @@ categoryTitle.textContent = `${heading} Movies`;
 window.addEventListener('scroll', () => {
   if (window.scrollY + window.innerHeight >= document.body.offsetHeight - 500) {
     loadMore();
+async function ensureScrollablePage() {
+  while (!ended && document.documentElement.scrollHeight <= window.innerHeight + 120) {
+    await loadMore();
   }
-}, { passive: true });
+}
+
+function setupInfiniteScroll() {
+  const sentinel = document.createElement('div');
+  sentinel.id = 'categoryScrollSentinel';
+  sentinel.setAttribute('aria-hidden', 'true');
+  categoryStatus.insertAdjacentElement('beforebegin', sentinel);
+
+  const observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) {
+      loadMore();
+    }
+  }, { rootMargin: '600px 0px' });
+
+  observer.observe(sentinel);
+}
 
 loadMore();
+categoryTitle.textContent = `${heading} Movies`;
+setupInfiniteScroll();
+loadMore().then(ensureScrollablePage);

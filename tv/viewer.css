@@ -25,7 +25,7 @@ main {
   min-height: 100vh;
   padding: 20px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: flex-start;
   position: relative;
 }
@@ -33,9 +33,9 @@ main {
 #playerWrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 800px;
-  max-width: 95vw;
+  align-items: stretch;
+  width: 100%;
+  max-width: none;
   position: relative;
   gap: 12px;
 }
