@@ -523,3 +523,12 @@ iframe {
     padding: 6px 10px;
   }
 }
+
+.more-like-view-more {
+  color: var(--text-primary);
+  text-decoration: none;
+  border: 1px solid var(--accent-soft);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+}

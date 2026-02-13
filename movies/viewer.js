@@ -34,6 +34,7 @@ const playbackNoteMinutesInput = document.getElementById('playbackNoteMinutes');
 const moreLikeBox = document.getElementById('moreLikeBox');
 const moreLikeGrid = document.getElementById('moreLikeGrid');
 const moreLikeStatus = document.getElementById('moreLikeStatus');
+const moreLikeViewMore = document.getElementById('moreLikeViewMore');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
@@ -45,6 +46,14 @@ const normalizeServer = (server) => (supportedServers.includes(server) ? server 
 let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
+
+function toSlug(value) {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'trending';
+}
+
 let imdbId = null;
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
@@ -473,6 +482,7 @@ async function loadMovieDetails() {
       year,
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
+      genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
       link: `${withBase('/movies/viewer.html')}?id=${contentId}`
     };
 
@@ -480,6 +490,12 @@ async function loadMovieDetails() {
     updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
     const watchLater = loadList(WATCH_LATER_KEY);
     updateWatchLaterButton(watchLater.some(item => item.key === `movie-${contentId}`));
+    if (moreLikeViewMore) {
+      const fallbackTitle = 'Trending';
+      const firstGenreSlug = mediaDetails.genreSlugs?.[0] || 'trending';
+      const firstGenreTitle = details.genres?.[0]?.name || fallbackTitle;
+      moreLikeViewMore.href = `${withBase('/movies/category.html')}?section=${encodeURIComponent(firstGenreSlug)}&title=${encodeURIComponent(firstGenreTitle)}`;
+    }
     loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();

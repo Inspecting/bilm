@@ -14,6 +14,13 @@ let allGenres = [];
 const loadedCounts = {};
 const loadedShowIds = {};
 
+function slugifySectionTitle(title) {
+  return (title || 'section')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'section';
+}
+
 async function fetchJSON(url) {
   try {
     const res = await fetch(url);
@@ -44,7 +51,10 @@ function getSections() {
     endpoint: `/discover/tv?with_genres=${genre.id}`
   }));
 
-  return [...staticSections, ...genreSections];
+  return [...staticSections, ...genreSections].map((section) => ({
+    ...section,
+    slug: slugifySectionTitle(section.title)
+  }));
 }
 
 async function fetchShows(endpoint, page = 1) {
@@ -64,39 +74,106 @@ function createShowCard(show) {
   });
 }
 
-
 function createSectionSkeleton(section, container) {
-  const sectionEl = document.createElement('div');
+  const sectionEl = document.createElement('section');
   sectionEl.className = 'section';
-  sectionEl.id = `section-${section.title.replace(/\s/g, '')}`;
+  sectionEl.id = `section-${section.slug}`;
+
+  const headerEl = document.createElement('div');
+  headerEl.className = 'section-header';
 
   const titleEl = document.createElement('h2');
   titleEl.className = 'section-title';
   titleEl.textContent = section.title;
 
+  const viewMoreLink = document.createElement('a');
+  viewMoreLink.className = 'view-more-button';
+  viewMoreLink.href = `${BASE_URL}/tv/category.html?section=${encodeURIComponent(section.slug)}&title=${encodeURIComponent(section.title)}`;
+  viewMoreLink.textContent = 'View more';
+  viewMoreLink.setAttribute('aria-label', `View more ${section.title} TV shows`);
+
+  headerEl.appendChild(titleEl);
+  headerEl.appendChild(viewMoreLink);
+
   const rowEl = document.createElement('div');
   rowEl.className = 'scroll-row';
-  rowEl.id = `row-${section.title.replace(/\s/g, '')}`;
+  rowEl.id = `row-${section.slug}`;
 
-  sectionEl.appendChild(titleEl);
+  sectionEl.appendChild(headerEl);
   sectionEl.appendChild(rowEl);
   container.appendChild(sectionEl);
 }
 
-async function loadShowsForSection(section) {
-  loadedCounts[section.title] ??= 0;
-  loadedShowIds[section.title] ??= new Set();
+function setupFiltersDrawer() {
+  const toggle = document.getElementById('filterToggle');
+  const drawer = document.getElementById('filtersDrawer');
+  const backdrop = document.getElementById('filtersBackdrop');
+  const closeBtn = document.getElementById('filtersClose');
+  if (!toggle || !drawer || !backdrop || !closeBtn) {
+    return { closeDrawer: () => {} };
+  }
 
-  const page = Math.floor(loadedCounts[section.title] / showsPerLoad) + 1;
+  const closeDrawer = () => {
+    drawer.classList.remove('is-open');
+    drawer.setAttribute('aria-hidden', 'true');
+    backdrop.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  };
+
+  const openDrawer = () => {
+    drawer.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+    backdrop.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  };
+
+  toggle.addEventListener('click', () => {
+    if (drawer.classList.contains('is-open')) closeDrawer();
+    else openDrawer();
+  });
+  closeBtn.addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+
+  return { closeDrawer };
+}
+
+function renderQuickFilters(sections, closeDrawer) {
+  const filtersContainer = document.getElementById('quickFilters');
+  if (!filtersContainer) return;
+
+  filtersContainer.innerHTML = '';
+  sections.forEach((section) => {
+    const item = document.createElement('button');
+    item.className = 'filter-item';
+    item.type = 'button';
+    item.textContent = section.title;
+    item.addEventListener('click', () => {
+      const target = document.getElementById(`section-${section.slug}`);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      closeDrawer?.();
+    });
+    filtersContainer.appendChild(item);
+  });
+}
+
+async function loadShowsForSection(section) {
+  loadedCounts[section.slug] ??= 0;
+  loadedShowIds[section.slug] ??= new Set();
+
+  const page = Math.floor(loadedCounts[section.slug] / showsPerLoad) + 1;
   const shows = await fetchShows(section.endpoint, page);
   if (!shows.length) return false;
 
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.slug}`);
 
-  const uniqueShows = shows.filter(s => !loadedShowIds[section.title].has(s.id));
+  const uniqueShows = shows.filter(s => !loadedShowIds[section.slug].has(s.id));
 
   for (const show of uniqueShows.slice(0, showsPerLoad)) {
-    loadedShowIds[section.title].add(show.id);
+    loadedShowIds[section.slug].add(show.id);
 
     const poster = show.poster_path
       ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
@@ -116,12 +193,12 @@ async function loadShowsForSection(section) {
     rowEl.appendChild(card);
   }
 
-  loadedCounts[section.title] += showsPerLoad;
+  loadedCounts[section.slug] += showsPerLoad;
   return true;
 }
 
 function setupInfiniteScroll(section) {
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.slug}`);
   if (!rowEl) return;
 
   let loading = false;
@@ -143,9 +220,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await fetchGenres();
-
   const sections = getSections();
+  const { closeDrawer } = setupFiltersDrawer();
 
+  renderQuickFilters(sections, closeDrawer);
   sections.forEach(section => createSectionSkeleton(section, container));
 
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
