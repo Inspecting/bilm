@@ -19,6 +19,7 @@ let page = 1;
 let loading = false;
 let ended = false;
 const seenIds = new Set();
+let observer;
 
 const staticMap = {
   trending: '/trending/movie/week',
@@ -82,6 +83,7 @@ async function loadMore() {
   if (!results.length) {
     ended = true;
     categoryStatus.textContent = 'No more results.';
+    observer?.disconnect();
   } else {
     page += 1;
     categoryStatus.textContent = '';
@@ -89,11 +91,19 @@ async function loadMore() {
   loading = false;
 }
 
-window.addEventListener('scroll', () => {
-  if (window.scrollY + window.innerHeight >= document.body.offsetHeight - 500) {
-    loadMore();
-  }
-}, { passive: true });
+function setupInfiniteScroll() {
+  if (!categoryStatus) return;
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) {
+      loadMore();
+    }
+  }, {
+    root: null,
+    rootMargin: '0px 0px 600px 0px'
+  });
+  observer.observe(categoryStatus);
+}
 
 categoryTitle.textContent = `${heading} Movies`;
+setupInfiniteScroll();
 loadMore();
