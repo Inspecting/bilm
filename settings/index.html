@@ -534,6 +534,8 @@
   const closeDataModalBtn = document.getElementById('closeDataModalBtn');
   const presetsContainer = document.getElementById('accentPresets');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+  const BACKUP_FORMAT_PREFIX = 'BLM1';
+  const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   let pendingImportPayload = null;
 
   function readStorage(storage) {
@@ -555,6 +557,123 @@
     };
   }
 
+  function hashSeed(input) {
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function checksumBytes(bytes) {
+    let checksum = 0;
+    for (let i = 0; i < bytes.length; i += 1) {
+      checksum = (checksum + bytes[i] * ((i % 31) + 1)) >>> 0;
+    }
+    return checksum >>> 0;
+  }
+
+  function randomNonce(length = 12) {
+    const bytes = new Uint8Array(length);
+    crypto.getRandomValues(bytes);
+    return bytes;
+  }
+
+  function buildKeystream(length, nonceHex) {
+    const stream = new Uint8Array(length);
+    let state = hashSeed(`bilm-backup::${nonceHex}::${location.origin}::${length}`) || 0x9e3779b9;
+    for (let i = 0; i < length; i += 1) {
+      state ^= state << 13;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      stream[i] = state & 0xff;
+    }
+    return stream;
+  }
+
+  function bytesToBase62(bytes) {
+    if (!bytes.length) return '0';
+    let value = 0n;
+    for (let i = 0; i < bytes.length; i += 1) {
+      value = (value << 8n) + BigInt(bytes[i]);
+    }
+    let encoded = '';
+    while (value > 0n) {
+      const rem = Number(value % 62n);
+      encoded = BASE62_ALPHABET[rem] + encoded;
+      value /= 62n;
+    }
+    let leadingZeroCount = 0;
+    for (let i = 0; i < bytes.length && bytes[i] === 0; i += 1) {
+      leadingZeroCount += 1;
+    }
+    return `${'0'.repeat(leadingZeroCount)}${encoded || '0'}`;
+  }
+
+  function base62ToBytes(encoded) {
+    const cleaned = String(encoded || '').trim();
+    if (!/^[0-9A-Za-z]+$/.test(cleaned)) {
+      throw new Error('Backup code must only contain letters and numbers.');
+    }
+    const leadingZeroCount = cleaned.match(/^0+/)?.[0]?.length || 0;
+    const meaningful = cleaned.slice(leadingZeroCount);
+    let value = 0n;
+    for (let i = 0; i < meaningful.length; i += 1) {
+      const idx = BASE62_ALPHABET.indexOf(meaningful[i]);
+      if (idx < 0) throw new Error('Backup code contains invalid characters.');
+      value = (value * 62n) + BigInt(idx);
+    }
+    const bytes = [];
+    while (value > 0n) {
+      bytes.push(Number(value & 0xffn));
+      value >>= 8n;
+    }
+    bytes.reverse();
+    return new Uint8Array([...new Array(leadingZeroCount).fill(0), ...bytes]);
+  }
+
+  function encodeBackup(payload) {
+    const encoder = new TextEncoder();
+    const raw = encoder.encode(JSON.stringify(payload));
+    const nonce = randomNonce();
+    const nonceHex = Array.from(nonce).map(byte => byte.toString(16).padStart(2, '0')).join('');
+    const keystream = buildKeystream(raw.length, nonceHex);
+    const encrypted = raw.map((byte, index) => byte ^ keystream[index]);
+    const packed = new Uint8Array(nonce.length + encrypted.length + 4);
+    packed.set(nonce, 0);
+    packed.set(encrypted, nonce.length);
+    const check = checksumBytes(raw);
+    packed[packed.length - 4] = (check >>> 24) & 0xff;
+    packed[packed.length - 3] = (check >>> 16) & 0xff;
+    packed[packed.length - 2] = (check >>> 8) & 0xff;
+    packed[packed.length - 1] = check & 0xff;
+    return `${BACKUP_FORMAT_PREFIX}${bytesToBase62(packed)}`;
+  }
+
+  function decodeBackup(code) {
+    if (!String(code || '').startsWith(BACKUP_FORMAT_PREFIX)) {
+      return JSON.parse(code);
+    }
+    const packed = base62ToBytes(String(code).slice(BACKUP_FORMAT_PREFIX.length));
+    if (packed.length < 17) {
+      throw new Error('Backup code is too short.');
+    }
+    const nonce = packed.slice(0, 12);
+    const checksumOffset = packed.length - 4;
+    const encrypted = packed.slice(12, checksumOffset);
+    const expectedChecksum = ((packed[checksumOffset] << 24) | (packed[checksumOffset + 1] << 16) | (packed[checksumOffset + 2] << 8) | packed[checksumOffset + 3]) >>> 0;
+    const nonceHex = Array.from(nonce).map(byte => byte.toString(16).padStart(2, '0')).join('');
+    const keystream = buildKeystream(encrypted.length, nonceHex);
+    const decrypted = encrypted.map((byte, index) => byte ^ keystream[index]);
+    const actualChecksum = checksumBytes(decrypted);
+    if (actualChecksum !== expectedChecksum) {
+      throw new Error('Backup code failed verification.');
+    }
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(decrypted));
+  }
+
   function openDataModal({ title, message, code = '', importMode = false }) {
     dataModalTitle.textContent = title;
     dataModalMessage.textContent = message;
@@ -574,7 +693,7 @@
   }
 
   function parseBackup(raw) {
-    const payload = JSON.parse(raw);
+    const payload = decodeBackup(raw);
     if (!payload || payload.schema !== 'bilm-backup-v1') {
       throw new Error('Invalid backup schema.');
     }
@@ -699,10 +818,10 @@
   });
 
   exportDataBtn.addEventListener('click', () => {
-    const code = JSON.stringify(collectBackupData());
+    const code = encodeBackup(collectBackupData());
     openDataModal({
       title: 'Export Backup Code',
-      message: 'Copy this long code or download it as a JSON file. Keep it private; it contains your site data.',
+      message: 'Copy this secure backup code or download it as a coded file. Keep it private; it contains your site data.',
       code
     });
     backupStatus.textContent = `Export ready (${code.length.toLocaleString()} chars).`;
@@ -750,16 +869,16 @@
   });
 
   downloadDataBtn.addEventListener('click', () => {
-    const blob = new Blob([dataCodeField.value], { type: 'application/json' });
+    const blob = new Blob([dataCodeField.value], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.bilm`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    backupStatus.textContent = 'Backup JSON downloaded.';
+    backupStatus.textContent = 'Backup code downloaded.';
   });
 
   applyImportBtn.addEventListener('click', () => {
