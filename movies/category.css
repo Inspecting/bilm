@@ -1,0 +1,6 @@
+body { font-family: 'Poppins', sans-serif; background: var(--bg-main); color: var(--text-primary); }
+main { padding: 24px; }
+#categoryTitle { margin-bottom: 18px; }
+.category-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.movie-card { width: 100%; background: var(--surface-2); border-radius: var(--radius-md); overflow: hidden; }
+.category-status { text-align: center; color: var(--text-subtle); margin: 18px 0; }

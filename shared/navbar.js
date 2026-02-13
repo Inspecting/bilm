@@ -47,6 +47,7 @@ function withBase(path) {
   }
 
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const INCOGNITO_SEARCH_MAP_KEY = 'bilm-incognito-search-map';
   const storage = window.bilmTheme?.storage || {
     getJSON: (key, fallback = []) => {
       try {
@@ -83,9 +84,29 @@ function withBase(path) {
     saveList(SEARCH_HISTORY_KEY, next);
   }
 
+  function saveIncognitoSearch(query) {
+    const token = Math.random().toString(36).slice(2, 12);
+    let map = {};
+    try {
+      map = JSON.parse(sessionStorage.getItem(INCOGNITO_SEARCH_MAP_KEY) || '{}') || {};
+    } catch {
+      map = {};
+    }
+    map[token] = query;
+    const orderedEntries = Object.entries(map).slice(-50);
+    const compactMap = Object.fromEntries(orderedEntries);
+    try {
+      sessionStorage.setItem(INCOGNITO_SEARCH_MAP_KEY, JSON.stringify(compactMap));
+    } catch {
+      return query;
+    }
+    return token;
+  }
+
   function submitSearch(query, { closeMobileOverlay = false } = {}) {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return;
+    const settings = window.bilmTheme?.getSettings?.() || {};
     saveSearchHistoryEntry(trimmedQuery);
     if (closeMobileOverlay) {
       const overlay = shadow.getElementById('mobileSearchOverlay');
@@ -102,7 +123,10 @@ function withBase(path) {
       }
       document.body.style.overflow = '';
     }
-    window.location.href = `${withBase('/search/')}?q=${encodeURIComponent(trimmedQuery)}`;
+    const outgoingQuery = settings.incognito === true
+      ? saveIncognitoSearch(trimmedQuery)
+      : trimmedQuery;
+    window.location.href = `${withBase('/search/')}?q=${encodeURIComponent(outgoingQuery)}`;
   }
 
   // Desktop nav buttons

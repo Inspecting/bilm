@@ -14,6 +14,13 @@ let allGenres = [];
 const loadedCounts = {};
 const loadedMovieIds = {};
 
+function slugifySectionTitle(title) {
+  return (title || 'section')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'section';
+}
+
 async function fetchJSON(url) {
   try {
     const res = await fetch(url);
@@ -44,7 +51,10 @@ function getSections() {
     endpoint: `/discover/movie?with_genres=${genre.id}`
   }));
 
-  return [...staticSections, ...genreSections];
+  return [...staticSections, ...genreSections].map((section) => ({
+    ...section,
+    slug: slugifySectionTitle(section.title)
+  }));
 }
 
 async function fetchMovies(endpoint, page = 1) {
@@ -64,40 +74,71 @@ function createMovieCard(movie) {
   });
 }
 
-
 function createSectionSkeleton(section, container) {
-  const sectionEl = document.createElement('div');
+  const sectionEl = document.createElement('section');
   sectionEl.className = 'section';
-  sectionEl.id = `section-${section.title.replace(/\s/g, '')}`;
+  sectionEl.id = `section-${section.slug}`;
+
+  const headerEl = document.createElement('div');
+  headerEl.className = 'section-header';
 
   const titleEl = document.createElement('h2');
   titleEl.className = 'section-title';
   titleEl.textContent = section.title;
 
+  const viewMoreLink = document.createElement('a');
+  viewMoreLink.className = 'view-more-button';
+  viewMoreLink.href = `${BASE_URL}/movies/category.html?section=${encodeURIComponent(section.slug)}&title=${encodeURIComponent(section.title)}`;
+  viewMoreLink.textContent = 'View more';
+  viewMoreLink.setAttribute('aria-label', `View more ${section.title} movies`);
+
+  headerEl.appendChild(titleEl);
+  headerEl.appendChild(viewMoreLink);
+
   const rowEl = document.createElement('div');
   rowEl.className = 'scroll-row';
-  rowEl.id = `row-${section.title.replace(/\s/g, '')}`;
+  rowEl.id = `row-${section.slug}`;
 
-  sectionEl.appendChild(titleEl);
+  sectionEl.appendChild(headerEl);
   sectionEl.appendChild(rowEl);
   container.appendChild(sectionEl);
 }
 
-async function loadMoviesForSection(section) {
-  loadedCounts[section.title] ??= 0;
-  loadedMovieIds[section.title] ??= new Set();
+function renderQuickFilters(sections) {
+  const filtersContainer = document.getElementById('quickFilters');
+  if (!filtersContainer) return;
 
-  const page = Math.floor(loadedCounts[section.title] / moviesPerLoad) + 1;
+  filtersContainer.innerHTML = '';
+  sections.forEach((section) => {
+    const chip = document.createElement('a');
+    chip.className = 'filter-chip';
+    chip.href = `#section-${section.slug}`;
+    chip.textContent = section.title;
+    chip.addEventListener('click', (event) => {
+      event.preventDefault();
+      const target = document.getElementById(`section-${section.slug}`);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+    filtersContainer.appendChild(chip);
+  });
+}
+
+async function loadMoviesForSection(section) {
+  loadedCounts[section.slug] ??= 0;
+  loadedMovieIds[section.slug] ??= new Set();
+
+  const page = Math.floor(loadedCounts[section.slug] / moviesPerLoad) + 1;
   const movies = await fetchMovies(section.endpoint, page);
   if (!movies.length) return false;
 
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.slug}`);
 
-  // Filter to unique movies
-  const uniqueMovies = movies.filter(m => !loadedMovieIds[section.title].has(m.id));
+  const uniqueMovies = movies.filter(m => !loadedMovieIds[section.slug].has(m.id));
 
   for (const movie of uniqueMovies.slice(0, moviesPerLoad)) {
-    loadedMovieIds[section.title].add(movie.id);
+    loadedMovieIds[section.slug].add(movie.id);
 
     const poster = movie.poster_path
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
@@ -117,12 +158,12 @@ async function loadMoviesForSection(section) {
     rowEl.appendChild(card);
   }
 
-  loadedCounts[section.title] += moviesPerLoad;
+  loadedCounts[section.slug] += moviesPerLoad;
   return true;
 }
 
 function setupInfiniteScroll(section) {
-  const rowEl = document.getElementById(`row-${section.title.replace(/\s/g, '')}`);
+  const rowEl = document.getElementById(`row-${section.slug}`);
   if (!rowEl) return;
 
   let loading = false;
@@ -144,13 +185,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await fetchGenres();
-
   const sections = getSections();
 
-  // Create section skeletons immediately for stable layout
+  renderQuickFilters(sections);
   sections.forEach(section => createSectionSkeleton(section, container));
 
-  // Prioritize above-the-fold sections first for faster perceived load
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
   const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
   await Promise.all(prioritySections.map(section => loadMoviesForSection(section)));
