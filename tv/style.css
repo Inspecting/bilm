@@ -171,15 +171,16 @@ body.filters-open .quick-filters-panel {
 }
 
 .card-meta {
-  padding: 8px 8px 10px;
+  padding: 6px 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 58px;
-  justify-content: center;
+  gap: 2px;
+  min-height: 44px;
+  justify-content: flex-start;
 }
 
 .card-title {
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
@@ -190,7 +191,9 @@ body.filters-open .quick-filters-panel {
 }
 
 .card-subtitle {
+  margin: 0;
   font-size: 12px;
+  line-height: 1.2;
   color: var(--text-subtle);
 }
 
