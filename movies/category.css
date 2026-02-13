@@ -47,49 +47,6 @@ main {
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
 }
 
-
-.category-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.infinite-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--text-subtle);
-}
-
-.infinite-toggle input {
-  accent-color: var(--accent);
-}
-
-.load-more-btn {
-  border: 1px solid var(--accent-soft);
-  background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
-  color: var(--text-primary);
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.load-more-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 0 14px var(--accent-glow);
-}
-
-.load-more-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .category-grid {
   display: grid;
   gap: 14px;
