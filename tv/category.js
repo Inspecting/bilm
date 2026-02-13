@@ -18,6 +18,7 @@ const categoryStatus = document.getElementById('categoryStatus');
 let page = 1;
 let loading = false;
 let ended = false;
+let resolvedEndpoint = null;
 const seenIds = new Set();
 
 const staticMap = {
@@ -38,20 +39,29 @@ async function fetchJSON(url) {
 }
 
 async function resolveEndpoint() {
-  if (staticMap[section]) return staticMap[section];
+  if (resolvedEndpoint) return resolvedEndpoint;
+  if (staticMap[section]) {
+    resolvedEndpoint = staticMap[section];
+    return resolvedEndpoint;
+  }
+
   const genresData = await fetchJSON(`https://api.themoviedb.org/3/genre/tv/list?api_key=${TMDB_API_KEY}&language=en-US`);
   const genres = genresData?.genres || [];
   const genre = genres.find((item) => {
     const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     return slug === section;
   });
-  return genre ? `/discover/tv?with_genres=${genre.id}` : '/trending/tv/week';
+
+  resolvedEndpoint = genre ? `/discover/tv?with_genres=${genre.id}` : '/trending/tv/week';
+  return resolvedEndpoint;
 }
 
 async function loadMore() {
   if (loading || ended) return;
+
   loading = true;
   categoryStatus.textContent = 'Loading more...';
+
   const endpoint = await resolveEndpoint();
   const join = endpoint.includes('?') ? '&' : '?';
   const data = await fetchJSON(`https://api.themoviedb.org/3${endpoint}${join}api_key=${TMDB_API_KEY}&page=${page}`);
@@ -83,8 +93,11 @@ async function loadMore() {
     page += 1;
     categoryStatus.textContent = '';
   }
+
   loading = false;
 }
+
+categoryTitle.textContent = `${heading} TV Shows`;
 
 window.addEventListener('scroll', () => {
   if (window.scrollY + window.innerHeight >= document.body.offsetHeight - 500) {
@@ -92,5 +105,4 @@ window.addEventListener('scroll', () => {
   }
 }, { passive: true });
 
-categoryTitle.textContent = `${heading} TV Shows`;
 loadMore();

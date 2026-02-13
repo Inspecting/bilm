@@ -13,9 +13,9 @@ body {
 }
 
 main {
-  width: min(1200px, 100%);
-  margin: 0 auto;
-  padding: 24px 18px 80px;
+  width: 100%;
+  margin: 0;
+  padding: 24px 20px 80px;
 }
 
 .filter-menu-wrap {
@@ -42,7 +42,7 @@ main {
   position: absolute;
   top: calc(100% + 10px);
   left: 0;
-  width: min(320px, calc(100vw - 36px));
+  width: min(100%, 1200px);
   max-height: min(70vh, 520px);
   overflow: auto;
   padding: 14px;
@@ -183,6 +183,10 @@ body.filters-open .quick-filters-panel {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .card-subtitle {
