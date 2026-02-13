@@ -39,7 +39,6 @@ const nextEpisodeBtn = document.getElementById('nextEpisode');
 const moreLikeBox = document.getElementById('moreLikeBox');
 const moreLikeGrid = document.getElementById('moreLikeGrid');
 const moreLikeStatus = document.getElementById('moreLikeStatus');
-const moreLikeViewMore = document.getElementById('moreLikeViewMore');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
@@ -858,12 +857,6 @@ async function fetchTMDBData() {
     updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
     const watchLater = loadList(WATCH_LATER_KEY);
     updateWatchLaterButton(watchLater.some(item => item.key === `tv-${tmdbId}`));
-    if (moreLikeViewMore) {
-      const fallbackTitle = 'Trending';
-      const firstGenreSlug = mediaDetails.genreSlugs?.[0] || 'trending';
-      const firstGenreTitle = details.genres?.[0]?.name || fallbackTitle;
-      moreLikeViewMore.href = `${withBase('/tv/category.html')}?section=${encodeURIComponent(firstGenreSlug)}&title=${encodeURIComponent(firstGenreTitle)}`;
-    }
     mediaTitle.textContent = showTitle;
     mediaMeta.textContent = displayDate;
     document.title = `Bilm 💜 - ${showTitle}`;
