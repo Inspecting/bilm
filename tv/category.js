@@ -14,12 +14,15 @@ const heading = params.get('title') || section.replace(/-/g, ' ');
 const categoryTitle = document.getElementById('categoryTitle');
 const categoryGrid = document.getElementById('categoryGrid');
 const categoryStatus = document.getElementById('categoryStatus');
+const infiniteToggle = document.getElementById('infiniteToggle');
+const loadMoreBtn = document.getElementById('loadMoreBtn');
 
 let page = 1;
 let loading = false;
 let ended = false;
 const seenIds = new Set();
 let observer;
+let endpointPromise = null;
 
 const staticMap = {
   trending: '/trending/tv/week',
@@ -27,6 +30,13 @@ const staticMap = {
   'top-rated': '/tv/top_rated',
   'airing-today': '/tv/airing_today'
 };
+
+const storage = window.bilmTheme?.storage || {
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value)
+};
+
+const INFINITE_SCROLL_KEY = 'bilm-category-infinite-scroll';
 
 async function fetchJSON(url) {
   try {
@@ -39,20 +49,38 @@ async function fetchJSON(url) {
 }
 
 async function resolveEndpoint() {
-  if (staticMap[section]) return staticMap[section];
-  const genresData = await fetchJSON(`https://api.themoviedb.org/3/genre/tv/list?api_key=${TMDB_API_KEY}&language=en-US`);
-  const genres = genresData?.genres || [];
-  const genre = genres.find((item) => {
-    const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    return slug === section;
-  });
-  return genre ? `/discover/tv?with_genres=${genre.id}` : '/trending/tv/week';
+  if (endpointPromise) return endpointPromise;
+  endpointPromise = (async () => {
+    if (staticMap[section]) return staticMap[section];
+    const genresData = await fetchJSON(`https://api.themoviedb.org/3/genre/tv/list?api_key=${TMDB_API_KEY}&language=en-US`);
+    const genres = genresData?.genres || [];
+    const genre = genres.find((item) => {
+      const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      return slug === section;
+    });
+    return genre ? `/discover/tv?with_genres=${genre.id}` : '/trending/tv/week';
+  })();
+  return endpointPromise;
+}
+
+function setLoadMoreVisibility() {
+  if (!loadMoreBtn) return;
+  const enabled = infiniteToggle?.checked !== false;
+  loadMoreBtn.hidden = enabled || ended;
+}
+
+function setToggleDisabled(disabled) {
+  if (!infiniteToggle) return;
+  infiniteToggle.disabled = disabled;
 }
 
 async function loadMore() {
   if (loading || ended) return;
   loading = true;
+  setToggleDisabled(true);
+  if (loadMoreBtn) loadMoreBtn.disabled = true;
   categoryStatus.textContent = 'Loading more...';
+
   const endpoint = await resolveEndpoint();
   const join = endpoint.includes('?') ? '&' : '?';
   const data = await fetchJSON(`https://api.themoviedb.org/3${endpoint}${join}api_key=${TMDB_API_KEY}&page=${page}`);
@@ -88,12 +116,18 @@ async function loadMore() {
     page += 1;
     categoryStatus.textContent = '';
   }
+
+  setLoadMoreVisibility();
+  setToggleDisabled(false);
+  if (loadMoreBtn) loadMoreBtn.disabled = false;
   loading = false;
 }
 
 function setupInfiniteScroll() {
   if (!categoryStatus) return;
+  observer?.disconnect();
   observer = new IntersectionObserver((entries) => {
+    if (!infiniteToggle?.checked) return;
     if (entries.some((entry) => entry.isIntersecting)) {
       loadMore();
     }
@@ -104,6 +138,35 @@ function setupInfiniteScroll() {
   observer.observe(categoryStatus);
 }
 
+function loadInfiniteScrollPreference() {
+  const saved = storage.getItem(INFINITE_SCROLL_KEY);
+  if (saved === null) return true;
+  return saved !== 'false';
+}
+
+function saveInfiniteScrollPreference(enabled) {
+  storage.setItem(INFINITE_SCROLL_KEY, enabled ? 'true' : 'false');
+}
+
+function handleInfiniteToggleChange() {
+  const enabled = infiniteToggle?.checked !== false;
+  saveInfiniteScrollPreference(enabled);
+  setLoadMoreVisibility();
+  if (enabled && !ended) {
+    loadMore();
+  }
+}
+
 categoryTitle.textContent = `${heading} TV Shows`;
+if (infiniteToggle) {
+  infiniteToggle.checked = loadInfiniteScrollPreference();
+  infiniteToggle.addEventListener('change', handleInfiniteToggleChange);
+}
+if (loadMoreBtn) {
+  loadMoreBtn.addEventListener('click', () => {
+    loadMore();
+  });
+}
 setupInfiniteScroll();
+setLoadMoreVisibility();
 loadMore();
