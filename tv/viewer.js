@@ -533,12 +533,17 @@ if (moreLikeBox) {
     similarActive = true;
     setMoreLikeStatus('Loading recommendations…');
   }
-  moreLikeBox.addEventListener('scroll', () => {
+
+  const pageScroller = document.querySelector('main');
+  const handleMoreLikeScroll = () => {
     if (!similarActive || similarLoading || similarEnded) return;
-    if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 200) {
+    if (!pageScroller) return;
+    if (pageScroller.scrollTop + pageScroller.clientHeight >= pageScroller.scrollHeight - 240) {
       loadMoreLikeShows();
     }
-  }, { passive: true });
+  };
+
+  pageScroller?.addEventListener('scroll', handleMoreLikeScroll, { passive: true });
 }
 
 function saveProgress() {

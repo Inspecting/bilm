@@ -69,8 +69,8 @@ main {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 12px;
-  max-height: 360px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -127,15 +127,16 @@ main {
   pointer-events: none;
 }
 .more-like-card .card-meta {
-  padding: 8px 8px 10px;
+  padding: 6px 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 58px;
-  justify-content: center;
+  gap: 2px;
+  min-height: 44px;
+  justify-content: flex-start;
 }
 
 .more-like-card .card-title {
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
@@ -151,6 +152,7 @@ main {
 }
 
 .more-like-card .card-subtitle {
+  margin: 0;
   font-size: 12px;
   color: var(--text-subtle);
   line-height: 1.2;
