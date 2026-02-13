@@ -496,6 +496,8 @@
     <div class="actions-row">
       <button class="btn" id="copyDataBtn">Copy Code</button>
       <button class="btn btn-outline" id="downloadDataBtn">Download JSON</button>
+      <button class="btn" id="pasteImportBtn" hidden>Paste from Clipboard</button>
+      <button class="btn btn-outline" id="uploadImportBtn" hidden>Upload Save File</button>
       <button class="btn btn-outline" id="applyImportBtn" hidden>Apply Import</button>
       <button class="btn btn-outline" id="closeDataModalBtn">Close</button>
     </div>
@@ -526,6 +528,8 @@
   const dataCodeField = document.getElementById('dataCodeField');
   const copyDataBtn = document.getElementById('copyDataBtn');
   const downloadDataBtn = document.getElementById('downloadDataBtn');
+  const pasteImportBtn = document.getElementById('pasteImportBtn');
+  const uploadImportBtn = document.getElementById('uploadImportBtn');
   const applyImportBtn = document.getElementById('applyImportBtn');
   const closeDataModalBtn = document.getElementById('closeDataModalBtn');
   const presetsContainer = document.getElementById('accentPresets');
@@ -551,11 +555,15 @@
     };
   }
 
-  function openDataModal({ title, message, code, importMode = false }) {
+  function openDataModal({ title, message, code = '', importMode = false }) {
     dataModalTitle.textContent = title;
     dataModalMessage.textContent = message;
     dataCodeField.value = code;
     dataCodeField.readOnly = !importMode;
+    copyDataBtn.hidden = importMode;
+    downloadDataBtn.hidden = importMode;
+    pasteImportBtn.hidden = !importMode;
+    uploadImportBtn.hidden = !importMode;
     applyImportBtn.hidden = !importMode;
     dataModal.classList.add('open');
   }
@@ -701,21 +709,35 @@
   });
 
   importDataBtn.addEventListener('click', () => {
-    importFileInput.click();
+    openDataModal({
+      title: 'Import Backup Code',
+      message: 'Paste a backup code or upload a save file, then apply import to replace your current local data.',
+      importMode: true
+    });
+    backupStatus.textContent = 'Import popup opened.';
   });
 
   importFileInput.addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const raw = await file.text();
-    openDataModal({
-      title: 'Import Backup Code',
-      message: 'Review or edit the backup code, then apply import to replace your current local data.',
-      code: raw,
-      importMode: true
-    });
+    dataCodeField.value = raw;
     backupStatus.textContent = `Loaded ${file.name}.`;
     importFileInput.value = '';
+  });
+
+  pasteImportBtn.addEventListener('click', async () => {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      dataCodeField.value = clipboardText;
+      backupStatus.textContent = 'Backup code pasted from clipboard.';
+    } catch (err) {
+      backupStatus.textContent = 'Clipboard read blocked. Paste manually into the textbox.';
+    }
+  });
+
+  uploadImportBtn.addEventListener('click', () => {
+    importFileInput.click();
   });
 
   copyDataBtn.addEventListener('click', async () => {
