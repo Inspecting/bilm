@@ -15,6 +15,13 @@
   <div id="navbarContainer"></div>
   <main>
     <h1 id="categoryTitle"><span class="category-title-icon" aria-hidden="true">🎬</span><span class="category-title-text">Movies</span></h1>
+    <div class="category-controls">
+      <label class="infinite-toggle" for="infiniteToggle">
+        <input id="infiniteToggle" type="checkbox" checked />
+        Infinite scroll
+      </label>
+      <button id="loadMoreBtn" class="load-more-btn" type="button">Load More</button>
+    </div>
     <div id="categoryGrid" class="category-grid"></div>
     <p id="categoryStatus" class="category-status">Loading...</p>
   </main>
