@@ -621,17 +621,12 @@ if (moreLikeBox) {
     similarActive = true;
     setMoreLikeStatus('Loading recommendations…');
   }
-
-  const pageScroller = document.querySelector('main');
-  const handleMoreLikeScroll = () => {
+  moreLikeBox.addEventListener('scroll', () => {
     if (!similarActive || similarLoading || similarEnded) return;
-    if (!pageScroller) return;
-    if (pageScroller.scrollTop + pageScroller.clientHeight >= pageScroller.scrollHeight - 240) {
+    if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 200) {
       loadMoreLikeMovies();
     }
-  };
-
-  pageScroller?.addEventListener('scroll', handleMoreLikeScroll, { passive: true });
+  }, { passive: true });
 }
 
 fullscreenBtn.onclick = () => {

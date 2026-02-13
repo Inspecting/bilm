@@ -18,7 +18,6 @@ const categoryStatus = document.getElementById('categoryStatus');
 let page = 1;
 let loading = false;
 let ended = false;
-let resolvedEndpoint = null;
 const seenIds = new Set();
 
 const staticMap = {
@@ -39,29 +38,20 @@ async function fetchJSON(url) {
 }
 
 async function resolveEndpoint() {
-  if (resolvedEndpoint) return resolvedEndpoint;
-  if (staticMap[section]) {
-    resolvedEndpoint = staticMap[section];
-    return resolvedEndpoint;
-  }
-
+  if (staticMap[section]) return staticMap[section];
   const genresData = await fetchJSON(`https://api.themoviedb.org/3/genre/movie/list?api_key=${TMDB_API_KEY}&language=en-US`);
   const genres = genresData?.genres || [];
   const genre = genres.find((item) => {
     const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     return slug === section;
   });
-
-  resolvedEndpoint = genre ? `/discover/movie?with_genres=${genre.id}` : '/trending/movie/week';
-  return resolvedEndpoint;
+  return genre ? `/discover/movie?with_genres=${genre.id}` : '/trending/movie/week';
 }
 
 async function loadMore() {
   if (loading || ended) return;
-
   loading = true;
   categoryStatus.textContent = 'Loading more...';
-
   const endpoint = await resolveEndpoint();
   const join = endpoint.includes('?') ? '&' : '?';
   const data = await fetchJSON(`https://api.themoviedb.org/3${endpoint}${join}api_key=${TMDB_API_KEY}&page=${page}`);
@@ -93,31 +83,14 @@ async function loadMore() {
     page += 1;
     categoryStatus.textContent = '';
   }
-
   loading = false;
 }
 
-async function ensureScrollablePage() {
-  while (!ended && document.documentElement.scrollHeight <= window.innerHeight + 120) {
-    await loadMore();
+window.addEventListener('scroll', () => {
+  if (window.scrollY + window.innerHeight >= document.body.offsetHeight - 500) {
+    loadMore();
   }
-}
-
-function setupInfiniteScroll() {
-  const sentinel = document.createElement('div');
-  sentinel.id = 'categoryScrollSentinel';
-  sentinel.setAttribute('aria-hidden', 'true');
-  categoryStatus.insertAdjacentElement('beforebegin', sentinel);
-
-  const observer = new IntersectionObserver((entries) => {
-    if (entries.some((entry) => entry.isIntersecting)) {
-      loadMore();
-    }
-  }, { rootMargin: '600px 0px' });
-
-  observer.observe(sentinel);
-}
+}, { passive: true });
 
 categoryTitle.textContent = `${heading} Movies`;
-setupInfiniteScroll();
-loadMore().then(ensureScrollablePage);
+loadMore();
