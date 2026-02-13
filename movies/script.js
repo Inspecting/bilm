@@ -104,12 +104,53 @@ function createSectionSkeleton(section, container) {
   container.appendChild(sectionEl);
 }
 
+function setupFiltersDrawer() {
+  const toggle = document.getElementById('filterToggle');
+  const drawer = document.getElementById('filtersDrawer');
+  const backdrop = document.getElementById('filtersBackdrop');
+  const closeBtn = document.getElementById('filtersClose');
+  if (!toggle || !drawer || !backdrop || !closeBtn) {
+    return { closeDrawer: () => {} };
+  }
+
+  const closeDrawer = () => {
+    drawer.classList.remove('is-open');
+    drawer.setAttribute('aria-hidden', 'true');
+    backdrop.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  };
+
+  const openDrawer = () => {
+    drawer.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+    backdrop.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  };
+
+  toggle.addEventListener('click', () => {
+    if (drawer.classList.contains('is-open')) closeDrawer();
+    else openDrawer();
+  });
+  closeBtn.addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+
+  return { closeDrawer };
+}
+
+function renderQuickFilters(sections, closeDrawer) {
 function renderQuickFilters(sections) {
   const filtersContainer = document.getElementById('quickFilters');
   if (!filtersContainer) return;
 
   filtersContainer.innerHTML = '';
   sections.forEach((section) => {
+    const item = document.createElement('button');
+    item.className = 'filter-item';
+    item.type = 'button';
+    item.textContent = section.title;
+    item.addEventListener('click', () => {
     const chip = document.createElement('a');
     chip.className = 'filter-chip';
     chip.href = `#section-${section.slug}`;
@@ -120,6 +161,9 @@ function renderQuickFilters(sections) {
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
+      closeDrawer?.();
+    });
+    filtersContainer.appendChild(item);
     });
     filtersContainer.appendChild(chip);
   });
@@ -186,7 +230,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await fetchGenres();
   const sections = getSections();
+  const { closeDrawer } = setupFiltersDrawer();
 
+  renderQuickFilters(sections, closeDrawer);
   renderQuickFilters(sections);
   sections.forEach(section => createSectionSkeleton(section, container));
 

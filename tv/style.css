@@ -139,6 +139,80 @@ main {
   text-overflow: ellipsis;
 }
 
+.filter-toggle {
+  position: sticky;
+  top: 96px;
+  z-index: 10;
+  margin-bottom: 14px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+  border: 1px solid var(--accent-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.filters-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1090;
+}
+
+.filters-drawer {
+  position: fixed;
+  top: 0;
+  right: -320px;
+  width: min(320px, 84vw);
+  height: 100vh;
+  background: var(--surface-3);
+  border-left: 1px solid var(--border);
+  z-index: 1100;
+  transition: right var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+}
+
+.filters-drawer.is-open {
+  right: 0;
+}
+
+.filters-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filters-drawer-header h2 {
+  font-size: 16px;
+}
+
+.filters-drawer-header button {
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.quick-filters {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.filter-item {
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
 .quick-filters {
   display: flex;
   gap: 10px;
