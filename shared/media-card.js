@@ -18,7 +18,7 @@
     if (explicitSubtitle) return explicitSubtitle;
     const year = item?.year || 'N/A';
     const type = getTypeLabel(item?.type);
-    return `${year} • ${type}`;
+    return `${year} ${type}`;
   }
 
   function createMediaCard(config) {

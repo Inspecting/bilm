@@ -97,11 +97,6 @@ async function loadMore() {
   loading = false;
 }
 
-categoryTitle.textContent = `${heading} TV Shows`;
-
-window.addEventListener('scroll', () => {
-  if (window.scrollY + window.innerHeight >= document.body.offsetHeight - 500) {
-    loadMore();
 async function ensureScrollablePage() {
   while (!ended && document.documentElement.scrollHeight <= window.innerHeight + 120) {
     await loadMore();
@@ -123,7 +118,6 @@ function setupInfiniteScroll() {
   observer.observe(sentinel);
 }
 
-loadMore();
 categoryTitle.textContent = `${heading} TV Shows`;
 setupInfiniteScroll();
 loadMore().then(ensureScrollablePage);
