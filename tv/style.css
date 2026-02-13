@@ -186,10 +186,29 @@ body.filters-open .quick-filters-panel {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
 .card-subtitle {
   font-size: 12px;
   color: var(--text-subtle);
+}
+
+
+.filter-toggle:hover,
+.view-more-button:hover,
+.filter-item:hover {
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface-2));
+}
+
+.filter-toggle:active,
+.view-more-button:active,
+.movie-card:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.movie-card:hover {
+  border-color: var(--accent-soft);
+  box-shadow: 0 0 18px var(--accent-glow);
+  transform: translateY(-4px);
 }
