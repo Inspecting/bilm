@@ -27,8 +27,8 @@ main {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  width: min(100%, 1200px);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   position: relative;
 }
 
@@ -40,6 +40,7 @@ main {
   max-width: 1040px;
   position: relative;
   gap: 12px;
+  margin: 0 auto;
 }
 
 .more-like-section {
@@ -143,6 +144,10 @@ main {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  min-height: calc(1.2em * 2);
+  max-height: calc(1.2em * 2);
+  word-break: break-word;
 }
 
 .more-like-card .card-subtitle {
