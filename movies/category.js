@@ -71,7 +71,10 @@ async function loadMore() {
         source: 'TMDB'
       },
       className: 'movie-card',
-      badgeClassName: 'source-badge-overlay'
+      badgeClassName: 'source-badge-overlay',
+      metaClassName: 'card-meta',
+      titleClassName: 'card-title',
+      subtitleClassName: 'card-subtitle'
     });
     categoryGrid.appendChild(card);
   });
