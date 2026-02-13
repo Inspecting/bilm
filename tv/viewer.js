@@ -39,6 +39,7 @@ const nextEpisodeBtn = document.getElementById('nextEpisode');
 const moreLikeBox = document.getElementById('moreLikeBox');
 const moreLikeGrid = document.getElementById('moreLikeGrid');
 const moreLikeStatus = document.getElementById('moreLikeStatus');
+const moreLikeViewMore = document.getElementById('moreLikeViewMore');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
@@ -55,6 +56,14 @@ let episodesPerSeason = {};
 let seasonEpisodeMemory = {};
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
+
+function toSlug(value) {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'trending';
+}
+
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
@@ -841,6 +850,7 @@ async function fetchTMDBData() {
       year,
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
+      genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
       link: `${withBase('/tv/viewer.html')}?id=${tmdbId}`
     };
 
@@ -848,6 +858,12 @@ async function fetchTMDBData() {
     updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
     const watchLater = loadList(WATCH_LATER_KEY);
     updateWatchLaterButton(watchLater.some(item => item.key === `tv-${tmdbId}`));
+    if (moreLikeViewMore) {
+      const fallbackTitle = 'Trending';
+      const firstGenreSlug = mediaDetails.genreSlugs?.[0] || 'trending';
+      const firstGenreTitle = details.genres?.[0]?.name || fallbackTitle;
+      moreLikeViewMore.href = `${withBase('/tv/category.html')}?section=${encodeURIComponent(firstGenreSlug)}&title=${encodeURIComponent(firstGenreTitle)}`;
+    }
     mediaTitle.textContent = showTitle;
     mediaMeta.textContent = displayDate;
     document.title = `Bilm 💜 - ${showTitle}`;

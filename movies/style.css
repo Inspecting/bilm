@@ -138,3 +138,41 @@ main {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.quick-filters {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  margin-bottom: 18px;
+  padding-bottom: 8px;
+}
+
+.filter-chip {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.view-more-button {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+  border: 1px solid var(--accent-soft);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
