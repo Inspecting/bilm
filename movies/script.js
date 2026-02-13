@@ -46,7 +46,7 @@ function getSections() {
     { title: 'Now Playing', endpoint: '/movie/now_playing' }
   ];
 
-  const genreSections = allGenres.map(genre => ({
+  const genreSections = allGenres.map((genre) => ({
     title: genre.name,
     endpoint: `/discover/movie?with_genres=${genre.id}`
   }));
@@ -104,24 +104,66 @@ function createSectionSkeleton(section, container) {
   container.appendChild(sectionEl);
 }
 
+function closeFiltersPanel() {
+  const toggle = document.getElementById('filterToggle');
+  const panel = document.getElementById('quickFiltersPanel');
+  if (!toggle || !panel) return;
+
+  toggle.setAttribute('aria-expanded', 'false');
+  panel.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('filters-open');
+}
+
 function renderQuickFilters(sections) {
   const filtersContainer = document.getElementById('quickFilters');
   if (!filtersContainer) return;
 
   filtersContainer.innerHTML = '';
   sections.forEach((section) => {
-    const chip = document.createElement('a');
-    chip.className = 'filter-chip';
-    chip.href = `#section-${section.slug}`;
-    chip.textContent = section.title;
-    chip.addEventListener('click', (event) => {
+    const item = document.createElement('a');
+    item.className = 'filter-item';
+    item.href = `#section-${section.slug}`;
+    item.textContent = section.title;
+    item.addEventListener('click', (event) => {
       event.preventDefault();
       const target = document.getElementById(`section-${section.slug}`);
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
+      closeFiltersPanel();
     });
-    filtersContainer.appendChild(chip);
+    filtersContainer.appendChild(item);
+  });
+}
+
+function setupFilterMenu() {
+  const toggle = document.getElementById('filterToggle');
+  const panel = document.getElementById('quickFiltersPanel');
+  if (!toggle || !panel) return;
+
+  const setOpen = (open) => {
+    toggle.setAttribute('aria-expanded', String(open));
+    panel.setAttribute('aria-hidden', String(!open));
+    document.body.classList.toggle('filters-open', open);
+  };
+
+  toggle.addEventListener('click', () => {
+    const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+    setOpen(!isOpen);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      setOpen(false);
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (!panel.contains(target) && target !== toggle) {
+      setOpen(false);
+    }
   });
 }
 
@@ -135,7 +177,7 @@ async function loadMoviesForSection(section) {
 
   const rowEl = document.getElementById(`row-${section.slug}`);
 
-  const uniqueMovies = movies.filter(m => !loadedMovieIds[section.slug].has(m.id));
+  const uniqueMovies = movies.filter((m) => !loadedMovieIds[section.slug].has(m.id));
 
   for (const movie of uniqueMovies.slice(0, moviesPerLoad)) {
     loadedMovieIds[section.slug].add(movie.id);
@@ -187,15 +229,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   await fetchGenres();
   const sections = getSections();
 
+  setupFilterMenu();
   renderQuickFilters(sections);
-  sections.forEach(section => createSectionSkeleton(section, container));
+  sections.forEach((section) => createSectionSkeleton(section, container));
 
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
   const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
-  await Promise.all(prioritySections.map(section => loadMoviesForSection(section)));
+  await Promise.all(prioritySections.map((section) => loadMoviesForSection(section)));
 
   const loadDeferredSections = async () => {
-    await Promise.all(deferredSections.map(section => loadMoviesForSection(section)));
+    await Promise.all(deferredSections.map((section) => loadMoviesForSection(section)));
   };
 
   if ('requestIdleCallback' in window) {
@@ -204,5 +247,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(loadDeferredSections, 0);
   }
 
-  sections.forEach(section => setupInfiniteScroll(section));
+  sections.forEach((section) => setupInfiniteScroll(section));
 });
