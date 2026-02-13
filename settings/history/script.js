@@ -51,6 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
   const cancelSelectBtn = document.getElementById('cancelSelectBtn');
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const exportDataBtn = document.getElementById('exportDataBtn');
+  const importDataBtn = document.getElementById('importDataBtn');
+  const importDataInput = document.getElementById('importDataInput');
   const watchFilters = document.getElementById('watchFilters');
   const historyList = document.getElementById('historyList');
   const searchFilterInput = document.getElementById('searchFilterInput');
@@ -71,6 +74,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function saveList(key, list) {
     storage.setJSON(key, list);
+  }
+
+  function toObfuscatedString(value) {
+    const json = JSON.stringify(value);
+    return btoa(unescape(encodeURIComponent(json))).split('').reverse().join('');
+  }
+
+  function fromObfuscatedString(value) {
+    const normalized = String(value || '').trim();
+    const decoded = decodeURIComponent(escape(atob(normalized.split('').reverse().join(''))));
+    return JSON.parse(decoded);
+  }
+
+  function exportHistoryData() {
+    const payload = {
+      format: 'bilm-obf-v1',
+      createdAt: Date.now(),
+      search: loadList(SEARCH_HISTORY_KEY),
+      watch: loadList(WATCH_HISTORY_KEY)
+    };
+
+    const obfuscated = toObfuscatedString(payload);
+    const blob = new Blob([obfuscated], { type: 'text/plain;charset=utf-8' });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `bilm-history-${stamp}.bilm`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  }
+
+  async function importHistoryData(file) {
+    if (!file) return;
+
+    let parsed;
+    try {
+      const raw = await file.text();
+      parsed = fromObfuscatedString(raw);
+    } catch {
+      window.alert('Could not read this file. Make sure it is a Bilm obfuscated export file.');
+      return;
+    }
+
+    if (!parsed || parsed.format !== 'bilm-obf-v1') {
+      window.alert('Unsupported export format.');
+      return;
+    }
+
+    const search = Array.isArray(parsed.search) ? parsed.search : [];
+    const watch = Array.isArray(parsed.watch) ? parsed.watch : [];
+
+    if (!window.confirm(`Import ${search.length + watch.length} entr${search.length + watch.length === 1 ? 'y' : 'ies'}? This replaces current history.`)) {
+      return;
+    }
+
+    saveList(SEARCH_HISTORY_KEY, search);
+    saveList(WATCH_HISTORY_KEY, watch);
+    resetSelection();
+    render();
+    window.alert('History import complete.');
   }
 
   function migrateLegacyWatchHistory() {
@@ -388,6 +453,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resetSelection();
     render();
+  });
+
+  exportDataBtn.addEventListener('click', () => {
+    exportHistoryData();
+  });
+
+  importDataBtn.addEventListener('click', () => {
+    importDataInput.click();
+  });
+
+  importDataInput.addEventListener('change', async () => {
+    const [file] = importDataInput.files || [];
+    await importHistoryData(file);
+    importDataInput.value = '';
   });
 
   clearHistoryBtn.addEventListener('click', () => {
