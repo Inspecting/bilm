@@ -175,9 +175,8 @@
     }
 
     function applyParticleSettings(settings) {
-      const lowData = settings?.lowDataMode === true;
-      particlesEnabled = settings?.particles !== false && !lowData;
-      motionEnabled = settings?.motion !== false && !lowData;
+      particlesEnabled = settings?.particles !== false;
+      motionEnabled = settings?.motion !== false;
       canvas.style.display = particlesEnabled ? 'block' : 'none';
 
       stopAnimation();
