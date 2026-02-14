@@ -68,7 +68,27 @@ function withBase(path) {
     defaultServer: 'vidsrc',
     searchHistory: true,
     continueWatching: true,
-    incognito: false
+    incognito: false,
+    skeletonLoading: true,
+    optimisticUi: true,
+    commandPalette: true,
+    guidedEmptyStates: true,
+    microInteractions: true,
+    milestones: true,
+    smartForms: true,
+    smartDefaults: true,
+    navHints: true,
+    contextualHelp: true,
+    accessibilityBoost: true,
+    lowDataMode: false,
+    smartSearch: true,
+    trustSignals: true,
+    funMode: true,
+    feedbackTools: true,
+    offlineMode: true,
+    sessionRecovery: true,
+    onboardingChecklist: true,
+    whatsNew: true
   };
 
   const backgroundColors = {
@@ -117,11 +137,25 @@ function withBase(path) {
     const themeColor = root.dataset.background === 'custom'
       ? (settings.customBackground || DEFAULT_SETTINGS.customBackground)
       : (backgroundColors[root.dataset.background] || backgroundColors.deep);
+
+    root.dataset.lowDataMode = settings.lowDataMode === true ? 'on' : 'off';
+    root.dataset.commandPalette = settings.commandPalette === false ? 'off' : 'on';
+    root.dataset.microInteractions = settings.microInteractions === false ? 'off' : 'on';
+    root.dataset.funMode = settings.funMode === false ? 'off' : 'on';
+    root.dataset.guidedEmptyStates = settings.guidedEmptyStates === false ? 'off' : 'on';
+    root.dataset.contextualHelp = settings.contextualHelp === false ? 'off' : 'on';
+    root.dataset.accessibilityBoost = settings.accessibilityBoost === false ? 'off' : 'on';
+    root.dataset.smartSearch = settings.smartSearch === false ? 'off' : 'on';
+    root.dataset.smartForms = settings.smartForms === false ? 'off' : 'on';
+    root.dataset.onboardingChecklist = settings.onboardingChecklist === false ? 'off' : 'on';
+    root.dataset.whatsNew = settings.whatsNew === false ? 'off' : 'on';
+
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
       metaTheme.setAttribute('content', themeColor);
     }
 
+    ensureExperience(settings);
     window.dispatchEvent(new CustomEvent('bilm:theme-changed', { detail: settings }));
   };
 
@@ -295,6 +329,220 @@ function withBase(path) {
       return;
     }
     applyTheme({ ...DEFAULT_SETTINGS });
+  };
+
+
+  const EXPERIENCE_VERSION = '2026.02-experience-pack';
+  const SESSION_RECOVERY_PREFIX = 'bilm-recovery:';
+  let experienceInitialized = false;
+  let commandPaletteNode = null;
+  let feedbackButtonNode = null;
+  let statusNode = null;
+  let checklistNode = null;
+
+  const createStatusNode = () => {
+    if (statusNode) return statusNode;
+    statusNode = document.createElement('div');
+    statusNode.className = 'bilm-status-pill';
+    statusNode.hidden = true;
+    document.body.appendChild(statusNode);
+    return statusNode;
+  };
+
+  const showStatus = (text, timeout = 2200) => {
+    const node = createStatusNode();
+    node.textContent = text;
+    node.hidden = false;
+    clearTimeout(node._hideTimer);
+    node._hideTimer = window.setTimeout(() => {
+      node.hidden = true;
+    }, timeout);
+  };
+
+  const createCommandPalette = () => {
+    if (commandPaletteNode) return commandPaletteNode;
+    const palette = document.createElement('div');
+    palette.className = 'bilm-command-palette';
+    palette.innerHTML = `
+      <div class="bilm-command-panel" role="dialog" aria-modal="true" aria-label="Quick actions">
+        <input class="bilm-command-input" placeholder="Jump to page..." aria-label="Quick action search" />
+        <div class="bilm-command-list"></div>
+      </div>`;
+    const commands = [
+      { label: 'Home', href: withBase('/home/') },
+      { label: 'Movies', href: withBase('/movies/') },
+      { label: 'TV', href: withBase('/tv/') },
+      { label: 'Games', href: withBase('/games/') },
+      { label: 'Settings', href: withBase('/settings/') },
+      { label: 'Search', href: withBase('/search/') }
+    ];
+    const input = palette.querySelector('.bilm-command-input');
+    const list = palette.querySelector('.bilm-command-list');
+
+    const renderCommands = (query = '') => {
+      const normalized = query.trim().toLowerCase();
+      const items = commands.filter((item) => item.label.toLowerCase().includes(normalized));
+      list.innerHTML = '';
+      items.forEach((item) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'bilm-command-item';
+        button.textContent = item.label;
+        button.addEventListener('click', () => {
+          window.location.href = item.href;
+        });
+        list.appendChild(button);
+      });
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'bilm-command-empty';
+        empty.textContent = 'No matches';
+        list.appendChild(empty);
+      }
+    };
+
+    renderCommands();
+    input.addEventListener('input', () => renderCommands(input.value));
+    palette.addEventListener('click', (event) => {
+      if (event.target === palette) {
+        palette.classList.remove('open');
+      }
+    });
+    document.body.appendChild(palette);
+    commandPaletteNode = palette;
+    return palette;
+  };
+
+  const createFeedbackButton = () => {
+    if (feedbackButtonNode) return feedbackButtonNode;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'bilm-feedback-button';
+    button.textContent = 'Feedback';
+    button.addEventListener('click', () => {
+      const message = window.prompt('Quick feedback for Bilm:');
+      if (!message) return;
+      try {
+        const log = safeParse(localStorage.getItem('bilm-feedback-log'), []);
+        const next = Array.isArray(log) ? log : [];
+        next.unshift({ message, at: Date.now(), path: location.pathname });
+        localStorage.setItem('bilm-feedback-log', JSON.stringify(next.slice(0, 40)));
+        showStatus('Thanks for your feedback 💜');
+      } catch {
+        showStatus('Feedback saved locally failed.');
+      }
+    });
+    document.body.appendChild(button);
+    feedbackButtonNode = button;
+    return button;
+  };
+
+  const setupSessionRecovery = (enabled) => {
+    const forms = document.querySelectorAll('input[type="text"], input[type="search"], textarea');
+    forms.forEach((field) => {
+      const key = `${SESSION_RECOVERY_PREFIX}${location.pathname}:${field.id || field.name || field.placeholder || 'field'}`;
+      if (enabled) {
+        if (!field.value) {
+          const cached = sessionStorage.getItem(key);
+          if (cached) field.value = cached;
+        }
+        if (!field.dataset.recoveryBound) {
+          field.dataset.recoveryBound = 'true';
+          field.addEventListener('input', () => {
+            try {
+              sessionStorage.setItem(key, field.value || '');
+            } catch {
+              return;
+            }
+          });
+        }
+      } else {
+        try {
+          sessionStorage.removeItem(key);
+        } catch {
+          return;
+        }
+      }
+    });
+  };
+
+  const maybeShowWhatsNew = (settings) => {
+    if (settings.whatsNew === false) return;
+    const seenKey = 'bilm-whats-new-seen';
+    if (localStorage.getItem(seenKey) === EXPERIENCE_VERSION) return;
+    showStatus('New: Experience options are now active site-wide.');
+    localStorage.setItem(seenKey, EXPERIENCE_VERSION);
+  };
+
+  const ensureExperience = (settings) => {
+    const root = document.documentElement;
+    if (!root.dataset.loaded) root.dataset.loaded = 'false';
+    root.dataset.skeletonLoading = settings.skeletonLoading === false ? 'off' : 'on';
+    root.dataset.optimisticUi = settings.optimisticUi === false ? 'off' : 'on';
+    root.dataset.navHints = settings.navHints === false ? 'off' : 'on';
+    root.dataset.trustSignals = settings.trustSignals === false ? 'off' : 'on';
+    root.dataset.feedbackTools = settings.feedbackTools === false ? 'off' : 'on';
+    root.dataset.offlineMode = settings.offlineMode === false ? 'off' : 'on';
+    root.dataset.sessionRecovery = settings.sessionRecovery === false ? 'off' : 'on';
+
+    if (!experienceInitialized) {
+      experienceInitialized = true;
+
+      document.addEventListener('keydown', (event) => {
+        const palette = createCommandPalette();
+        if (event.key === 'Escape' && palette.classList.contains('open')) {
+          palette.classList.remove('open');
+          return;
+        }
+        const paletteEnabled = (window.bilmTheme?.getSettings?.().commandPalette) !== false;
+        const isShortcut = (event.key && event.key.toLowerCase() === 'k') && (event.ctrlKey || event.metaKey);
+        if (!paletteEnabled || !isShortcut) return;
+        event.preventDefault();
+        palette.classList.add('open');
+        const input = palette.querySelector('.bilm-command-input');
+        input.value = '';
+        input.dispatchEvent(new Event('input'));
+        input.focus();
+      });
+
+      window.addEventListener('online', () => showStatus('You are back online.'));
+      window.addEventListener('offline', () => showStatus('You are offline. Cached pages still work.'));
+
+      window.addEventListener('DOMContentLoaded', () => {
+        document.documentElement.dataset.loaded = 'true';
+        const liveSettings = window.bilmTheme?.getSettings?.() || settings;
+        maybeShowWhatsNew(liveSettings);
+        if (liveSettings.onboardingChecklist !== false && location.pathname.includes('/home')) {
+          if (!checklistNode) {
+            checklistNode = document.createElement('div');
+            checklistNode.className = 'bilm-checklist';
+            checklistNode.innerHTML = '<h4>Quick checklist</h4><ul><li>Search for a title</li><li>Open a movie or show</li><li>Customize your theme in Settings</li></ul>';
+            document.body.appendChild(checklistNode);
+          }
+          checklistNode.hidden = false;
+        }
+      });
+    }
+
+    const palette = createCommandPalette();
+    palette.classList.toggle('feature-disabled', settings.commandPalette === false);
+    if (settings.commandPalette === false) palette.classList.remove('open');
+
+    const feedbackButton = createFeedbackButton();
+    feedbackButton.hidden = settings.feedbackTools === false;
+
+    if (settings.offlineMode !== false && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register(withBase('/sw.js')).catch(() => null);
+    }
+
+    if (settings.smartDefaults !== false) {
+      const searchInput = document.querySelector('input[type="search"], input#searchInput');
+      if (searchInput && !searchInput.placeholder) {
+        searchInput.placeholder = 'Search movies, shows, actors...';
+      }
+    }
+
+    setupSessionRecovery(settings.sessionRecovery !== false);
   };
 
   currentSettings = loadSettings();
