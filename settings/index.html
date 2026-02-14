@@ -327,6 +327,22 @@
       line-height: 1.4;
     }
 
+
+    .experience-wheel {
+      display: grid;
+      gap: 12px;
+      max-height: 252px;
+      overflow-y: auto;
+      padding-right: 6px;
+      scroll-snap-type: y mandatory;
+      mask-image: linear-gradient(to bottom, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
+    }
+
+    .experience-wheel .control-row {
+      min-height: 76px;
+      scroll-snap-align: start;
+    }
+
     @media (max-width: 720px) {
       .settings-content {
         padding: 20px 16px 80px;
@@ -479,6 +495,7 @@
       <h2>Experience Toggles</h2>
       <p>Turn on or off UX improvements and lightweight site features.</p>
 
+      <div class="experience-wheel" aria-label="Experience toggles scroll list">
       <div class="control-row"><div><label>Skeleton Loading</label><small>Show placeholders while content loads.</small></div><label class="toggle"><input id="skeletonToggle" type="checkbox" /><span></span></label></div>
       <div class="control-row"><div><label>Optimistic UI</label><small>Instant visual feedback while actions sync.</small></div><label class="toggle"><input id="optimisticToggle" type="checkbox" /><span></span></label></div>
       <div class="control-row"><div><label>Command Palette</label><small>Enable Ctrl/Cmd + K quick action overlay.</small></div><label class="toggle"><input id="commandPaletteToggle" type="checkbox" /><span></span></label></div>
@@ -499,6 +516,8 @@
       <div class="control-row"><div><label>Session Recovery</label><small>Restore unfinished actions after reload.</small></div><label class="toggle"><input id="sessionRecoveryToggle" type="checkbox" /><span></span></label></div>
       <div class="control-row"><div><label>Onboarding Checklist</label><small>Display simple setup checklist for new users.</small></div><label class="toggle"><input id="onboardingChecklistToggle" type="checkbox" /><span></span></label></div>
       <div class="control-row"><div><label>What's New</label><small>Show release highlights when available.</small></div><label class="toggle"><input id="whatsNewToggle" type="checkbox" /><span></span></label></div>
+      </div>
+
     </section>
 
     <section class="settings-card">
