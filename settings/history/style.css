@@ -158,7 +158,23 @@ main {
   list-style: none;
   display: grid;
   gap: 10px;
+}
+
+.history-scroll-region {
   margin-top: 14px;
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+  padding: 10px;
+}
+
+.history-load-state {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
 }
 
 .history-item,
