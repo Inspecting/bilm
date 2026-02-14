@@ -126,6 +126,39 @@ document.addEventListener('DOMContentLoaded', () => {
     await window.bilmAuth.init();
   }
 
+
+  async function clearAllLocalData() {
+    localStorage.clear();
+    sessionStorage.clear();
+
+    document.cookie.split(';').forEach((cookie) => {
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+      if (name) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      }
+    });
+
+    if (window.indexedDB?.databases) {
+      const databases = await window.indexedDB.databases();
+      await Promise.all((databases || []).map((db) => new Promise((resolve) => {
+        if (!db.name) {
+          resolve();
+          return;
+        }
+        const request = window.indexedDB.deleteDatabase(db.name);
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve();
+        request.onblocked = () => resolve();
+      })));
+    }
+
+    if (window.caches?.keys) {
+      const cacheKeys = await window.caches.keys();
+      await Promise.all(cacheKeys.map((cacheKey) => window.caches.delete(cacheKey)));
+    }
+  }
+
   autoSyncToggle.checked = getSettings().accountAutoSync !== false;
   autoSyncToggle.addEventListener('change', () => {
     setSettings({ accountAutoSync: autoSyncToggle.checked });
@@ -174,7 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!window.bilmAuth.getCurrentUser()) throw new Error('Already logged out.');
       if (!confirm('Log out of your account now?')) return;
       await window.bilmAuth.signOut();
-      statusText.textContent = 'Logged out.';
+      await clearAllLocalData();
+      statusText.textContent = 'Logged out and cleared local data. Reloading...';
+      setTimeout(() => location.reload(), 250);
     } catch (error) {
       statusText.textContent = `Logout failed: ${error.message}`;
     }

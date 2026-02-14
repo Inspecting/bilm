@@ -906,7 +906,7 @@
       openSignInBtn.hidden = false;
       openSignUpBtn.hidden = false;
       logoutBtn.hidden = true;
-      openAccountSettingsBtn.disabled = true;
+      openAccountSettingsBtn.disabled = false;
       cloudStatus.textContent = 'Log in to use account sync features.';
       loginHelperText.textContent = 'Use email and password to log in.';
       if (accountSettingsModal.classList.contains('open')) accountSettingsModal.classList.remove('open');
@@ -922,6 +922,55 @@
     await window.bilmAuth.init();
   }
 
+  async function clearAllLocalData() {
+    localStorage.clear();
+    sessionStorage.clear();
+
+    document.cookie.split(';').forEach((cookie) => {
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+      if (name) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      }
+    });
+
+    if (window.indexedDB?.databases) {
+      const databases = await window.indexedDB.databases();
+      await Promise.all((databases || []).map((db) => new Promise((resolve) => {
+        if (!db.name) {
+          resolve();
+          return;
+        }
+        const request = window.indexedDB.deleteDatabase(db.name);
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve();
+        request.onblocked = () => resolve();
+      })));
+    }
+
+    if (window.caches?.keys) {
+      const cacheKeys = await window.caches.keys();
+      await Promise.all(cacheKeys.map((cacheKey) => window.caches.delete(cacheKey)));
+    }
+  }
+
+  async function autoSyncAfterSignIn() {
+    const localSnapshot = collectBackupData();
+    const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
+
+    if (!cloudSnapshot) {
+      await window.bilmAuth.saveCloudSnapshot(localSnapshot);
+      cloudStatus.textContent = 'New account detected. Local data was merged into your account.';
+      return;
+    }
+
+    const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
+    applyBackup(merged);
+    await window.bilmAuth.saveCloudSnapshot(merged);
+    cloudStatus.textContent = 'Auto Sync complete. Reloading with your account data...';
+    setTimeout(() => location.reload(), 300);
+  }
+
   function mergeSnapshots(localSnapshot, cloudSnapshot) {
     const localData = localSnapshot || collectBackupData();
     const cloudData = cloudSnapshot || {};
@@ -934,8 +983,8 @@
       exportedAt: new Date().toISOString(),
       origin: location.origin,
       pathname: location.pathname,
-      localStorage: { ...(cloudData.localStorage || {}), ...(localData.localStorage || {}) },
-      sessionStorage: { ...(cloudData.sessionStorage || {}), ...(localData.sessionStorage || {}) },
+      localStorage: { ...(localData.localStorage || {}), ...(cloudData.localStorage || {}) },
+      sessionStorage: { ...(localData.sessionStorage || {}), ...(cloudData.sessionStorage || {}) },
       cookies: [...new Set(cookieItems)].join('; ')
     };
   }
@@ -1140,25 +1189,17 @@
       await ensureAuthReady();
       if (!confirm('Log out of your account?')) return;
       await window.bilmAuth.signOut();
-      cloudStatus.textContent = 'Logged out successfully.';
+      await clearAllLocalData();
+      cloudStatus.textContent = 'Logged out and cleared local data. Reloading...';
+      setTimeout(() => location.reload(), 250);
     } catch (err) {
       cloudStatus.textContent = `Logout failed: ${err.message}`;
     }
   });
 
-  openAccountSettingsBtn.addEventListener('click', async () => {
-    try {
-      await ensureAuthReady();
-      const user = window.bilmAuth.getCurrentUser();
-      if (!user) {
-        openLoginModal();
-        return;
-      }
-      accountSettingsStatus.textContent = '';
-      window.location.href = new URL('../settings/account/', window.location.href).toString();
-    } catch (err) {
-      cloudStatus.textContent = `Account settings failed: ${err.message}`;
-    }
+  openAccountSettingsBtn.addEventListener('click', () => {
+    accountSettingsStatus.textContent = '';
+    window.location.href = new URL('../settings/account/', window.location.href).toString();
   });
 
   smartSyncBtn.addEventListener('click', async () => {
@@ -1202,11 +1243,8 @@
       const password = loginPassword.value;
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
-      const localSnapshot = collectBackupData();
-      const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
-      if (Object.keys(localSnapshot.localStorage || {}).length && !cloudSnapshot) {
-        await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-        cloudStatus.textContent = 'Logged in. Found local data and added it to your account.';
+      if ((window.bilmTheme?.getSettings?.() || {}).accountAutoSync !== false) {
+        await autoSyncAfterSignIn();
       } else {
         cloudStatus.textContent = 'Logged in successfully.';
       }
@@ -1224,10 +1262,8 @@
       const password = signUpPassword.value;
       await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
-      const localSnapshot = collectBackupData();
-      if (Object.keys(localSnapshot.localStorage || {}).length) {
-        await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-        cloudStatus.textContent = 'Account created. Local data was added to your new account.';
+      if ((window.bilmTheme?.getSettings?.() || {}).accountAutoSync !== false) {
+        await autoSyncAfterSignIn();
       } else {
         cloudStatus.textContent = 'Account created. You can sync any time from Account Settings.';
       }
@@ -1277,7 +1313,7 @@
       accountStatusText.textContent = 'Account tools are unavailable right now. Refresh and try again.';
       cloudStatus.textContent = `Auth setup failed: ${err.message}`;
       loginHelperText.textContent = 'If this keeps happening, disable blockers for Firebase and reload.';
-      openAccountSettingsBtn.disabled = true;
+      openAccountSettingsBtn.disabled = false;
     }
   }
 
