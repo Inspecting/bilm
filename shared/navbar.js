@@ -215,14 +215,14 @@ function loadAuthScript() {
 
     if (accountBtn) {
       accountBtn.addEventListener('click', () => {
-        window.location.href = withBase('/settings/');
+        window.location.href = withBase('/settings/account/');
       });
     }
   }).catch(() => {
     if (accountBtn) {
       accountBtn.textContent = 'Account';
       accountBtn.addEventListener('click', () => {
-        window.location.href = withBase('/settings/');
+        window.location.href = withBase('/settings/account/');
       });
     }
   });
