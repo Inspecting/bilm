@@ -85,16 +85,16 @@
 
       <section class="panel actions-panel" aria-label="Actions">
         <button id="clearHistoryBtn" class="control-btn danger" type="button">Clear all search history</button>
-        <button id="exportDataBtn" class="control-btn" type="button">Export history (obfuscated)</button>
-        <button id="importDataBtn" class="control-btn" type="button">Import history</button>
-        <input id="importDataInput" type="file" accept=".txt,.bilm" hidden />
         <button id="selectModeBtn" class="control-btn" type="button">Select</button>
         <button id="selectAllBtn" class="control-btn" type="button" hidden>Select all visible</button>
         <button id="cancelSelectBtn" class="control-btn" type="button" hidden>Cancel</button>
         <button id="deleteSelectedBtn" class="control-btn danger" type="button" hidden>Delete selected</button>
       </section>
 
-      <ul id="historyList" class="history-list" aria-live="polite"></ul>
+      <section id="historyScrollRegion" class="history-scroll-region" aria-label="History entries" tabindex="0">
+        <ul id="historyList" class="history-list" aria-live="polite"></ul>
+        <p id="historyLoadState" class="history-load-state" aria-live="polite"></p>
+      </section>
     </section>
   </main>
 

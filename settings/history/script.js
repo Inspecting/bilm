@@ -39,7 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
     textFilter: '',
     selectMode: false,
     compactView: false,
-    selectedKeys: new Set()
+    selectedKeys: new Set(),
+    pageSize: 25,
+    visibleLimit: 25,
+    loadingMore: false
   };
 
   const searchTabBtn = document.getElementById('searchTabBtn');
@@ -51,13 +54,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
   const cancelSelectBtn = document.getElementById('cancelSelectBtn');
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-  const exportDataBtn = document.getElementById('exportDataBtn');
-  const importDataBtn = document.getElementById('importDataBtn');
-  const importDataInput = document.getElementById('importDataInput');
   const watchFilters = document.getElementById('watchFilters');
   const historyList = document.getElementById('historyList');
   const searchFilterInput = document.getElementById('searchFilterInput');
   const compactViewBtn = document.getElementById('compactViewBtn');
+  const historyScrollRegion = document.getElementById('historyScrollRegion');
+  const historyLoadState = document.getElementById('historyLoadState');
 
   const visibleCount = document.getElementById('visibleCount');
   const totalCount = document.getElementById('totalCount');
@@ -76,67 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
     storage.setJSON(key, list);
   }
 
-  function toObfuscatedString(value) {
-    const json = JSON.stringify(value);
-    return btoa(unescape(encodeURIComponent(json))).split('').reverse().join('');
-  }
-
-  function fromObfuscatedString(value) {
-    const normalized = String(value || '').trim();
-    const decoded = decodeURIComponent(escape(atob(normalized.split('').reverse().join(''))));
-    return JSON.parse(decoded);
-  }
-
-  function exportHistoryData() {
-    const payload = {
-      format: 'bilm-obf-v1',
-      createdAt: Date.now(),
-      search: loadList(SEARCH_HISTORY_KEY),
-      watch: loadList(WATCH_HISTORY_KEY)
-    };
-
-    const obfuscated = toObfuscatedString(payload);
-    const blob = new Blob([obfuscated], { type: 'text/plain;charset=utf-8' });
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `bilm-history-${stamp}.bilm`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(link.href);
-  }
-
-  async function importHistoryData(file) {
-    if (!file) return;
-
-    let parsed;
-    try {
-      const raw = await file.text();
-      parsed = fromObfuscatedString(raw);
-    } catch {
-      window.alert('Could not read this file. Make sure it is a Bilm obfuscated export file.');
-      return;
-    }
-
-    if (!parsed || parsed.format !== 'bilm-obf-v1') {
-      window.alert('Unsupported export format.');
-      return;
-    }
-
-    const search = Array.isArray(parsed.search) ? parsed.search : [];
-    const watch = Array.isArray(parsed.watch) ? parsed.watch : [];
-
-    if (!window.confirm(`Import ${search.length + watch.length} entr${search.length + watch.length === 1 ? 'y' : 'ies'}? This replaces current history.`)) {
-      return;
-    }
-
-    saveList(SEARCH_HISTORY_KEY, search);
-    saveList(WATCH_HISTORY_KEY, watch);
-    resetSelection();
-    render();
-    window.alert('History import complete.');
-  }
 
   function migrateLegacyWatchHistory() {
     const current = loadList(WATCH_HISTORY_KEY);
@@ -219,6 +160,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.sortOrder === 'old') sorted.reverse();
 
     return sorted;
+  }
+
+  function getVisibleItems(items) {
+    return items.slice(0, state.visibleLimit);
+  }
+
+  function queueMoreItems() {
+    const items = getFilteredItems();
+    if (state.visibleLimit >= items.length) return;
+    state.loadingMore = true;
+    historyLoadState.textContent = 'Loading more...';
+    window.requestAnimationFrame(() => {
+      state.visibleLimit = Math.min(state.visibleLimit + state.pageSize, items.length);
+      state.loadingMore = false;
+      render();
+    });
+  }
+
+  function updateLoadState(visibleItems, allItems) {
+    if (!allItems.length) {
+      historyLoadState.textContent = '';
+      return;
+    }
+
+    if (visibleItems.length >= allItems.length) {
+      historyLoadState.textContent = `Showing all ${allItems.length} entries.`;
+      return;
+    }
+
+    historyLoadState.textContent = `Showing ${visibleItems.length} of ${allItems.length}. Scroll to load more.`;
   }
 
   function renderEmptyState() {
@@ -377,16 +348,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     historyList.innerHTML = '';
     const items = getFilteredItems();
-    updateStats(items);
+    const visibleItems = getVisibleItems(items);
+    updateStats(visibleItems);
 
     if (!items.length) {
       renderEmptyState();
       syncSelectActions(items);
+      updateLoadState([], items);
       return;
     }
 
-    items.forEach(renderHistoryItem);
-    syncSelectActions(items);
+    visibleItems.forEach(renderHistoryItem);
+    syncSelectActions(visibleItems);
+    updateLoadState(visibleItems, items);
   }
 
   function resetSelection() {
@@ -394,25 +368,33 @@ document.addEventListener('DOMContentLoaded', () => {
     state.selectedKeys.clear();
   }
 
+  function resetVisibleWindow() {
+    state.visibleLimit = state.pageSize;
+  }
+
   searchTabBtn.addEventListener('click', () => {
     state.activeType = 'search';
     resetSelection();
+    resetVisibleWindow();
     render();
   });
 
   watchTabBtn.addEventListener('click', () => {
     state.activeType = 'watch';
     resetSelection();
+    resetVisibleWindow();
     render();
   });
 
   sortRecentBtn.addEventListener('click', () => {
     state.sortOrder = 'recent';
+    resetVisibleWindow();
     render();
   });
 
   sortOldBtn.addEventListener('click', () => {
     state.sortOrder = 'old';
+    resetVisibleWindow();
     render();
   });
 
@@ -423,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   selectAllBtn.addEventListener('click', () => {
-    const items = getFilteredItems();
+    const items = getVisibleItems(getFilteredItems());
     const itemIds = items.map(getItemId);
     const allSelected = itemIds.length && itemIds.every(id => state.selectedKeys.has(id));
 
@@ -438,6 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   cancelSelectBtn.addEventListener('click', () => {
     resetSelection();
+    resetVisibleWindow();
     render();
   });
 
@@ -452,34 +435,24 @@ document.addEventListener('DOMContentLoaded', () => {
     saveList(key, next);
 
     resetSelection();
+    resetVisibleWindow();
     render();
   });
 
-  exportDataBtn.addEventListener('click', () => {
-    exportHistoryData();
-  });
-
-  importDataBtn.addEventListener('click', () => {
-    importDataInput.click();
-  });
-
-  importDataInput.addEventListener('change', async () => {
-    const [file] = importDataInput.files || [];
-    await importHistoryData(file);
-    importDataInput.value = '';
-  });
 
   clearHistoryBtn.addEventListener('click', () => {
     const isSearch = state.activeType === 'search';
     if (!window.confirm(`Clear all ${isSearch ? 'search' : 'watch'} history?`)) return;
     saveList(getActiveKey(), []);
     resetSelection();
+    resetVisibleWindow();
     render();
   });
 
   watchTypeButtons.forEach(button => {
     button.addEventListener('click', () => {
       state.watchFilter = button.dataset.filter;
+      resetVisibleWindow();
       render();
     });
   });
@@ -488,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     button.addEventListener('click', () => {
       state.dateRange = button.dataset.range;
       resetSelection();
+      resetVisibleWindow();
       render();
     });
   });
@@ -495,6 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
   searchFilterInput.addEventListener('input', () => {
     state.textFilter = searchFilterInput.value;
     resetSelection();
+    resetVisibleWindow();
     render();
   });
 
@@ -502,6 +477,16 @@ document.addEventListener('DOMContentLoaded', () => {
     state.compactView = !state.compactView;
     savePrefs();
     render();
+  });
+
+
+  historyScrollRegion.addEventListener('scroll', () => {
+    if (state.loadingMore || state.selectMode) return;
+    const threshold = 120;
+    const isNearBottom = historyScrollRegion.scrollTop + historyScrollRegion.clientHeight >= historyScrollRegion.scrollHeight - threshold;
+    if (isNearBottom) {
+      queueMoreItems();
+    }
   });
 
   document.addEventListener('keydown', (event) => {
@@ -513,5 +498,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadPrefs();
   migrateLegacyWatchHistory();
+  resetVisibleWindow();
   render();
 });

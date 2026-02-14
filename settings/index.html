@@ -200,25 +200,23 @@
       transform: translateX(20px);
     }
 
-    .preset-row {
+    .preset-control {
       display: flex;
+      align-items: center;
       gap: 10px;
+      justify-content: flex-end;
       flex-wrap: wrap;
+      min-width: 220px;
     }
 
-    .preset-btn {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
-      transition: transform var(--transition-fast), border-color var(--transition-fast);
+    .inline-picker {
+      width: 44px;
+      height: 36px;
+      padding: 3px;
     }
 
-    .preset-btn:hover {
-      transform: scale(1.08);
-      border-color: var(--text-primary);
+    .preset-select {
+      min-width: 170px;
     }
 
     .actions-row {
@@ -356,28 +354,32 @@
 
       <div class="control-row">
         <div>
-          <label for="accentPicker">Accent Color</label>
-          <small>Pick a custom glow color.</small>
+          <label for="accentPresetsSelect">Accent Color</label>
+          <small>Choose from presets or use a custom color.</small>
         </div>
-        <input id="accentPicker" type="color" />
+        <div class="preset-control">
+          <select id="accentPresetsSelect" class="preset-select" aria-label="Accent color presets"></select>
+          <button class="btn btn-outline" id="accentCustomBtn" type="button">Custom</button>
+          <input id="accentPicker" class="inline-picker" type="color" hidden />
+        </div>
       </div>
-
-      <div class="preset-row" id="accentPresets" aria-label="Accent color presets"></div>
 
       <div class="control-row">
         <div>
           <label for="backgroundSelect">Background Mode</label>
-          <small>Pick a preset theme or build your own.</small>
+          <small>Pick a preset mode or switch to custom.</small>
         </div>
-        <select id="backgroundSelect">
-          <option value="deep">Deep</option>
-          <option value="midnight">Midnight</option>
-          <option value="velvet">Velvet</option>
-          <option value="aurora">Aurora</option>
-          <option value="slate">Slate</option>
-          <option value="sunset">Sunset</option>
-          <option value="custom">Custom</option>
-        </select>
+        <div class="preset-control">
+          <select id="backgroundSelect" class="preset-select">
+            <option value="deep">Deep</option>
+            <option value="midnight">Midnight</option>
+            <option value="velvet">Velvet</option>
+            <option value="aurora">Aurora</option>
+            <option value="slate">Slate</option>
+            <option value="sunset">Sunset</option>
+          </select>
+          <button class="btn btn-outline" id="backgroundCustomBtn" type="button">Custom</button>
+        </div>
       </div>
 
       <div class="control-row" id="customBackgroundRow" hidden>
@@ -508,8 +510,11 @@
 
 <script>
   const accentPresets = ['#a855f7', '#c084fc', '#7c3aed', '#ec4899', '#38bdf8'];
+  const accentPresetsSelect = document.getElementById('accentPresetsSelect');
+  const accentCustomBtn = document.getElementById('accentCustomBtn');
   const accentPicker = document.getElementById('accentPicker');
   const backgroundSelect = document.getElementById('backgroundSelect');
+  const backgroundCustomBtn = document.getElementById('backgroundCustomBtn');
   const customBackgroundRow = document.getElementById('customBackgroundRow');
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
@@ -532,8 +537,7 @@
   const uploadImportBtn = document.getElementById('uploadImportBtn');
   const applyImportBtn = document.getElementById('applyImportBtn');
   const closeDataModalBtn = document.getElementById('closeDataModalBtn');
-  const presetsContainer = document.getElementById('accentPresets');
-  const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+    const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
   const BACKUP_FORMAT_PREFIX = 'BLM1';
   const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   let pendingImportPayload = null;
@@ -733,10 +737,18 @@
 
   function syncUI() {
     const settings = window.bilmTheme?.getSettings?.() || {};
-    accentPicker.value = settings.accent || '#a855f7';
-    backgroundSelect.value = settings.background || 'deep';
+    const accentValue = settings.accent || '#a855f7';
+    accentPicker.value = accentValue;
+    if ([...accentPresetsSelect.options].some(option => option.value === accentValue)) {
+      accentPresetsSelect.value = accentValue;
+    }
+    const backgroundValue = settings.background || 'deep';
+    backgroundSelect.value = backgroundValue === 'custom' ? 'deep' : backgroundValue;
     customBackgroundPicker.value = settings.customBackground || '#0b0b14';
-    customBackgroundRow.hidden = (settings.background || 'deep') !== 'custom';
+    customBackgroundRow.hidden = backgroundValue !== 'custom';
+    backgroundCustomBtn.classList.toggle('is-active', backgroundValue === 'custom');
+    accentPicker.hidden = true;
+    accentCustomBtn.classList.remove('is-active');
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
     incognitoToggle.checked = settings.incognito === true;
@@ -745,31 +757,45 @@
   }
 
   accentPresets.forEach(color => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'preset-btn';
-    btn.style.background = color;
-    btn.setAttribute('aria-label', `Set accent to ${color}`);
-    btn.addEventListener('click', () => {
-      accentPicker.value = color;
-      applySettings({ accent: color });
-    });
-    presetsContainer.appendChild(btn);
+    const option = document.createElement('option');
+    option.value = color;
+    option.textContent = color;
+    accentPresetsSelect.appendChild(option);
+  });
+
+  accentPresetsSelect.addEventListener('change', (event) => {
+    const color = event.target.value;
+    accentPicker.value = color;
+    applySettings({ accent: color });
+  });
+
+  accentCustomBtn.addEventListener('click', () => {
+    accentPicker.hidden = !accentPicker.hidden;
+    accentCustomBtn.classList.toggle('is-active', !accentPicker.hidden);
   });
 
   accentPicker.addEventListener('input', (event) => {
     applySettings({ accent: event.target.value });
+    if ([...accentPresetsSelect.options].some(option => option.value === event.target.value)) {
+      accentPresetsSelect.value = event.target.value;
+    }
   });
 
   backgroundSelect.addEventListener('change', (event) => {
     const nextBackground = event.target.value;
-    customBackgroundRow.hidden = nextBackground !== 'custom';
+    customBackgroundRow.hidden = true;
+    backgroundCustomBtn.classList.remove('is-active');
     applySettings({ background: nextBackground });
+  });
+
+  backgroundCustomBtn.addEventListener('click', () => {
+    customBackgroundRow.hidden = false;
+    backgroundCustomBtn.classList.add('is-active');
+    applySettings({ background: 'custom' });
   });
 
   customBackgroundPicker.addEventListener('input', (event) => {
     applySettings({ customBackground: event.target.value, background: 'custom' });
-    backgroundSelect.value = 'custom';
     customBackgroundRow.hidden = false;
   });
 
