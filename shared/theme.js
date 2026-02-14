@@ -68,7 +68,27 @@ function withBase(path) {
     defaultServer: 'vidsrc',
     searchHistory: true,
     continueWatching: true,
-    incognito: false
+    incognito: false,
+    skeletonLoading: true,
+    optimisticUi: true,
+    commandPalette: true,
+    guidedEmptyStates: true,
+    microInteractions: true,
+    milestones: true,
+    smartForms: true,
+    smartDefaults: true,
+    navHints: true,
+    contextualHelp: true,
+    accessibilityBoost: true,
+    lowDataMode: false,
+    smartSearch: true,
+    trustSignals: true,
+    funMode: true,
+    feedbackTools: true,
+    offlineMode: true,
+    sessionRecovery: true,
+    onboardingChecklist: true,
+    whatsNew: true
   };
 
   const backgroundColors = {
@@ -117,6 +137,19 @@ function withBase(path) {
     const themeColor = root.dataset.background === 'custom'
       ? (settings.customBackground || DEFAULT_SETTINGS.customBackground)
       : (backgroundColors[root.dataset.background] || backgroundColors.deep);
+
+    root.dataset.lowDataMode = settings.lowDataMode === true ? 'on' : 'off';
+    root.dataset.commandPalette = settings.commandPalette === false ? 'off' : 'on';
+    root.dataset.microInteractions = settings.microInteractions === false ? 'off' : 'on';
+    root.dataset.funMode = settings.funMode === false ? 'off' : 'on';
+    root.dataset.guidedEmptyStates = settings.guidedEmptyStates === false ? 'off' : 'on';
+    root.dataset.contextualHelp = settings.contextualHelp === false ? 'off' : 'on';
+    root.dataset.accessibilityBoost = settings.accessibilityBoost === false ? 'off' : 'on';
+    root.dataset.smartSearch = settings.smartSearch === false ? 'off' : 'on';
+    root.dataset.smartForms = settings.smartForms === false ? 'off' : 'on';
+    root.dataset.onboardingChecklist = settings.onboardingChecklist === false ? 'off' : 'on';
+    root.dataset.whatsNew = settings.whatsNew === false ? 'off' : 'on';
+
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
       metaTheme.setAttribute('content', themeColor);

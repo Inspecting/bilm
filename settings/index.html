@@ -474,6 +474,33 @@
       </div>
     </section>
 
+
+    <section class="settings-card">
+      <h2>Experience Toggles</h2>
+      <p>Turn on or off UX improvements and lightweight site features.</p>
+
+      <div class="control-row"><div><label>Skeleton Loading</label><small>Show placeholders while content loads.</small></div><label class="toggle"><input id="skeletonToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Optimistic UI</label><small>Instant visual feedback while actions sync.</small></div><label class="toggle"><input id="optimisticToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Command Palette</label><small>Enable Ctrl/Cmd + K quick action overlay.</small></div><label class="toggle"><input id="commandPaletteToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Guided Empty States</label><small>Show suggestions when a section has no items.</small></div><label class="toggle"><input id="emptyStatesToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Micro Interactions</label><small>Small hover and click animations.</small></div><label class="toggle"><input id="microInteractionsToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Milestones</label><small>Progress and completion celebrations.</small></div><label class="toggle"><input id="milestonesToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Smart Forms</label><small>Inline validation and draft-friendly behavior.</small></div><label class="toggle"><input id="smartFormsToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Smart Defaults</label><small>Auto-select commonly used options.</small></div><label class="toggle"><input id="smartDefaultsToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Navigation Hints</label><small>Extra cues for page orientation.</small></div><label class="toggle"><input id="navHintsToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Contextual Help</label><small>Show inline tips for complex controls.</small></div><label class="toggle"><input id="contextualHelpToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Accessibility Boost</label><small>Enhanced focus and readability helpers.</small></div><label class="toggle"><input id="accessibilityToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Low Data Mode</label><small>Reduce animation and heavy visuals.</small></div><label class="toggle"><input id="lowDataModeToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Smart Search</label><small>Smarter suggestions and recovery hints.</small></div><label class="toggle"><input id="smartSearchToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Trust Signals</label><small>Show freshness and reliability cues.</small></div><label class="toggle"><input id="trustSignalsToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Fun Mode</label><small>Enable playful optional UI flair.</small></div><label class="toggle"><input id="funModeToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Feedback Tools</label><small>Show quick in-page feedback actions.</small></div><label class="toggle"><input id="feedbackToolsToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Offline-friendly Mode</label><small>Prefer cached content and lightweight assets.</small></div><label class="toggle"><input id="offlineModeToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Session Recovery</label><small>Restore unfinished actions after reload.</small></div><label class="toggle"><input id="sessionRecoveryToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>Onboarding Checklist</label><small>Display simple setup checklist for new users.</small></div><label class="toggle"><input id="onboardingChecklistToggle" type="checkbox" /><span></span></label></div>
+      <div class="control-row"><div><label>What's New</label><small>Show release highlights when available.</small></div><label class="toggle"><input id="whatsNewToggle" type="checkbox" /><span></span></label></div>
+    </section>
+
     <section class="settings-card">
       <h2>Reset & Maintenance</h2>
       <p>Restore defaults or clear all local data.</p>
@@ -521,6 +548,26 @@
   const particleToggle = document.getElementById('particleToggle');
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
+  const skeletonToggle = document.getElementById('skeletonToggle');
+  const optimisticToggle = document.getElementById('optimisticToggle');
+  const commandPaletteToggle = document.getElementById('commandPaletteToggle');
+  const emptyStatesToggle = document.getElementById('emptyStatesToggle');
+  const microInteractionsToggle = document.getElementById('microInteractionsToggle');
+  const milestonesToggle = document.getElementById('milestonesToggle');
+  const smartFormsToggle = document.getElementById('smartFormsToggle');
+  const smartDefaultsToggle = document.getElementById('smartDefaultsToggle');
+  const navHintsToggle = document.getElementById('navHintsToggle');
+  const contextualHelpToggle = document.getElementById('contextualHelpToggle');
+  const accessibilityToggle = document.getElementById('accessibilityToggle');
+  const lowDataModeToggle = document.getElementById('lowDataModeToggle');
+  const smartSearchToggle = document.getElementById('smartSearchToggle');
+  const trustSignalsToggle = document.getElementById('trustSignalsToggle');
+  const funModeToggle = document.getElementById('funModeToggle');
+  const feedbackToolsToggle = document.getElementById('feedbackToolsToggle');
+  const offlineModeToggle = document.getElementById('offlineModeToggle');
+  const sessionRecoveryToggle = document.getElementById('sessionRecoveryToggle');
+  const onboardingChecklistToggle = document.getElementById('onboardingChecklistToggle');
+  const whatsNewToggle = document.getElementById('whatsNewToggle');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const exportDataBtn = document.getElementById('exportDataBtn');
@@ -750,6 +797,27 @@
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
+
+    skeletonToggle.checked = settings.skeletonLoading !== false;
+    optimisticToggle.checked = settings.optimisticUi !== false;
+    commandPaletteToggle.checked = settings.commandPalette !== false;
+    emptyStatesToggle.checked = settings.guidedEmptyStates !== false;
+    microInteractionsToggle.checked = settings.microInteractions !== false;
+    milestonesToggle.checked = settings.milestones !== false;
+    smartFormsToggle.checked = settings.smartForms !== false;
+    smartDefaultsToggle.checked = settings.smartDefaults !== false;
+    navHintsToggle.checked = settings.navHints !== false;
+    contextualHelpToggle.checked = settings.contextualHelp !== false;
+    accessibilityToggle.checked = settings.accessibilityBoost !== false;
+    lowDataModeToggle.checked = settings.lowDataMode === true;
+    smartSearchToggle.checked = settings.smartSearch !== false;
+    trustSignalsToggle.checked = settings.trustSignals !== false;
+    funModeToggle.checked = settings.funMode !== false;
+    feedbackToolsToggle.checked = settings.feedbackTools !== false;
+    offlineModeToggle.checked = settings.offlineMode !== false;
+    sessionRecoveryToggle.checked = settings.sessionRecovery !== false;
+    onboardingChecklistToggle.checked = settings.onboardingChecklist !== false;
+    whatsNewToggle.checked = settings.whatsNew !== false;
   }
 
   accentPresets.forEach(({ value, label }) => {
@@ -797,6 +865,28 @@
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
   });
+
+
+  skeletonToggle.addEventListener('change', (event) => applySettings({ skeletonLoading: event.target.checked }));
+  optimisticToggle.addEventListener('change', (event) => applySettings({ optimisticUi: event.target.checked }));
+  commandPaletteToggle.addEventListener('change', (event) => applySettings({ commandPalette: event.target.checked }));
+  emptyStatesToggle.addEventListener('change', (event) => applySettings({ guidedEmptyStates: event.target.checked }));
+  microInteractionsToggle.addEventListener('change', (event) => applySettings({ microInteractions: event.target.checked }));
+  milestonesToggle.addEventListener('change', (event) => applySettings({ milestones: event.target.checked }));
+  smartFormsToggle.addEventListener('change', (event) => applySettings({ smartForms: event.target.checked }));
+  smartDefaultsToggle.addEventListener('change', (event) => applySettings({ smartDefaults: event.target.checked }));
+  navHintsToggle.addEventListener('change', (event) => applySettings({ navHints: event.target.checked }));
+  contextualHelpToggle.addEventListener('change', (event) => applySettings({ contextualHelp: event.target.checked }));
+  accessibilityToggle.addEventListener('change', (event) => applySettings({ accessibilityBoost: event.target.checked }));
+  lowDataModeToggle.addEventListener('change', (event) => applySettings({ lowDataMode: event.target.checked }));
+  smartSearchToggle.addEventListener('change', (event) => applySettings({ smartSearch: event.target.checked }));
+  trustSignalsToggle.addEventListener('change', (event) => applySettings({ trustSignals: event.target.checked }));
+  funModeToggle.addEventListener('change', (event) => applySettings({ funMode: event.target.checked }));
+  feedbackToolsToggle.addEventListener('change', (event) => applySettings({ feedbackTools: event.target.checked }));
+  offlineModeToggle.addEventListener('change', (event) => applySettings({ offlineMode: event.target.checked }));
+  sessionRecoveryToggle.addEventListener('change', (event) => applySettings({ sessionRecovery: event.target.checked }));
+  onboardingChecklistToggle.addEventListener('change', (event) => applySettings({ onboardingChecklist: event.target.checked }));
+  whatsNewToggle.addEventListener('change', (event) => applySettings({ whatsNew: event.target.checked }));
 
   resetThemeBtn.addEventListener('click', () => {
     if (!confirm('Reset theme to the default purple style?')) return;
