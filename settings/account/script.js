@@ -16,11 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const accountHintText = document.getElementById('accountHintText');
   const statusText = document.getElementById('statusText');
 
-  const signInIdentifier = document.getElementById('signInIdentifier');
-  const signInPassword = document.getElementById('signInPassword');
-  const signInBtn = document.getElementById('signInBtn');
+  const loginEmail = document.getElementById('loginEmail');
+  const loginPassword = document.getElementById('loginPassword');
+  const loginBtn = document.getElementById('loginBtn');
 
-  const signUpUsername = document.getElementById('signUpUsername');
   const signUpEmail = document.getElementById('signUpEmail');
   const signUpPassword = document.getElementById('signUpPassword');
   const signUpBtn = document.getElementById('signUpBtn');
@@ -112,10 +111,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateUserUi(user) {
     const username = user?.displayName ? `@${user.displayName}` : '';
     const email = user?.email ? ` (${user.email})` : '';
-    accountStatusText.textContent = user ? `Signed in ${username}${email}` : 'You are not signed in.';
+    accountStatusText.textContent = user ? `Logged in ${username}${email}` : 'You are not signed in.';
     accountHintText.textContent = user
       ? 'Your account can sync local and cloud data anytime.'
-      : 'Sign in with username/email and password, or create a new account.';
+      : 'Log in with email and password, or create a new account.';
   }
 
   async function ensureAuthReady() {
@@ -133,28 +132,24 @@ document.addEventListener('DOMContentLoaded', () => {
     statusText.textContent = `Auto Sync ${autoSyncToggle.checked ? 'enabled' : 'disabled'}.`;
   });
 
-  signInBtn.addEventListener('click', async () => {
+  loginBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.signInWithIdentifier(signInIdentifier.value, signInPassword.value);
-      statusText.textContent = 'Signed in.';
+      await window.bilmAuth.signIn(loginEmail.value, loginPassword.value);
+      statusText.textContent = 'Logged in.';
       if (getSettings().accountAutoSync !== false) {
         await autoSyncAfterSignIn();
       }
     } catch (error) {
-      statusText.textContent = `Sign in failed: ${error.message}`;
+      statusText.textContent = `Log in failed: ${error.message}`;
     }
   });
 
   signUpBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.signUpWithUsername({
-        username: signUpUsername.value,
-        email: signUpEmail.value,
-        password: signUpPassword.value
-      });
-      statusText.textContent = 'Account created and signed in.';
+      await window.bilmAuth.signUp(signUpEmail.value, signUpPassword.value);
+      statusText.textContent = 'Account created and logged in.';
       if (getSettings().accountAutoSync !== false) {
         await autoSyncAfterSignIn();
       }
@@ -166,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
   syncNowBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Sign in first.');
+      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
       await runManualSync();
     } catch (error) {
       statusText.textContent = `Sync failed: ${error.message}`;
@@ -188,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
   deleteAccountBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Sign in first.');
+      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
       if (!deletePassword.value) throw new Error('Enter your password to confirm delete.');
       if (!confirm('Delete account permanently? This cannot be undone.')) return;
       await window.bilmAuth.deleteAccount(deletePassword.value);
