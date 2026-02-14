@@ -11,23 +11,6 @@ function withBase(path) {
   return `${detectBasePath()}${normalized}`;
 }
 
-  const ACCESS_KEY = 'bilm-site-unlocked';
-  const ACCESS_GATE_PATH = withBase('/random/rng.html');
-  const path = window.location.pathname;
-  const isRngPage = path.includes('/random/rng');
-  let hasAccess = false;
-
-  try {
-    hasAccess = localStorage.getItem(ACCESS_KEY) === 'true';
-  } catch {
-    hasAccess = false;
-  }
-
-  if (!hasAccess && !isRngPage) {
-    window.location.replace(ACCESS_GATE_PATH);
-    return;
-  }
-
   const GA_MEASUREMENT_ID = 'G-KJSZFZNESQ';
 
   const initAnalytics = () => {
