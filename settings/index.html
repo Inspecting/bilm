@@ -420,7 +420,7 @@
 
     <section class="settings-card">
       <h2>Account & Cloud Sync</h2>
-      <p>Login is optional. Stay as guest or sign in to sync and restore your data across devices.</p>
+      <p>Think of this like iCloud backup for Bilm: sign in once, tap sync, and you can restore on another device later.</p>
 
       <div class="control-row">
         <div>
@@ -436,12 +436,23 @@
       <div class="control-row">
         <div>
           <label>Cloud Sync</label>
-          <small>Manually sync this device backup to your account, or restore from cloud backup.</small>
+          <small>Save this device state to cloud, or pull your last saved cloud backup down to this device.</small>
         </div>
         <div class="actions-row">
-          <button class="btn" id="syncNowBtn">Sync to Cloud</button>
-          <button class="btn btn-outline" id="restoreCloudBtn">Restore from Cloud</button>
+          <button class="btn" id="syncNowBtn">Sync This Device Now</button>
+          <button class="btn btn-outline" id="restoreCloudBtn">Restore From Cloud Backup</button>
         </div>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label for="autoSyncToggle">Auto Sync</label>
+          <small>When enabled, this account auto-syncs every minute (like iCloud background backup).</small>
+        </div>
+        <label class="toggle">
+          <input id="autoSyncToggle" type="checkbox" />
+          <span></span>
+        </label>
       </div>
       <span class="backup-status" id="cloudStatus" aria-live="polite"></span>
     </section>
@@ -523,16 +534,19 @@
   <div class="data-modal__panel">
     <h3 id="accountModalTitle">Account</h3>
     <p id="accountModalMessage">Sign in or create an account to sync your data across devices.</p>
-    <div class="backup-tools">
-      <input id="authEmail" type="email" placeholder="Email" autocomplete="email" />
-      <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" />
-      <span class="backup-status" id="authStatus" aria-live="polite"></span>
-    </div>
-    <div class="actions-row">
-      <button class="btn" id="signInBtn">Sign In</button>
-      <button class="btn btn-outline" id="signUpBtn">Sign Up</button>
-      <button class="btn btn-outline" id="closeAccountModalBtn">Close</button>
-    </div>
+    <form id="authForm" autocomplete="on">
+      <div class="backup-tools">
+        <input id="authEmail" name="email" type="email" placeholder="Email" autocomplete="username email" inputmode="email" />
+        <input id="authPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" />
+        <span class="backup-status" id="authStatus" aria-live="polite"></span>
+        <small id="authHelperText">No dedicated login page: use “Continue with Email” to sign in and enable sync.</small>
+      </div>
+      <div class="actions-row">
+        <button class="btn" id="signInBtn" type="button">Continue with Email</button>
+        <button class="btn btn-outline" id="signUpBtn" type="button">Create Account</button>
+        <button class="btn btn-outline" id="closeAccountModalBtn" type="button">Close</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -592,18 +606,24 @@
   const logoutClearBtn = document.getElementById('logoutClearBtn');
   const syncNowBtn = document.getElementById('syncNowBtn');
   const restoreCloudBtn = document.getElementById('restoreCloudBtn');
+  const autoSyncToggle = document.getElementById('autoSyncToggle');
   const cloudStatus = document.getElementById('cloudStatus');
   const accountModal = document.getElementById('accountModal');
+  const authForm = document.getElementById('authForm');
   const authEmail = document.getElementById('authEmail');
   const authPassword = document.getElementById('authPassword');
   const authStatus = document.getElementById('authStatus');
+  const authHelperText = document.getElementById('authHelperText');
   const signInBtn = document.getElementById('signInBtn');
   const signUpBtn = document.getElementById('signUpBtn');
   const closeAccountModalBtn = document.getElementById('closeAccountModalBtn');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
   const BACKUP_FORMAT_PREFIX = 'BLM1';
   const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  const AUTO_SYNC_STORAGE_KEY = 'bilm:auto-sync-enabled';
+  const AUTO_SYNC_INTERVAL_MS = 60 * 1000;
   let pendingImportPayload = null;
+  let autoSyncIntervalId = null;
 
   function readStorage(storage) {
     return Object.entries(storage).reduce((all, [key, value]) => {
@@ -827,26 +847,71 @@
 
   function updateAccountUi(user) {
     if (user) {
-      accountStatusText.textContent = `Signed in as ${user.email || 'account user'}.`;
+      accountStatusText.textContent = `Connected as ${user.email || 'account user'}. Cloud sync is ready.`;
       accountActionBtn.textContent = 'Log Out';
       logoutClearBtn.hidden = false;
       syncNowBtn.disabled = false;
       restoreCloudBtn.disabled = false;
+      autoSyncToggle.disabled = false;
+      autoSyncToggle.checked = isAutoSyncEnabled();
+      cloudStatus.textContent = isAutoSyncEnabled() ? 'Cloud connected. Auto-sync is ON.' : 'Cloud connected. You can sync or restore any time.';
+      authHelperText.textContent = 'Signed in. Use “Sync This Device” to upload your latest state.';
     } else {
-      accountStatusText.textContent = 'Guest mode active. Sign in to sync data to cloud.';
+      accountStatusText.textContent = 'Guest mode active. Open Account to sign in and enable cloud sync.';
       accountActionBtn.textContent = 'Account';
       logoutClearBtn.hidden = true;
       syncNowBtn.disabled = true;
       restoreCloudBtn.disabled = true;
+      autoSyncToggle.disabled = true;
+      autoSyncToggle.checked = isAutoSyncEnabled();
+      authHelperText.textContent = 'No dedicated login page: use “Continue with Email” to sign in and enable sync.';
     }
   }
 
   async function ensureAuthReady() {
-    if (!window.bilmAuth) throw new Error('Auth unavailable.');
+    const start = Date.now();
+    while (!window.bilmAuth && Date.now() - start < 7000) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!window.bilmAuth) throw new Error('Auth module did not load.');
     await window.bilmAuth.init();
   }
 
-  async function performCloudSync() {
+  function isAutoSyncEnabled() {
+    return localStorage.getItem(AUTO_SYNC_STORAGE_KEY) === '1';
+  }
+
+  function setAutoSyncEnabled(enabled) {
+    localStorage.setItem(AUTO_SYNC_STORAGE_KEY, enabled ? '1' : '0');
+  }
+
+  async function saveCredentialsForAutofill(email, password) {
+    if (!('PasswordCredential' in window) || !navigator.credentials || !email || !password) return;
+    try {
+      const credential = new PasswordCredential({ id: email, password, name: email });
+      await navigator.credentials.store(credential);
+    } catch (error) {
+      console.debug('Credential store skipped:', error);
+    }
+  }
+
+  function restartAutoSyncLoop() {
+    if (autoSyncIntervalId) {
+      clearInterval(autoSyncIntervalId);
+      autoSyncIntervalId = null;
+    }
+    const user = window.bilmAuth?.getCurrentUser?.();
+    if (!user || !isAutoSyncEnabled()) return;
+    autoSyncIntervalId = setInterval(async () => {
+      try {
+        await performCloudSync({ silent: true, source: 'auto-sync' });
+      } catch (error) {
+        console.debug('Auto sync skipped:', error);
+      }
+    }, AUTO_SYNC_INTERVAL_MS);
+  }
+
+  async function performCloudSync({ silent = false, source = 'manual' } = {}) {
     await ensureAuthReady();
     const user = window.bilmAuth.getCurrentUser();
     if (!user) {
@@ -856,7 +921,7 @@
     }
     const snapshot = collectBackupData();
     await window.bilmAuth.saveCloudSnapshot(snapshot);
-    cloudStatus.textContent = 'Cloud backup synced.';
+    if (!silent) cloudStatus.textContent = source === 'auto-sync' ? 'Auto-sync complete.' : 'Cloud backup synced.';
   }
 
   async function restoreFromCloud() {
@@ -872,20 +937,14 @@
       cloudStatus.textContent = 'No cloud backup found yet.';
       return;
     }
-    const choose = prompt('Cloud data found. Type LOCAL to keep local, CLOUD to restore cloud, or MERGE to upload local over cloud.', '');
-    const normalized = String(choose || '').trim().toUpperCase();
-    if (normalized === 'CLOUD') {
-      applyBackup(cloudSnapshot);
-      cloudStatus.textContent = 'Cloud backup restored. Reloading...';
-      setTimeout(() => location.reload(), 250);
+    const restoreCloudCopy = confirm('Cloud backup found. Press OK to restore cloud backup to this device. Press Cancel to keep local data unchanged.');
+    if (!restoreCloudCopy) {
+      cloudStatus.textContent = 'Kept local data unchanged.';
       return;
     }
-    if (normalized === 'MERGE') {
-      await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-      cloudStatus.textContent = 'Local backup uploaded to cloud.';
-      return;
-    }
-    cloudStatus.textContent = 'Kept local data unchanged.';
+    applyBackup(cloudSnapshot);
+    cloudStatus.textContent = 'Cloud backup restored to this device. Reloading...';
+    setTimeout(() => location.reload(), 250);
   }
 
   accentPresets.forEach(({ value, label }) => {
@@ -1050,6 +1109,7 @@
       }
       if (!confirm('Log out of your account?')) return;
       await window.bilmAuth.signOut();
+      restartAutoSyncLoop();
       cloudStatus.textContent = 'Logged out. Local data kept on this device.';
     } catch (err) {
       cloudStatus.textContent = `Account action failed: ${err.message}`;
@@ -1061,6 +1121,7 @@
     try {
       await ensureAuthReady();
       await window.bilmAuth.signOut();
+      restartAutoSyncLoop();
       localStorage.clear();
       sessionStorage.clear();
       cloudStatus.textContent = 'Logged out and local data cleared. Reloading...';
@@ -1086,11 +1147,21 @@
     }
   });
 
+  authForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    signInBtn.click();
+  });
+
   signInBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.signIn(authEmail.value.trim(), authPassword.value);
-      authStatus.textContent = 'Signed in successfully.';
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+      await window.bilmAuth.signIn(email, password);
+      await saveCredentialsForAutofill(email, password);
+      restartAutoSyncLoop();
+      if (isAutoSyncEnabled()) await performCloudSync({ silent: false, source: 'auto-sync' });
+      authStatus.textContent = 'Signed in. Cloud sync is now enabled.';
       closeAccountModal();
     } catch (err) {
       authStatus.textContent = `Sign in failed: ${err.message}`;
@@ -1100,12 +1171,40 @@
   signUpBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.signUp(authEmail.value.trim(), authPassword.value);
-      authStatus.textContent = 'Account created and signed in.';
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+      await window.bilmAuth.signUp(email, password);
+      await saveCredentialsForAutofill(email, password);
+      restartAutoSyncLoop();
+      if (isAutoSyncEnabled()) await performCloudSync({ silent: false, source: 'auto-sync' });
+      authStatus.textContent = 'Account created. Cloud sync is now enabled.';
       closeAccountModal();
     } catch (err) {
       authStatus.textContent = `Sign up failed: ${err.message}`;
     }
+  });
+
+  autoSyncToggle.addEventListener('change', async () => {
+    const enabled = autoSyncToggle.checked;
+    setAutoSyncEnabled(enabled);
+    restartAutoSyncLoop();
+    const user = window.bilmAuth?.getCurrentUser?.();
+    if (!user) {
+      cloudStatus.textContent = enabled
+        ? 'Auto-sync saved. Sign in to start syncing.'
+        : 'Auto-sync disabled.';
+      return;
+    }
+    if (enabled) {
+      try {
+        await performCloudSync({ source: 'auto-sync' });
+        cloudStatus.textContent = 'Auto-sync enabled. Initial sync complete.';
+      } catch (err) {
+        cloudStatus.textContent = `Auto-sync could not start: ${err.message}`;
+      }
+      return;
+    }
+    cloudStatus.textContent = 'Auto-sync disabled for this device.';
   });
 
   closeAccountModalBtn.addEventListener('click', closeAccountModal);
@@ -1113,19 +1212,33 @@
     if (event.target === accountModal) closeAccountModal();
   });
 
-  ensureAuthReady().then(() => {
-    updateAccountUi(window.bilmAuth.getCurrentUser());
-    window.bilmAuth.onAuthStateChanged(updateAccountUi);
-  }).catch(() => {
-    accountStatusText.textContent = 'Auth unavailable in this session.';
-  });
+  async function initCloudAuthUi() {
+    autoSyncToggle.checked = isAutoSyncEnabled();
+    try {
+      await ensureAuthReady();
+      updateAccountUi(window.bilmAuth.getCurrentUser());
+      restartAutoSyncLoop();
+      window.bilmAuth.onAuthStateChanged((user) => {
+        updateAccountUi(user);
+        restartAutoSyncLoop();
+      });
+    } catch (err) {
+      accountStatusText.textContent = 'Cloud auth is unavailable right now. Check blockers/network, then refresh.';
+      cloudStatus.textContent = `Auth setup failed: ${err.message}`;
+      authHelperText.textContent = 'If this keeps happening, disable strict blockers for Firebase and reload.';
+      autoSyncToggle.disabled = true;
+    }
+  }
 
   closeDataModalBtn.addEventListener('click', closeDataModal);
   dataModal.addEventListener('click', (event) => {
     if (event.target === dataModal) closeDataModal();
   });
 
-  window.addEventListener('DOMContentLoaded', syncUI);
+  window.addEventListener('DOMContentLoaded', () => {
+    syncUI();
+    initCloudAuthUi();
+  });
   window.addEventListener('bilm:theme-changed', syncUI);
 </script>
 

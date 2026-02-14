@@ -58,27 +58,32 @@
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
-      await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-app-compat.js`);
-      await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-auth-compat.js`);
-      await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-firestore-compat.js`);
+      try {
+        await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-app-compat.js`);
+        await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-auth-compat.js`);
+        await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-firestore-compat.js`);
 
-      if (!window.firebase) {
-        throw new Error('Firebase did not initialize.');
+        if (!window.firebase) {
+          throw new Error('Firebase did not initialize.');
+        }
+
+        const app = window.firebase.apps?.length
+          ? window.firebase.app()
+          : window.firebase.initializeApp(FIREBASE_CONFIG);
+
+        auth = window.firebase.auth(app);
+        firestore = window.firebase.firestore(app);
+
+        auth.onAuthStateChanged((user) => {
+          currentUser = user || null;
+          notifySubscribers(currentUser);
+        });
+
+        return { auth, firestore };
+      } catch (error) {
+        initPromise = null;
+        throw error;
       }
-
-      const app = window.firebase.apps?.length
-        ? window.firebase.app()
-        : window.firebase.initializeApp(FIREBASE_CONFIG);
-
-      auth = window.firebase.auth(app);
-      firestore = window.firebase.firestore(app);
-
-      auth.onAuthStateChanged((user) => {
-        currentUser = user || null;
-        notifySubscribers(currentUser);
-      });
-
-      return { auth, firestore };
     })();
 
     return initPromise;
