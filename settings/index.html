@@ -204,19 +204,24 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      min-width: 220px;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      width: 100%;
+      max-width: min(100%, 420px);
+      margin-left: 0;
     }
 
     .inline-picker {
-      width: 44px;
+      width: clamp(40px, 10vw, 52px);
       height: 36px;
       padding: 3px;
+      flex: 0 1 auto;
     }
 
     .preset-select {
-      min-width: 170px;
+      min-width: 0;
+      flex: 1 1 0;
+      max-width: 340px;
     }
 
     .actions-row {
@@ -358,8 +363,8 @@
           <small>Choose from presets or pick a custom color.</small>
         </div>
         <div class="preset-control">
-          <select id="accentPresetsSelect" class="preset-select" aria-label="Accent color presets"></select>
           <input id="accentPicker" class="inline-picker" type="color" aria-label="Custom accent color" />
+          <select id="accentPresetsSelect" class="preset-select" aria-label="Accent color presets"></select>
         </div>
       </div>
 
@@ -369,6 +374,7 @@
           <small>Pick a preset mode or choose a custom color.</small>
         </div>
         <div class="preset-control">
+          <input id="customBackgroundPicker" class="inline-picker" type="color" aria-label="Custom background color" />
           <select id="backgroundSelect" class="preset-select">
             <option value="deep">Deep</option>
             <option value="midnight">Midnight</option>
@@ -378,7 +384,6 @@
             <option value="sunset">Sunset</option>
             <option value="custom">Custom</option>
           </select>
-          <input id="customBackgroundPicker" class="inline-picker" type="color" aria-label="Custom background color" />
         </div>
       </div>
     </section>
