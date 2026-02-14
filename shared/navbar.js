@@ -29,11 +29,11 @@ function withBase(path) {
   shadow.innerHTML = `<style>${css}</style>${html}`;
 
   const pathParts = location.pathname.split('/').filter(Boolean);
-  const bilmIndex = pathParts.indexOf('bilm');
-  const section = bilmIndex >= 0 ? pathParts[bilmIndex + 1] : pathParts[0];
+  const appSections = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test']);
+  const section = pathParts.find(part => appSections.has(part)) || 'home';
   const fileName = pathParts.at(-1) || '';
-  const isSearchPage = fileName.startsWith('search');
-  let page = section || 'home';
+  const isSearchPage = section === 'search' || fileName.startsWith('search');
+  let page = section;
 
 
   const logoLink = shadow.querySelector('.logo');
