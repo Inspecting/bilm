@@ -355,19 +355,18 @@
       <div class="control-row">
         <div>
           <label for="accentPresetsSelect">Accent Color</label>
-          <small>Choose from presets or use a custom color.</small>
+          <small>Choose from presets or pick a custom color.</small>
         </div>
         <div class="preset-control">
           <select id="accentPresetsSelect" class="preset-select" aria-label="Accent color presets"></select>
-          <button class="btn btn-outline" id="accentCustomBtn" type="button">Custom</button>
-          <input id="accentPicker" class="inline-picker" type="color" hidden />
+          <input id="accentPicker" class="inline-picker" type="color" aria-label="Custom accent color" />
         </div>
       </div>
 
       <div class="control-row">
         <div>
           <label for="backgroundSelect">Background Mode</label>
-          <small>Pick a preset mode or switch to custom.</small>
+          <small>Pick a preset mode or choose a custom color.</small>
         </div>
         <div class="preset-control">
           <select id="backgroundSelect" class="preset-select">
@@ -377,17 +376,10 @@
             <option value="aurora">Aurora</option>
             <option value="slate">Slate</option>
             <option value="sunset">Sunset</option>
+            <option value="custom">Custom</option>
           </select>
-          <button class="btn btn-outline" id="backgroundCustomBtn" type="button">Custom</button>
+          <input id="customBackgroundPicker" class="inline-picker" type="color" aria-label="Custom background color" />
         </div>
-      </div>
-
-      <div class="control-row" id="customBackgroundRow" hidden>
-        <div>
-          <label for="customBackgroundPicker">Custom Background</label>
-          <small>Choose a custom background base color.</small>
-        </div>
-        <input id="customBackgroundPicker" type="color" />
       </div>
     </section>
 
@@ -509,13 +501,16 @@
 <script src="../shared/navbar.js" defer></script>
 
 <script>
-  const accentPresets = ['#a855f7', '#c084fc', '#7c3aed', '#ec4899', '#38bdf8'];
+  const accentPresets = [
+    { value: '#a855f7', label: 'Purple' },
+    { value: '#c084fc', label: 'Lilac' },
+    { value: '#7c3aed', label: 'Violet' },
+    { value: '#ec4899', label: 'Pink' },
+    { value: '#38bdf8', label: 'Sky Blue' }
+  ];
   const accentPresetsSelect = document.getElementById('accentPresetsSelect');
-  const accentCustomBtn = document.getElementById('accentCustomBtn');
   const accentPicker = document.getElementById('accentPicker');
   const backgroundSelect = document.getElementById('backgroundSelect');
-  const backgroundCustomBtn = document.getElementById('backgroundCustomBtn');
-  const customBackgroundRow = document.getElementById('customBackgroundRow');
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
@@ -743,12 +738,8 @@
       accentPresetsSelect.value = accentValue;
     }
     const backgroundValue = settings.background || 'deep';
-    backgroundSelect.value = backgroundValue === 'custom' ? 'deep' : backgroundValue;
+    backgroundSelect.value = backgroundValue;
     customBackgroundPicker.value = settings.customBackground || '#0b0b14';
-    customBackgroundRow.hidden = backgroundValue !== 'custom';
-    backgroundCustomBtn.classList.toggle('is-active', backgroundValue === 'custom');
-    accentPicker.hidden = true;
-    accentCustomBtn.classList.remove('is-active');
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
     incognitoToggle.checked = settings.incognito === true;
@@ -756,10 +747,10 @@
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
   }
 
-  accentPresets.forEach(color => {
+  accentPresets.forEach(({ value, label }) => {
     const option = document.createElement('option');
-    option.value = color;
-    option.textContent = color;
+    option.value = value;
+    option.textContent = label;
     accentPresetsSelect.appendChild(option);
   });
 
@@ -769,10 +760,6 @@
     applySettings({ accent: color });
   });
 
-  accentCustomBtn.addEventListener('click', () => {
-    accentPicker.hidden = !accentPicker.hidden;
-    accentCustomBtn.classList.toggle('is-active', !accentPicker.hidden);
-  });
 
   accentPicker.addEventListener('input', (event) => {
     applySettings({ accent: event.target.value });
@@ -782,21 +769,12 @@
   });
 
   backgroundSelect.addEventListener('change', (event) => {
-    const nextBackground = event.target.value;
-    customBackgroundRow.hidden = true;
-    backgroundCustomBtn.classList.remove('is-active');
-    applySettings({ background: nextBackground });
-  });
-
-  backgroundCustomBtn.addEventListener('click', () => {
-    customBackgroundRow.hidden = false;
-    backgroundCustomBtn.classList.add('is-active');
-    applySettings({ background: 'custom' });
+    applySettings({ background: event.target.value });
   });
 
   customBackgroundPicker.addEventListener('input', (event) => {
     applySettings({ customBackground: event.target.value, background: 'custom' });
-    customBackgroundRow.hidden = false;
+    backgroundSelect.value = 'custom';
   });
 
   motionToggle.addEventListener('change', (event) => {
