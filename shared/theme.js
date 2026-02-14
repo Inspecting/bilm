@@ -51,7 +51,8 @@ function withBase(path) {
     defaultServer: 'vidsrc',
     searchHistory: true,
     continueWatching: true,
-    incognito: false
+    incognito: false,
+    accountAutoSync: true
   };
 
   const backgroundColors = {

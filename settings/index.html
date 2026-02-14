@@ -526,10 +526,11 @@
     <p id="accountModalMessage">Sign in or create an account.</p>
     <form id="authForm" autocomplete="on">
       <div class="backup-tools">
-        <input id="authEmail" name="email" type="email" placeholder="Email" autocomplete="username email" inputmode="email" />
+        <input id="authIdentifier" name="identifier" type="text" placeholder="Username or Email" autocomplete="username email" />
+        <input id="authUsername" name="username" type="text" placeholder="Username (for create account)" autocomplete="username" />
         <input id="authPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" />
         <span class="backup-status" id="authStatus" aria-live="polite"></span>
-        <small id="authHelperText">Use these buttons for simple email sign in and sign up.</small>
+        <small id="authHelperText">Sign in with username/email, or create an account with username + email.</small>
       </div>
       <div class="actions-row">
         <button class="btn" id="signInBtn" type="button">Sign In</button>
@@ -618,7 +619,8 @@
   const cloudStatus = document.getElementById('cloudStatus');
   const accountModal = document.getElementById('accountModal');
   const authForm = document.getElementById('authForm');
-  const authEmail = document.getElementById('authEmail');
+  const authIdentifier = document.getElementById('authIdentifier');
+  const authUsername = document.getElementById('authUsername');
   const authPassword = document.getElementById('authPassword');
   const authStatus = document.getElementById('authStatus');
   const authHelperText = document.getElementById('authHelperText');
@@ -872,7 +874,7 @@
       logoutBtn.hidden = true;
       openAccountSettingsBtn.disabled = true;
       cloudStatus.textContent = 'Sign in to use account sync features.';
-      authHelperText.textContent = 'Use these buttons for simple email sign in and sign up.';
+      authHelperText.textContent = 'Sign in with username/email, or create an account with username + email.';
       if (accountSettingsModal.classList.contains('open')) accountSettingsModal.classList.remove('open');
     }
   }
@@ -1102,6 +1104,7 @@
   logoutBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
+      if (!confirm('Log out of your account?')) return;
       await window.bilmAuth.signOut();
       cloudStatus.textContent = 'Logged out successfully.';
     } catch (err) {
@@ -1118,7 +1121,7 @@
         return;
       }
       accountSettingsStatus.textContent = '';
-      accountSettingsModal.classList.add('open');
+      window.location.href = './account/';
     } catch (err) {
       cloudStatus.textContent = `Account settings failed: ${err.message}`;
     }
@@ -1156,10 +1159,10 @@
   signInBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      const email = authEmail.value.trim();
+      const identifier = authIdentifier.value.trim();
       const password = authPassword.value;
-      await window.bilmAuth.signIn(email, password);
-      await saveCredentialsForAutofill(email, password);
+      await window.bilmAuth.signInWithIdentifier(identifier, password);
+      await saveCredentialsForAutofill(identifier, password);
       const localSnapshot = collectBackupData();
       const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
       if (Object.keys(localSnapshot.localStorage || {}).length && !cloudSnapshot) {
@@ -1178,9 +1181,10 @@
   signUpBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      const email = authEmail.value.trim();
+      const username = authUsername.value.trim();
+      const email = authIdentifier.value.trim();
       const password = authPassword.value;
-      await window.bilmAuth.signUp(email, password);
+      await window.bilmAuth.signUpWithUsername({ username, email, password });
       await saveCredentialsForAutofill(email, password);
       const localSnapshot = collectBackupData();
       if (Object.keys(localSnapshot.localStorage || {}).length) {
