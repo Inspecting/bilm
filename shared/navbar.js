@@ -25,6 +25,30 @@ function withBase(path) {
   return `${detectBasePath()}${normalized}`;
 }
 
+function loadAuthScript() {
+  return new Promise((resolve, reject) => {
+    if (window.bilmAuth) {
+      resolve(window.bilmAuth);
+      return;
+    }
+    const src = withBase('/shared/auth.js');
+    const existing = document.querySelector(`script[data-bilm-auth="${src}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.bilmAuth), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load auth module.')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.defer = true;
+    script.dataset.bilmAuth = src;
+    script.addEventListener('load', () => resolve(window.bilmAuth), { once: true });
+    script.addEventListener('error', () => reject(new Error('Failed to load auth module.')), { once: true });
+    document.head.appendChild(script);
+  });
+}
+
 (async () => {
   const container = document.getElementById('navbar-placeholder') || document.getElementById('navbarContainer');
   if (!container) return;
@@ -174,6 +198,33 @@ function withBase(path) {
       }
       window.location.href = withBase(`/${target === 'home' ? 'home' : target}/`);
     };
+  });
+
+
+  const accountBtn = shadow.getElementById('navbarAccountBtn');
+  loadAuthScript().then(async (authApi) => {
+    await authApi.init();
+    const syncAccountButton = (user) => {
+      if (!accountBtn) return;
+      accountBtn.textContent = user ? (user.email || 'Account') : 'Account';
+      accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
+    };
+
+    syncAccountButton(authApi.getCurrentUser());
+    authApi.onAuthStateChanged(syncAccountButton);
+
+    if (accountBtn) {
+      accountBtn.addEventListener('click', () => {
+        window.location.href = withBase('/settings/');
+      });
+    }
+  }).catch(() => {
+    if (accountBtn) {
+      accountBtn.textContent = 'Account';
+      accountBtn.addEventListener('click', () => {
+        window.location.href = withBase('/settings/');
+      });
+    }
   });
 
   const searchInput = shadow.querySelector('#searchInput');
