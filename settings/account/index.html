@@ -19,20 +19,20 @@
     <section class="account-shell">
       <header class="account-header">
         <h1>Account Settings</h1>
-        <p>Manage sign-in, sync behavior, and account safety.</p>
+        <p>Manage log in, sync behavior, and account safety.</p>
       </header>
 
       <section class="panel">
         <h2>Status</h2>
         <p id="accountStatusText">Checking account status...</p>
-        <p id="accountHintText" class="muted">Auto Sync refreshes your device with account data after sign in.</p>
+        <p id="accountHintText" class="muted">Auto Sync refreshes your device with account data after log in.</p>
       </section>
 
       <section class="panel">
         <h2>Auto Sync</h2>
         <div class="row">
           <div>
-            <strong>Auto Sync on sign in</strong>
+            <strong>Auto Sync on log in</strong>
             <p class="muted">Default is ON. Existing users load account data; new users upload local data.</p>
           </div>
           <label class="toggle">
@@ -43,18 +43,17 @@
       </section>
 
       <section class="panel">
-        <h2>Sign In</h2>
+        <h2>Log In</h2>
         <div class="stack">
-          <input id="signInIdentifier" type="text" placeholder="Username or Email" autocomplete="username email" />
-          <input id="signInPassword" type="password" placeholder="Password" autocomplete="current-password" />
-          <button id="signInBtn" class="btn" type="button">Sign In</button>
+          <input id="loginEmail" type="email" placeholder="Email" autocomplete="email" />
+          <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+          <button id="loginBtn" class="btn" type="button">Log In</button>
         </div>
       </section>
 
       <section class="panel">
         <h2>Create Account</h2>
         <div class="stack">
-          <input id="signUpUsername" type="text" placeholder="Username" autocomplete="username" />
           <input id="signUpEmail" type="email" placeholder="Email" autocomplete="email" />
           <input id="signUpPassword" type="password" placeholder="Password" autocomplete="new-password" />
           <button id="signUpBtn" class="btn" type="button">Create Account</button>

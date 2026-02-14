@@ -420,7 +420,7 @@
 
     <section class="settings-card">
       <h2>Account</h2>
-      <p>Simple account controls: sign in, sign up, log out, and open account sync settings.</p>
+      <p>Simple account controls: log in, sign up, log out, and open account sync settings.</p>
 
       <div class="control-row">
         <div>
@@ -428,7 +428,7 @@
           <small id="accountStatusText">Checking account status...</small>
         </div>
         <div class="actions-row">
-          <button class="btn" id="openSignInBtn">Sign In</button>
+          <button class="btn" id="openSignInBtn">Log In</button>
           <button class="btn btn-outline" id="openSignUpBtn">Sign Up</button>
           <button class="btn btn-outline" id="logoutBtn" hidden>Log Out</button>
         </div>
@@ -520,22 +520,40 @@
 </main>
 
 
-<div class="data-modal" id="accountModal" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+<div class="data-modal" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
   <div class="data-modal__panel">
-    <h3 id="accountModalTitle">Account</h3>
-    <p id="accountModalMessage">Sign in or create an account.</p>
-    <form id="authForm" autocomplete="on">
+    <h3 id="loginModalTitle">Log In</h3>
+    <p>Use your email and password to log in.</p>
+    <form id="loginForm" autocomplete="on">
       <div class="backup-tools">
-        <input id="authIdentifier" name="identifier" type="text" placeholder="Username or Email" autocomplete="username email" />
-        <input id="authUsername" name="username" type="text" placeholder="Username (for create account)" autocomplete="username" />
-        <input id="authPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" />
-        <span class="backup-status" id="authStatus" aria-live="polite"></span>
-        <small id="authHelperText">Sign in with username/email, or create an account with username + email.</small>
+        <input id="loginEmail" name="email" type="email" placeholder="Email" autocomplete="email" />
+        <input id="loginPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" />
+        <span class="backup-status" id="loginStatus" aria-live="polite"></span>
+        <small id="loginHelperText">Don&apos;t have an account? Use Create an Account.</small>
       </div>
       <div class="actions-row">
-        <button class="btn" id="signInBtn" type="button">Sign In</button>
-        <button class="btn btn-outline" id="signUpBtn" type="button">Create Account</button>
-        <button class="btn btn-outline" id="closeAccountModalBtn" type="button">Close</button>
+        <button class="btn" id="loginBtn" type="button">Log In</button>
+        <button class="btn btn-outline" id="openCreateAccountBtn" type="button">Create an Account</button>
+        <button class="btn btn-outline" id="closeLoginModalBtn" type="button">Close</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="data-modal" id="signUpModal" role="dialog" aria-modal="true" aria-labelledby="signUpModalTitle">
+  <div class="data-modal__panel">
+    <h3 id="signUpModalTitle">Sign Up</h3>
+    <p>Create an account with your email and password.</p>
+    <form id="signUpForm" autocomplete="on">
+      <div class="backup-tools">
+        <input id="signUpEmail" name="email" type="email" placeholder="Email" autocomplete="email" />
+        <input id="signUpPassword" name="password" type="password" placeholder="Password" autocomplete="new-password" />
+        <span class="backup-status" id="signUpStatus" aria-live="polite"></span>
+      </div>
+      <div class="actions-row">
+        <button class="btn" id="signUpBtn" type="button">Create Account</button>
+        <button class="btn btn-outline" id="backToLoginBtn" type="button">Back to Log In</button>
+        <button class="btn btn-outline" id="closeSignUpModalBtn" type="button">Close</button>
       </div>
     </form>
   </div>
@@ -617,16 +635,23 @@
   const logoutBtn = document.getElementById('logoutBtn');
   const openAccountSettingsBtn = document.getElementById('openAccountSettingsBtn');
   const cloudStatus = document.getElementById('cloudStatus');
-  const accountModal = document.getElementById('accountModal');
-  const authForm = document.getElementById('authForm');
-  const authIdentifier = document.getElementById('authIdentifier');
-  const authUsername = document.getElementById('authUsername');
-  const authPassword = document.getElementById('authPassword');
-  const authStatus = document.getElementById('authStatus');
-  const authHelperText = document.getElementById('authHelperText');
-  const signInBtn = document.getElementById('signInBtn');
+  const loginModal = document.getElementById('loginModal');
+  const loginForm = document.getElementById('loginForm');
+  const loginEmail = document.getElementById('loginEmail');
+  const loginPassword = document.getElementById('loginPassword');
+  const loginStatus = document.getElementById('loginStatus');
+  const loginHelperText = document.getElementById('loginHelperText');
+  const loginBtn = document.getElementById('loginBtn');
+  const openCreateAccountBtn = document.getElementById('openCreateAccountBtn');
+  const closeLoginModalBtn = document.getElementById('closeLoginModalBtn');
+  const signUpModal = document.getElementById('signUpModal');
+  const signUpForm = document.getElementById('signUpForm');
+  const signUpEmail = document.getElementById('signUpEmail');
+  const signUpPassword = document.getElementById('signUpPassword');
+  const signUpStatus = document.getElementById('signUpStatus');
   const signUpBtn = document.getElementById('signUpBtn');
-  const closeAccountModalBtn = document.getElementById('closeAccountModalBtn');
+  const backToLoginBtn = document.getElementById('backToLoginBtn');
+  const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
   const accountSettingsModal = document.getElementById('accountSettingsModal');
   const smartSyncBtn = document.getElementById('smartSyncBtn');
   const manualSyncBtn = document.getElementById('manualSyncBtn');
@@ -849,32 +874,41 @@
   }
 
 
-  function openAccountModal() {
-    authStatus.textContent = '';
-    accountModal.classList.add('open');
+  function openLoginModal() {
+    loginStatus.textContent = '';
+    loginModal.classList.add('open');
   }
 
-  function closeAccountModal() {
-    accountModal.classList.remove('open');
+  function closeLoginModal() {
+    loginModal.classList.remove('open');
+  }
+
+  function openSignUpModal() {
+    signUpStatus.textContent = '';
+    signUpModal.classList.add('open');
+  }
+
+  function closeSignUpModal() {
+    signUpModal.classList.remove('open');
   }
 
   function updateAccountUi(user) {
     if (user) {
-      accountStatusText.textContent = `Signed in as ${user.email || 'account user'}.`;
+      accountStatusText.textContent = `Logged in as ${user.email || 'account user'}.`;
       openSignInBtn.hidden = true;
       openSignUpBtn.hidden = true;
       logoutBtn.hidden = false;
       openAccountSettingsBtn.disabled = false;
       cloudStatus.textContent = 'Account ready. Open Account Settings to sync or merge data.';
-      authHelperText.textContent = 'Signed in successfully.';
+      loginHelperText.textContent = 'Logged in successfully.';
     } else {
-      accountStatusText.textContent = 'You are in guest mode. Sign in to enable account sync.';
+      accountStatusText.textContent = 'You are in guest mode. Log in to enable account sync.';
       openSignInBtn.hidden = false;
       openSignUpBtn.hidden = false;
       logoutBtn.hidden = true;
       openAccountSettingsBtn.disabled = true;
-      cloudStatus.textContent = 'Sign in to use account sync features.';
-      authHelperText.textContent = 'Sign in with username/email, or create an account with username + email.';
+      cloudStatus.textContent = 'Log in to use account sync features.';
+      loginHelperText.textContent = 'Use email and password to log in.';
       if (accountSettingsModal.classList.contains('open')) accountSettingsModal.classList.remove('open');
     }
   }
@@ -910,8 +944,8 @@
     await ensureAuthReady();
     const user = window.bilmAuth.getCurrentUser();
     if (!user) {
-      openAccountModal();
-      throw new Error('Please sign in first.');
+      openLoginModal();
+      throw new Error('Please log in first.');
     }
     await window.bilmAuth.saveCloudSnapshot(collectBackupData());
     cloudStatus.textContent = 'Manual sync complete. Local data uploaded.';
@@ -922,8 +956,8 @@
     await ensureAuthReady();
     const user = window.bilmAuth.getCurrentUser();
     if (!user) {
-      openAccountModal();
-      throw new Error('Please sign in first.');
+      openLoginModal();
+      throw new Error('Please log in first.');
     }
     const localSnapshot = collectBackupData();
     const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
@@ -1094,11 +1128,11 @@
 
 
   openSignInBtn.addEventListener('click', () => {
-    openAccountModal();
+    openLoginModal();
   });
 
   openSignUpBtn.addEventListener('click', () => {
-    openAccountModal();
+    openSignUpModal();
   });
 
   logoutBtn.addEventListener('click', async () => {
@@ -1117,11 +1151,11 @@
       await ensureAuthReady();
       const user = window.bilmAuth.getCurrentUser();
       if (!user) {
-        openAccountModal();
+        openLoginModal();
         return;
       }
       accountSettingsStatus.textContent = '';
-      window.location.href = './account/';
+      window.location.href = new URL('../settings/account/', window.location.href).toString();
     } catch (err) {
       cloudStatus.textContent = `Account settings failed: ${err.message}`;
     }
@@ -1151,40 +1185,44 @@
     }
   });
 
-  authForm.addEventListener('submit', (event) => {
+  loginForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    signInBtn.click();
+    loginBtn.click();
   });
 
-  signInBtn.addEventListener('click', async () => {
+  signUpForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    signUpBtn.click();
+  });
+
+  loginBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      const identifier = authIdentifier.value.trim();
-      const password = authPassword.value;
-      await window.bilmAuth.signInWithIdentifier(identifier, password);
-      await saveCredentialsForAutofill(identifier, password);
+      const email = loginEmail.value.trim();
+      const password = loginPassword.value;
+      await window.bilmAuth.signIn(email, password);
+      await saveCredentialsForAutofill(email, password);
       const localSnapshot = collectBackupData();
       const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
       if (Object.keys(localSnapshot.localStorage || {}).length && !cloudSnapshot) {
         await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-        cloudStatus.textContent = 'Signed in. Found local data and added it to your account.';
+        cloudStatus.textContent = 'Logged in. Found local data and added it to your account.';
       } else {
-        cloudStatus.textContent = 'Signed in successfully.';
+        cloudStatus.textContent = 'Logged in successfully.';
       }
-      authStatus.textContent = 'Signed in.';
-      closeAccountModal();
+      loginStatus.textContent = 'Logged in.';
+      closeLoginModal();
     } catch (err) {
-      authStatus.textContent = `Sign in failed: ${err.message}`;
+      loginStatus.textContent = `Log in failed: ${err.message}`;
     }
   });
 
   signUpBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      const username = authUsername.value.trim();
-      const email = authIdentifier.value.trim();
-      const password = authPassword.value;
-      await window.bilmAuth.signUpWithUsername({ username, email, password });
+      const email = signUpEmail.value.trim();
+      const password = signUpPassword.value;
+      await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
       const localSnapshot = collectBackupData();
       if (Object.keys(localSnapshot.localStorage || {}).length) {
@@ -1193,16 +1231,32 @@
       } else {
         cloudStatus.textContent = 'Account created. You can sync any time from Account Settings.';
       }
-      authStatus.textContent = 'Account created.';
-      closeAccountModal();
+      signUpStatus.textContent = 'Account created.';
+      closeSignUpModal();
     } catch (err) {
-      authStatus.textContent = `Sign up failed: ${err.message}`;
+      signUpStatus.textContent = `Sign up failed: ${err.message}`;
     }
   });
 
-  closeAccountModalBtn.addEventListener('click', closeAccountModal);
-  accountModal.addEventListener('click', (event) => {
-    if (event.target === accountModal) closeAccountModal();
+  openCreateAccountBtn.addEventListener('click', () => {
+    closeLoginModal();
+    openSignUpModal();
+  });
+
+  backToLoginBtn.addEventListener('click', () => {
+    closeSignUpModal();
+    openLoginModal();
+  });
+
+  closeLoginModalBtn.addEventListener('click', closeLoginModal);
+  closeSignUpModalBtn.addEventListener('click', closeSignUpModal);
+
+  loginModal.addEventListener('click', (event) => {
+    if (event.target === loginModal) closeLoginModal();
+  });
+
+  signUpModal.addEventListener('click', (event) => {
+    if (event.target === signUpModal) closeSignUpModal();
   });
 
   closeAccountSettingsModalBtn.addEventListener('click', () => {
@@ -1222,7 +1276,7 @@
     } catch (err) {
       accountStatusText.textContent = 'Account tools are unavailable right now. Refresh and try again.';
       cloudStatus.textContent = `Auth setup failed: ${err.message}`;
-      authHelperText.textContent = 'If this keeps happening, disable blockers for Firebase and reload.';
+      loginHelperText.textContent = 'If this keeps happening, disable blockers for Firebase and reload.';
       openAccountSettingsBtn.disabled = true;
     }
   }
