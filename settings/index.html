@@ -893,7 +893,7 @@
       throw new Error('Please log in first.');
     }
     await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-    cloudStatus.textContent = reason === 'auto' ? 'Auto save complete.' : 'Save complete. Local data uploaded.';
+    if (reason !== 'auto') cloudStatus.textContent = 'Save complete. Local data uploaded.';
   }
 
   function startAutoSaveTimer() {

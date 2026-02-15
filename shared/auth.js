@@ -23,9 +23,27 @@
   const AUTO_SAVE_NEXT_AT_KEY = 'bilm:autoSaveNextAt';
   const AUTO_SAVE_LOCK_KEY = 'bilm:autoSaveLock';
   const AUTO_SAVE_LOCK_TTL_MS = 15000;
+  const AUTO_SAVE_DEVICE_ID_KEY = 'bilm:autoSaveDeviceId';
+  const AUTO_SAVE_LAST_APPLIED_AT_KEY = 'bilm:autoSaveLastAppliedAt';
   const autoSaveTabId = `tab-${Math.random().toString(36).slice(2)}`;
   let autoSaveTimer = null;
   let autoSaveInFlight = false;
+  let cloudSyncUnsubscribe = null;
+  let applyingRemoteSnapshot = false;
+
+  function getAutoSaveDeviceId() {
+    try {
+      const existing = localStorage.getItem(AUTO_SAVE_DEVICE_ID_KEY);
+      if (existing) return existing;
+      const next = `device-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+      localStorage.setItem(AUTO_SAVE_DEVICE_ID_KEY, next);
+      return next;
+    } catch {
+      return `device-volatile-${Math.random().toString(36).slice(2)}`;
+    }
+  }
+
+  const autoSaveDeviceId = getAutoSaveDeviceId();
 
   function safeReadInt(value) {
     const parsed = Number.parseInt(String(value || ''), 10);
@@ -70,6 +88,8 @@
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
+      savedAtMs: Date.now(),
+      savedByDeviceId: autoSaveDeviceId,
       origin: location.origin,
       pathname: location.pathname,
       localStorage: readStorageSnapshot(localStorage),
@@ -119,15 +139,84 @@
     autoSaveInFlight = true;
     try {
       await api.saveCloudSnapshot(collectAutoSaveSnapshot());
-      const base = readAutoSaveNextAt() || dueAt;
-      const nextAt = Math.max(base + AUTO_SAVE_INTERVAL_MS, Date.now() + AUTO_SAVE_INTERVAL_MS);
-      writeAutoSaveNextAt(nextAt);
+      writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
     } catch (error) {
       console.warn('Global auto save failed:', error);
     } finally {
       autoSaveInFlight = false;
       releaseAutoSaveLock();
     }
+  }
+
+  function readLastAppliedAt() {
+    try {
+      return safeReadInt(localStorage.getItem(AUTO_SAVE_LAST_APPLIED_AT_KEY));
+    } catch {
+      return 0;
+    }
+  }
+
+  function writeLastAppliedAt(timestamp) {
+    try {
+      localStorage.setItem(AUTO_SAVE_LAST_APPLIED_AT_KEY, String(timestamp));
+    } catch {
+      // no-op if storage is unavailable
+    }
+    return timestamp;
+  }
+
+  function applyRemoteSnapshot(snapshot) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
+    applyingRemoteSnapshot = true;
+    try {
+      Object.entries(snapshot.localStorage || {}).forEach(([key, value]) => {
+        localStorage.setItem(key, value);
+      });
+      Object.entries(snapshot.sessionStorage || {}).forEach(([key, value]) => {
+        sessionStorage.setItem(key, value);
+      });
+      String(snapshot.cookies || '')
+        .split(';')
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .forEach((cookieEntry) => {
+          document.cookie = `${cookieEntry};path=/`;
+        });
+    } catch (error) {
+      console.warn('Applying cloud snapshot failed:', error);
+    } finally {
+      applyingRemoteSnapshot = false;
+    }
+  }
+
+  function stopCloudSyncListener() {
+    if (!cloudSyncUnsubscribe) return;
+    cloudSyncUnsubscribe();
+    cloudSyncUnsubscribe = null;
+  }
+
+  function startCloudSyncListener() {
+    if (!auth?.currentUser || !modules?.onSnapshot || !firestore || cloudSyncUnsubscribe) return;
+    const userRef = modules.doc(firestore, 'users', auth.currentUser.uid);
+    cloudSyncUnsubscribe = modules.onSnapshot(userRef, (docSnap) => {
+      const data = docSnap.data() || {};
+      const backup = data.cloudBackup || {};
+      const snapshot = backup.snapshot;
+      if (!snapshot) return;
+      if (snapshot.savedByDeviceId === autoSaveDeviceId) return;
+
+      const remoteSavedAt = Number(snapshot.savedAtMs || 0);
+      if (!Number.isFinite(remoteSavedAt) || remoteSavedAt <= 0) return;
+
+      const lastAppliedAt = readLastAppliedAt();
+      if (remoteSavedAt <= lastAppliedAt || applyingRemoteSnapshot) return;
+
+      applyRemoteSnapshot(snapshot);
+      writeLastAppliedAt(remoteSavedAt);
+      writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
+    }, (error) => {
+      console.warn('Cloud sync listener failed:', error);
+    });
   }
 
   function startGlobalAutoSave() {
@@ -203,9 +292,11 @@
           currentUser = user || null;
           if (currentUser) {
             startGlobalAutoSave();
+            startCloudSyncListener();
             maybeRunGlobalAutoSave(false);
           } else {
             stopGlobalAutoSave();
+            stopCloudSyncListener();
           }
           notifySubscribers(currentUser);
         });
@@ -267,6 +358,7 @@
     async signOut() {
       await init();
       stopGlobalAutoSave();
+      stopCloudSyncListener();
       return modules.signOut(auth);
     },
     getCurrentUser() {

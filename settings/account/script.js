@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const localSnapshot = collectBackupData();
     await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-    statusText.textContent = reason === 'auto' ? 'Auto save complete.' : 'Save complete.';
+    if (reason !== 'auto') statusText.textContent = 'Save complete.';
     nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdown();
   }
