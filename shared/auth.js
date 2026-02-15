@@ -59,6 +59,10 @@
 
   const autoSaveDeviceId = getAutoSaveDeviceId();
 
+  function scheduleNextAutoSave(fromMs = Date.now()) {
+    return writeAutoSaveNextAt(fromMs + AUTO_SAVE_INTERVAL_MS);
+  }
+
   function safeReadInt(value) {
     const parsed = Number.parseInt(String(value || ''), 10);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -84,7 +88,7 @@
   function ensureAutoSaveNextAt() {
     const existing = readAutoSaveNextAt();
     if (existing > 0) return existing;
-    return writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
+    return scheduleNextAutoSave();
   }
 
   function readStorageSnapshot(storage) {
@@ -149,11 +153,11 @@
     const dueAt = ensureAutoSaveNextAt();
     if (!force && Date.now() < dueAt) return;
     if (!acquireAutoSaveLock()) return;
+    writeAutoSaveNextAt(dueAt + AUTO_SAVE_INTERVAL_MS);
 
     autoSaveInFlight = true;
     try {
-      await api.saveCloudSnapshot(collectAutoSaveSnapshot());
-      writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
+      await api.saveCloudSnapshot(collectAutoSaveSnapshot(), { preserveSchedule: true });
     } catch (error) {
       console.warn('Global auto save failed:', error);
     } finally {
@@ -447,7 +451,7 @@
     getAutoSaveNextAt() {
       return ensureAutoSaveNextAt();
     },
-    async saveCloudSnapshot(snapshot) {
+    async saveCloudSnapshot(snapshot, options = {}) {
       const user = await requireAuth();
       await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
         cloudBackup: {
@@ -456,6 +460,7 @@
           snapshot
         }
       }, { merge: true });
+      if (!options?.preserveSchedule) scheduleNextAutoSave();
       scheduleAutoSyncAfterSave();
     },
     async getCloudSnapshot() {
