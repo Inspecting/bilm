@@ -29,13 +29,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const signUpBtn = document.getElementById('signUpBtn');
   const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
 
+  const usernameInput = document.getElementById('usernameInput');
+  const saveUsernameBtn = document.getElementById('saveUsernameBtn');
+
+  const saveNowBtn = document.getElementById('saveNowBtn');
   const syncNowBtn = document.getElementById('syncNowBtn');
   const autoSaveCountdownText = document.getElementById('autoSaveCountdownText');
   const logoutBtn = document.getElementById('logoutBtn');
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 
-  let autoSaveIntervalId = null;
   let autoSaveTickId = null;
   let nextAutoSaveAt = 0;
 
@@ -84,8 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    const importedCookies = String(payload.cookies || '');
-    importedCookies
+    String(payload.cookies || '')
       .split(';')
       .map((entry) => entry.trim())
       .filter(Boolean)
@@ -125,10 +127,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function stopAutoSave() {
-    if (autoSaveIntervalId) {
-      clearInterval(autoSaveIntervalId);
-      autoSaveIntervalId = null;
-    }
     if (autoSaveTickId) {
       clearInterval(autoSaveTickId);
       autoSaveTickId = null;
@@ -137,13 +135,13 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAutoSaveCountdown();
   }
 
-  async function runManualSave(reason = 'manual') {
+  async function runManualSave() {
     await ensureAuthReady();
     if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
 
     const localSnapshot = collectBackupData();
     await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-    if (reason !== 'auto') statusText.textContent = 'Save complete.';
+    statusText.textContent = 'Save complete.';
     nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdown();
   }
@@ -154,20 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAutoSaveCountdown();
       return;
     }
-
-    nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdown();
     autoSaveTickId = setInterval(updateAutoSaveCountdown, 1000);
-    autoSaveIntervalId = setInterval(async () => {
-      try {
-        await runManualSave('auto');
-      } catch (error) {
-        statusText.textContent = `Auto save failed: ${error.message}`;
-      } finally {
-        nextAutoSaveAt = getGlobalAutoSaveNextAt();
-        updateAutoSaveCountdown();
-      }
-    }, 60000);
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -193,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
     if (!cloudSnapshot) {
       await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-      statusText.textContent = 'New account detected. Local data was merged into your account.';
+      statusText.textContent = 'New account detected. Local data was uploaded to your account.';
       return;
     }
     const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
@@ -225,13 +211,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     accountStatusText.textContent = loggedIn ? `Logged in ${username}${email}` : 'You are not signed in.';
     accountHintText.textContent = loggedIn
-      ? 'Your account can sync local and cloud data anytime.'
+      ? 'Auto Sync keeps this device synced with your account backup.'
       : 'Log in with email and password, or create a new account.';
 
     loginPanel.hidden = loggedIn;
     signUpPanel.hidden = loggedIn;
+    saveNowBtn.disabled = !loggedIn;
     syncNowBtn.disabled = !loggedIn;
+    saveUsernameBtn.disabled = !loggedIn;
     logoutBtn.disabled = !loggedIn;
+    usernameInput.value = user?.displayName || '';
 
     if (loggedIn) {
       startAutoSave();
@@ -248,7 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!window.bilmAuth) throw new Error('Auth module did not load.');
     await window.bilmAuth.init();
   }
-
 
   async function clearAllLocalData() {
     localStorage.clear();
@@ -283,8 +271,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   autoSyncToggle.checked = getSettings().accountAutoSync !== false;
-  autoSyncToggle.addEventListener('change', () => {
+  autoSyncToggle.addEventListener('change', async () => {
     setSettings({ accountAutoSync: autoSyncToggle.checked });
+    if (autoSyncToggle.checked && window.bilmAuth?.getCurrentUser?.()) {
+      try {
+        await window.bilmAuth.syncFromCloudNow?.();
+      } catch (error) {
+        statusText.textContent = `Auto Sync refresh failed: ${error.message}`;
+        return;
+      }
+    }
     statusText.textContent = `Auto Sync ${autoSyncToggle.checked ? 'enabled' : 'disabled'}.`;
   });
 
@@ -322,6 +318,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  saveNowBtn.addEventListener('click', async () => {
+    try {
+      await runManualSave();
+    } catch (error) {
+      statusText.textContent = `Save failed: ${error.message}`;
+    }
+  });
+
   syncNowBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
@@ -329,6 +333,24 @@ document.addEventListener('DOMContentLoaded', () => {
       await runManualSync();
     } catch (error) {
       statusText.textContent = `Sync failed: ${error.message}`;
+    }
+  });
+
+  saveUsernameBtn.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
+      const username = usernameInput.value.trim();
+      if (username && !/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
+        throw new Error('Username must be 3-30 chars and use letters, numbers, ., _, or -.');
+      }
+      await window.bilmAuth.setUsername(username);
+      statusText.textContent = username
+        ? `Username updated to @${username}.`
+        : 'Username cleared. Navbar will show email.';
+      updateUserUi(window.bilmAuth.getCurrentUser());
+    } catch (error) {
+      statusText.textContent = `Username update failed: ${error.message}`;
     }
   });
 

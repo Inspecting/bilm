@@ -206,7 +206,7 @@ function loadAuthScript() {
     await authApi.init();
     const syncAccountButton = (user) => {
       if (!accountBtn) return;
-      accountBtn.textContent = user ? (user.email || 'Account') : 'Account';
+      accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
       accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
     };
 
