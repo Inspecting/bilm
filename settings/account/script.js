@@ -39,6 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let autoSaveTickId = null;
   let nextAutoSaveAt = 0;
 
+  function getGlobalAutoSaveNextAt() {
+    const apiNext = window.bilmAuth?.getAutoSaveNextAt?.();
+    return Number.isFinite(apiNext) && apiNext > 0 ? apiNext : (nextAutoSaveAt || (Date.now() + 60000));
+  }
+
   const getSettings = () => window.bilmTheme?.getSettings?.() || {};
   const setSettings = (partial) => {
     const current = getSettings();
@@ -114,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
       autoSaveCountdownText.textContent = 'Auto save paused until you log in.';
       return;
     }
+    nextAutoSaveAt = getGlobalAutoSaveNextAt();
     const secondsLeft = Math.max(0, Math.ceil((nextAutoSaveAt - Date.now()) / 1000));
     autoSaveCountdownText.textContent = `Auto save in ${secondsLeft} seconds.`;
   }
@@ -138,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const localSnapshot = collectBackupData();
     await window.bilmAuth.saveCloudSnapshot(localSnapshot);
     statusText.textContent = reason === 'auto' ? 'Auto save complete.' : 'Save complete.';
-    nextAutoSaveAt = Date.now() + 60000;
+    nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdown();
   }
 
@@ -149,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    nextAutoSaveAt = Date.now() + 60000;
+    nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdown();
     autoSaveTickId = setInterval(updateAutoSaveCountdown, 1000);
     autoSaveIntervalId = setInterval(async () => {
@@ -158,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (error) {
         statusText.textContent = `Auto save failed: ${error.message}`;
       } finally {
-        nextAutoSaveAt = Date.now() + 60000;
+        nextAutoSaveAt = getGlobalAutoSaveNextAt();
         updateAutoSaveCountdown();
       }
     }, 60000);

@@ -645,6 +645,11 @@
   let autoSaveTickId = null;
   let nextAutoSaveAt = 0;
 
+  function getGlobalAutoSaveNextAt() {
+    const apiNext = window.bilmAuth?.getAutoSaveNextAt?.();
+    return Number.isFinite(apiNext) && apiNext > 0 ? apiNext : (nextAutoSaveAt || (Date.now() + 60000));
+  }
+
   function readStorage(storage) {
     return Object.entries(storage).reduce((all, [key, value]) => {
       all[key] = value;
@@ -862,6 +867,7 @@
       cloudStatus.textContent = 'Auto save paused until you log in.';
       return;
     }
+    nextAutoSaveAt = getGlobalAutoSaveNextAt();
     const secondsLeft = Math.max(0, Math.ceil((nextAutoSaveAt - Date.now()) / 1000));
     cloudStatus.textContent = `Auto save in ${secondsLeft} seconds.`;
   }
@@ -902,7 +908,7 @@
       return;
     }
 
-    nextAutoSaveAt = Date.now() + 60000;
+    nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdownLabel();
     autoSaveTickId = setInterval(updateAutoSaveCountdownLabel, 1000);
     autoSaveIntervalId = setInterval(async () => {
@@ -911,7 +917,7 @@
       } catch (error) {
         cloudStatus.textContent = `Auto save failed: ${error.message}`;
       } finally {
-        nextAutoSaveAt = Date.now() + 60000;
+        nextAutoSaveAt = getGlobalAutoSaveNextAt();
         updateAutoSaveCountdownLabel();
       }
     }, 60000);
@@ -1054,7 +1060,7 @@
 
   async function syncLocalToCloud(reason = 'manual') {
     await runSaveNow(reason);
-    nextAutoSaveAt = Date.now() + 60000;
+    nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdownLabel();
   }
 
