@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const localSnapshot = collectBackupData();
     await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-    statusText.textContent = 'Save complete.';
+    statusText.textContent = 'Save complete. Cloud state was conflict-merged to protect data from other devices.';
     nextAutoSaveAt = getGlobalAutoSaveNextAt();
     updateAutoSaveCountdown();
   }
@@ -189,17 +189,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function runManualSync() {
-    const localSnapshot = collectBackupData();
-    const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
-    if (!cloudSnapshot) {
+    const synced = await window.bilmAuth.syncFromCloudNow();
+    if (!synced) {
+      const localSnapshot = collectBackupData();
       await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-      statusText.textContent = 'No cloud data existed. Uploaded your local data.';
+      statusText.textContent = 'No cloud snapshot existed. Uploaded your local data.';
       return;
     }
-    const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
-    applyBackup(merged);
-    await window.bilmAuth.saveCloudSnapshot(merged);
-    statusText.textContent = 'Sync complete. Reloading...';
+    statusText.textContent = 'Sync complete. Pulled latest cloud data. Reloading...';
     setTimeout(() => location.reload(), 250);
   }
 
@@ -210,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     accountStatusText.textContent = loggedIn ? `Logged in ${username}${email}` : 'You are not signed in.';
     accountHintText.textContent = loggedIn
-      ? 'Auto save runs every 30 seconds and auto sync runs 5 seconds after save when enabled. Use the navbar status menu to log out.'
+      ? 'Auto save runs every 30 seconds with conflict-safe cloud merging. Use Sync Now to pull latest cloud state. Use the navbar status menu to log out.'
       : 'Log in with email and password, or create a new account.';
 
     loginPanel.hidden = loggedIn;

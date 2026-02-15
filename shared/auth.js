@@ -20,17 +20,16 @@
   let currentUser = null;
 
   const AUTO_SAVE_INTERVAL_MS = 30000;
-  const AUTO_SYNC_DELAY_AFTER_SAVE_MS = 5000;
   const THEME_SETTINGS_KEY = 'bilm-theme-settings';
   const AUTO_SAVE_NEXT_AT_KEY = 'bilm:autoSaveNextAt';
   const AUTO_SAVE_LOCK_KEY = 'bilm:autoSaveLock';
   const AUTO_SAVE_LOCK_TTL_MS = 15000;
   const AUTO_SAVE_DEVICE_ID_KEY = 'bilm:autoSaveDeviceId';
   const AUTO_SAVE_LAST_APPLIED_AT_KEY = 'bilm:autoSaveLastAppliedAt';
+  const AUTO_SAVE_LAST_APPLIED_REVISION_KEY = 'bilm:autoSaveLastAppliedRevision';
   const autoSaveTabId = `tab-${Math.random().toString(36).slice(2)}`;
   let autoSaveTimer = null;
   let autoSaveInFlight = false;
-  let autoSyncAfterSaveTimer = null;
   let cloudSyncUnsubscribe = null;
   let applyingRemoteSnapshot = false;
 
@@ -166,22 +165,6 @@
     }
   }
 
-  function scheduleAutoSyncAfterSave() {
-    if (autoSyncAfterSaveTimer) {
-      clearTimeout(autoSyncAfterSaveTimer);
-      autoSyncAfterSaveTimer = null;
-    }
-
-    if (!auth?.currentUser || !isAccountSyncEnabled()) return;
-
-    autoSyncAfterSaveTimer = setTimeout(() => {
-      autoSyncAfterSaveTimer = null;
-      syncFromCloudNow().catch((error) => {
-        console.warn('Post-save auto sync failed:', error);
-      });
-    }, AUTO_SYNC_DELAY_AFTER_SAVE_MS);
-  }
-
   function readLastAppliedAt() {
     try {
       return safeReadInt(localStorage.getItem(AUTO_SAVE_LAST_APPLIED_AT_KEY));
@@ -197,6 +180,71 @@
       // no-op if storage is unavailable
     }
     return timestamp;
+  }
+
+  function readLastAppliedRevision() {
+    try {
+      return safeReadInt(localStorage.getItem(AUTO_SAVE_LAST_APPLIED_REVISION_KEY));
+    } catch {
+      return 0;
+    }
+  }
+
+  function writeLastAppliedRevision(revision) {
+    try {
+      localStorage.setItem(AUTO_SAVE_LAST_APPLIED_REVISION_KEY, String(revision));
+    } catch {
+      // no-op if storage is unavailable
+    }
+    return revision;
+  }
+
+  function normalizeSnapshot(snapshot) {
+    const normalized = { ...(snapshot || {}) };
+    if (normalized.schema !== 'bilm-backup-v1') {
+      normalized.schema = 'bilm-backup-v1';
+    }
+    const now = Date.now();
+    normalized.savedAtMs = Number.isFinite(Number(normalized.savedAtMs))
+      ? Number(normalized.savedAtMs)
+      : now;
+    normalized.savedByDeviceId = String(normalized.savedByDeviceId || autoSaveDeviceId);
+    normalized.localStorage = { ...(normalized.localStorage || {}) };
+    normalized.sessionStorage = { ...(normalized.sessionStorage || {}) };
+    normalized.cookies = String(normalized.cookies || '');
+    normalized.exportedAt = normalized.exportedAt || new Date(normalized.savedAtMs).toISOString();
+    normalized.origin = normalized.origin || location.origin;
+    normalized.pathname = normalized.pathname || location.pathname;
+    return normalized;
+  }
+
+  function mergeCookieStrings(primary, secondary) {
+    const merged = [
+      ...String(primary || '').split(';').map((item) => item.trim()).filter(Boolean),
+      ...String(secondary || '').split(';').map((item) => item.trim()).filter(Boolean)
+    ];
+    return [...new Set(merged)].join('; ');
+  }
+
+  function mergeSnapshots(localSnapshot, remoteSnapshot) {
+    const local = normalizeSnapshot(localSnapshot);
+    const remote = normalizeSnapshot(remoteSnapshot);
+    const preferLocal = local.savedAtMs >= remote.savedAtMs;
+
+    const favored = preferLocal ? local : remote;
+    const other = preferLocal ? remote : local;
+
+    return {
+      schema: 'bilm-backup-v1',
+      exportedAt: new Date(Math.max(local.savedAtMs, remote.savedAtMs)).toISOString(),
+      savedAtMs: Math.max(local.savedAtMs, remote.savedAtMs),
+      savedByDeviceId: local.savedByDeviceId,
+      origin: local.origin || remote.origin || location.origin,
+      pathname: local.pathname || remote.pathname || location.pathname,
+      localStorage: { ...(other.localStorage || {}), ...(favored.localStorage || {}) },
+      sessionStorage: { ...(other.sessionStorage || {}), ...(favored.sessionStorage || {}) },
+      cookies: mergeCookieStrings(local.cookies, remote.cookies)
+    };
   }
 
   function applyRemoteSnapshot(snapshot) {
@@ -238,16 +286,23 @@
       const backup = data.cloudBackup || {};
       const snapshot = backup.snapshot;
       if (!snapshot) return;
-      if (snapshot.savedByDeviceId === autoSaveDeviceId) return;
+      const remoteRevision = safeReadInt(backup.revision);
+      const lastAppliedRevision = readLastAppliedRevision();
+      if (remoteRevision > 0 && remoteRevision <= lastAppliedRevision) return;
+      if (snapshot.savedByDeviceId === autoSaveDeviceId) {
+        if (remoteRevision > 0) writeLastAppliedRevision(remoteRevision);
+        return;
+      }
 
       const remoteSavedAt = Number(snapshot.savedAtMs || 0);
       if (!Number.isFinite(remoteSavedAt) || remoteSavedAt <= 0) return;
 
       const lastAppliedAt = readLastAppliedAt();
-      if (remoteSavedAt <= lastAppliedAt || applyingRemoteSnapshot) return;
+      if ((remoteSavedAt <= lastAppliedAt && remoteRevision <= 0) || applyingRemoteSnapshot) return;
 
       applyRemoteSnapshot(snapshot);
       writeLastAppliedAt(remoteSavedAt);
+      if (remoteRevision > 0) writeLastAppliedRevision(remoteRevision);
     }, (error) => {
       console.warn('Cloud sync listener failed:', error);
     });
@@ -255,11 +310,17 @@
 
   async function syncFromCloudNow() {
     if (!isAccountSyncEnabled()) return false;
-    const snapshot = await api.getCloudSnapshot();
+    const user = await requireAuth();
+    const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
+    const data = docSnap.data() || {};
+    const backup = data.cloudBackup || {};
+    const snapshot = backup.snapshot || null;
     if (!snapshot) return false;
+    const revision = safeReadInt(backup.revision);
     applyRemoteSnapshot(snapshot);
     const remoteSavedAt = Number(snapshot.savedAtMs || Date.now());
     writeLastAppliedAt(remoteSavedAt);
+    if (revision > 0) writeLastAppliedRevision(revision);
     return true;
   }
 
@@ -287,10 +348,6 @@
     if (!autoSaveTimer) return;
     clearInterval(autoSaveTimer);
     autoSaveTimer = null;
-    if (autoSyncAfterSaveTimer) {
-      clearTimeout(autoSyncAfterSaveTimer);
-      autoSyncAfterSaveTimer = null;
-    }
   }
 
 
@@ -453,15 +510,39 @@
     },
     async saveCloudSnapshot(snapshot, options = {}) {
       const user = await requireAuth();
-      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
-        cloudBackup: {
-          schema: 'bilm-cloud-sync-v1',
-          updatedAt: modules.serverTimestamp(),
-          snapshot
-        }
-      }, { merge: true });
+      const userRef = modules.doc(firestore, 'users', user.uid);
+      const localSnapshot = normalizeSnapshot(snapshot);
+
+      const result = await modules.runTransaction(firestore, async (transaction) => {
+        const existingSnap = await transaction.get(userRef);
+        const existingData = existingSnap.data() || {};
+        const existingBackup = existingData.cloudBackup || {};
+        const existingSnapshot = existingBackup.snapshot || null;
+        const existingRevision = safeReadInt(existingBackup.revision);
+
+        const resolvedSnapshot = existingSnapshot
+          ? mergeSnapshots(localSnapshot, existingSnapshot)
+          : localSnapshot;
+        const nextRevision = existingRevision + 1;
+
+        transaction.set(userRef, {
+          cloudBackup: {
+            schema: 'bilm-cloud-sync-v2',
+            updatedAt: modules.serverTimestamp(),
+            revision: nextRevision,
+            snapshot: resolvedSnapshot
+          }
+        }, { merge: true });
+
+        return {
+          revision: nextRevision,
+          savedAtMs: Number(resolvedSnapshot.savedAtMs || Date.now())
+        };
+      });
+
+      writeLastAppliedRevision(result.revision);
+      writeLastAppliedAt(result.savedAtMs);
       if (!options?.preserveSchedule) scheduleNextAutoSave();
-      scheduleAutoSyncAfterSave();
     },
     async getCloudSnapshot() {
       const user = await requireAuth();
