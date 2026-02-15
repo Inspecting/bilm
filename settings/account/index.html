@@ -19,7 +19,7 @@
     <section class="account-shell">
       <header class="account-header">
         <h1>Account Settings</h1>
-        <p>Traditional Firebase email/password login and account management.</p>
+        <p>Simple email/password account login and cloud sync controls.</p>
       </header>
 
       <section class="panel">
@@ -45,6 +45,16 @@
           <input id="signUpPassword" type="password" placeholder="Password" autocomplete="new-password" />
           <button id="toggleSignUpPasswordBtn" class="btn btn-outline" type="button">Show Password</button>
           <button id="signUpBtn" class="btn" type="button">Create Account</button>
+        </div>
+      </section>
+
+
+      <section class="panel" id="cloudPanel">
+        <h2>Cloud Sync</h2>
+        <div class="stack">
+          <button id="saveCloudBtn" class="btn btn-outline" type="button">Save to Cloud</button>
+          <button id="syncCloudBtn" class="btn btn-outline" type="button">Sync from Cloud</button>
+          <p class="muted">Login now runs one sync automatically. After that, use these buttons to manually upload or pull cloud data.</p>
         </div>
       </section>
 

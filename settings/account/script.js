@@ -40,6 +40,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 
+  const saveCloudBtn = document.getElementById('saveCloudBtn');
+  const syncCloudBtn = document.getElementById('syncCloudBtn');
+
   async function saveCredentialsForAutofill(email, password) {
     if (!('credentials' in navigator) || !window.PasswordCredential) return;
     try {
@@ -66,14 +69,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     accountStatusText.textContent = loggedIn ? `Logged in ${username}${email}` : 'You are not signed in.';
     accountHintText.textContent = loggedIn
-      ? 'You are using standard Firebase email/password authentication.'
+      ? 'Your account is simple: email/password login + manual cloud controls.'
       : 'Log in with email and password, or create a new account.';
 
     loginPanel.hidden = loggedIn;
     signUpPanel.hidden = loggedIn;
     saveUsernameBtn.disabled = !loggedIn;
     deleteAccountBtn.disabled = !loggedIn;
+    saveCloudBtn.disabled = !loggedIn;
+    syncCloudBtn.disabled = !loggedIn;
     usernameInput.value = user?.displayName || '';
+  }
+
+  async function autoSyncAfterLogin() {
+    const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
+    if (!cloudSnapshot) {
+      await window.bilmAuth.saveCloudSnapshot();
+      return 'No cloud backup existed, so your current local data was saved.';
+    }
+
+    const synced = await window.bilmAuth.syncFromCloudNow();
+    if (synced) {
+      setTimeout(() => window.location.reload(), 250);
+      return 'Synced from cloud. Reloading with account data...';
+    }
+
+    return 'Cloud sync completed.';
   }
 
   loginBtn.addEventListener('click', async () => {
@@ -83,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const password = loginPassword.value;
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
-      statusText.textContent = 'Logged in.';
+      statusText.textContent = await autoSyncAfterLogin();
     } catch (error) {
       statusText.textContent = `Log in failed: ${error.message}`;
     }
@@ -96,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const password = signUpPassword.value;
       await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
-      statusText.textContent = 'Account created and logged in.';
+      statusText.textContent = await autoSyncAfterLogin();
     } catch (error) {
       statusText.textContent = `Sign up failed: ${error.message}`;
     }
@@ -133,6 +154,33 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 450);
     } catch (error) {
       statusText.textContent = `Delete failed: ${error.message}`;
+    }
+  });
+
+  saveCloudBtn.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
+      await window.bilmAuth.saveCloudSnapshot();
+      statusText.textContent = 'Saved current local data to cloud.';
+    } catch (error) {
+      statusText.textContent = `Cloud save failed: ${error.message}`;
+    }
+  });
+
+  syncCloudBtn.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
+      const synced = await window.bilmAuth.syncFromCloudNow();
+      if (!synced) {
+        statusText.textContent = 'No cloud backup found yet.';
+        return;
+      }
+      statusText.textContent = 'Synced from cloud. Reloading...';
+      setTimeout(() => window.location.reload(), 250);
+    } catch (error) {
+      statusText.textContent = `Cloud sync failed: ${error.message}`;
     }
   });
 
