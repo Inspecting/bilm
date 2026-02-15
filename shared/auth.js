@@ -20,6 +20,7 @@
   let currentUser = null;
 
   const AUTO_SAVE_INTERVAL_MS = 60000;
+  const AUTO_SAVE_AFTER_LOCAL_CHANGE_DELAY_MS = 5000;
   const THEME_SETTINGS_KEY = 'bilm-theme-settings';
   const AUTO_SAVE_NEXT_AT_KEY = 'bilm:autoSaveNextAt';
   const AUTO_SAVE_LOCK_KEY = 'bilm:autoSaveLock';
@@ -33,6 +34,7 @@
   let applyingRemoteSnapshot = false;
   let localSnapshotDirty = false;
   let lastUploadedSnapshotHash = '';
+  let pendingLocalChangeSaveTimer = null;
 
   function stableStringify(value) {
     if (Array.isArray(value)) {
@@ -130,6 +132,19 @@
     });
   }
 
+  function scheduleLocalChangeAutoSave() {
+    if (pendingLocalChangeSaveTimer) {
+      clearTimeout(pendingLocalChangeSaveTimer);
+    }
+    pendingLocalChangeSaveTimer = setTimeout(() => {
+      pendingLocalChangeSaveTimer = null;
+      maybeRunGlobalAutoSave(true);
+    }, AUTO_SAVE_AFTER_LOCAL_CHANGE_DELAY_MS);
+  }
+
+  function markLocalSnapshotDirty() {
+    localSnapshotDirty = true;
+    scheduleLocalChangeAutoSave();
   function markLocalSnapshotDirty() {
     localSnapshotDirty = true;
     maybeRunGlobalAutoSave(true);
@@ -140,11 +155,23 @@
     installSnapshotDirtyTrackers.installed = true;
 
     const methodsToWrap = ['setItem', 'removeItem', 'clear'];
+    const internalKeys = new Set([
+      AUTO_SAVE_NEXT_AT_KEY,
+      AUTO_SAVE_LOCK_KEY,
+      AUTO_SAVE_LAST_APPLIED_AT_KEY,
+      AUTO_SAVE_DEVICE_ID_KEY
+    ]);
+
     [localStorage, sessionStorage].forEach((storage) => {
       methodsToWrap.forEach((method) => {
         const original = storage[method];
         if (typeof original !== 'function') return;
         storage[method] = function wrappedStorageMethod(...args) {
+          const key = method !== 'clear' ? String(args[0] || '') : '';
+          const result = original.apply(this, args);
+          if (applyingRemoteSnapshot) return result;
+          if (storage === localStorage && internalKeys.has(key)) return result;
+          markLocalSnapshotDirty();
           const result = original.apply(this, args);
           if (!applyingRemoteSnapshot) {
             markLocalSnapshotDirty();
@@ -326,9 +353,14 @@
   }
 
   function stopGlobalAutoSave() {
-    if (!autoSaveTimer) return;
-    clearInterval(autoSaveTimer);
-    autoSaveTimer = null;
+    if (autoSaveTimer) {
+      clearInterval(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+    if (pendingLocalChangeSaveTimer) {
+      clearTimeout(pendingLocalChangeSaveTimer);
+      pendingLocalChangeSaveTimer = null;
+    }
   }
 
 
