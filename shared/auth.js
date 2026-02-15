@@ -19,7 +19,8 @@
   let analytics;
   let currentUser = null;
 
-  const AUTO_SAVE_INTERVAL_MS = 60000;
+  const AUTO_SAVE_INTERVAL_MS = 30000;
+  const AUTO_SYNC_DELAY_AFTER_SAVE_MS = 5000;
   const THEME_SETTINGS_KEY = 'bilm-theme-settings';
   const AUTO_SAVE_NEXT_AT_KEY = 'bilm:autoSaveNextAt';
   const AUTO_SAVE_LOCK_KEY = 'bilm:autoSaveLock';
@@ -29,6 +30,7 @@
   const autoSaveTabId = `tab-${Math.random().toString(36).slice(2)}`;
   let autoSaveTimer = null;
   let autoSaveInFlight = false;
+  let autoSyncAfterSaveTimer = null;
   let cloudSyncUnsubscribe = null;
   let applyingRemoteSnapshot = false;
 
@@ -160,6 +162,22 @@
     }
   }
 
+  function scheduleAutoSyncAfterSave() {
+    if (autoSyncAfterSaveTimer) {
+      clearTimeout(autoSyncAfterSaveTimer);
+      autoSyncAfterSaveTimer = null;
+    }
+
+    if (!auth?.currentUser || !isAccountSyncEnabled()) return;
+
+    autoSyncAfterSaveTimer = setTimeout(() => {
+      autoSyncAfterSaveTimer = null;
+      syncFromCloudNow().catch((error) => {
+        console.warn('Post-save auto sync failed:', error);
+      });
+    }, AUTO_SYNC_DELAY_AFTER_SAVE_MS);
+  }
+
   function readLastAppliedAt() {
     try {
       return safeReadInt(localStorage.getItem(AUTO_SAVE_LAST_APPLIED_AT_KEY));
@@ -226,7 +244,6 @@
 
       applyRemoteSnapshot(snapshot);
       writeLastAppliedAt(remoteSavedAt);
-      writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
     }, (error) => {
       console.warn('Cloud sync listener failed:', error);
     });
@@ -239,7 +256,6 @@
     applyRemoteSnapshot(snapshot);
     const remoteSavedAt = Number(snapshot.savedAtMs || Date.now());
     writeLastAppliedAt(remoteSavedAt);
-    writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
     return true;
   }
 
@@ -267,6 +283,10 @@
     if (!autoSaveTimer) return;
     clearInterval(autoSaveTimer);
     autoSaveTimer = null;
+    if (autoSyncAfterSaveTimer) {
+      clearTimeout(autoSyncAfterSaveTimer);
+      autoSyncAfterSaveTimer = null;
+    }
   }
 
 
@@ -436,7 +456,7 @@
           snapshot
         }
       }, { merge: true });
-      writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
+      scheduleAutoSyncAfterSave();
     },
     async getCloudSnapshot() {
       const user = await requireAuth();
