@@ -10,6 +10,11 @@
     measurementId: 'G-3481XXPLFV'
   };
 
+  const CLOUD_BACKUP_COLLECTION = 'bilmUserBackups';
+  const AUTO_SAVE_INTERVAL_MS = 60000;
+  const AUTO_SAVE_NEXT_AT_KEY = 'bilm:autoSaveNextAt';
+  const AUTO_SAVE_DEVICE_ID_KEY = 'bilm:autoSaveDeviceId';
+
   const subscribers = new Set();
   let initPromise;
   let modules;
@@ -27,6 +32,196 @@
       emailVerified: Boolean(user.emailVerified),
       photoURL: user.photoURL || ''
     };
+  }
+
+  function notifySubscribers(user) {
+    subscribers.forEach((listener) => {
+      try {
+        listener(user);
+      } catch (error) {
+        console.error('Auth listener failed:', error);
+      }
+    });
+  }
+
+  function safeReadInt(value) {
+    const parsed = Number.parseInt(String(value || ''), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function readAutoSaveNextAt() {
+    try {
+      return safeReadInt(localStorage.getItem(AUTO_SAVE_NEXT_AT_KEY));
+    } catch {
+      return 0;
+    }
+  }
+
+  function writeAutoSaveNextAt(timestamp) {
+    try {
+      localStorage.setItem(AUTO_SAVE_NEXT_AT_KEY, String(timestamp));
+    } catch {
+      // no-op when storage is unavailable
+    }
+    return timestamp;
+  }
+
+  function scheduleNextAutoSave(fromMs = Date.now()) {
+    return writeAutoSaveNextAt(fromMs + AUTO_SAVE_INTERVAL_MS);
+  }
+
+  function ensureAutoSaveNextAt() {
+    const existing = readAutoSaveNextAt();
+    if (existing > 0) return existing;
+    return scheduleNextAutoSave();
+  }
+
+  function getAutoSaveDeviceId() {
+    try {
+      const existing = localStorage.getItem(AUTO_SAVE_DEVICE_ID_KEY);
+      if (existing) return existing;
+      const next = `device-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+      localStorage.setItem(AUTO_SAVE_DEVICE_ID_KEY, next);
+      return next;
+    } catch {
+      return `device-volatile-${Math.random().toString(36).slice(2)}`;
+    }
+  }
+
+  function readStorageSnapshot(storage) {
+    try {
+      return Object.entries(storage).reduce((all, [key, value]) => {
+        all[key] = value;
+        return all;
+      }, {});
+    } catch {
+      return {};
+    }
+  }
+
+  function collectLocalSnapshot() {
+    return {
+      schema: 'bilm-backup-v1',
+      exportedAt: new Date().toISOString(),
+      savedAtMs: Date.now(),
+      origin: location.origin,
+      pathname: location.pathname,
+      localStorage: readStorageSnapshot(localStorage),
+      sessionStorage: readStorageSnapshot(sessionStorage),
+      cookies: document.cookie
+    };
+  }
+
+  function normalizeSnapshot(snapshot) {
+    const input = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    return {
+      schema: 'bilm-backup-v1',
+      exportedAt: typeof input.exportedAt === 'string' ? input.exportedAt : new Date().toISOString(),
+      savedAtMs: Number.isFinite(input.savedAtMs) ? input.savedAtMs : Date.now(),
+      origin: typeof input.origin === 'string' ? input.origin : location.origin,
+      pathname: typeof input.pathname === 'string' ? input.pathname : location.pathname,
+      localStorage: input.localStorage && typeof input.localStorage === 'object' ? input.localStorage : {},
+      sessionStorage: input.sessionStorage && typeof input.sessionStorage === 'object' ? input.sessionStorage : {},
+      cookies: typeof input.cookies === 'string' ? input.cookies : ''
+    };
+  }
+
+  async function loadModules() {
+    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+    const [
+      appModule,
+      authModule,
+      analyticsModule,
+      firestoreModule
+    ] = await Promise.all([
+      import(`${base}/firebase-app.js`),
+      import(`${base}/firebase-auth.js`),
+      import(`${base}/firebase-analytics.js`),
+      import(`${base}/firebase-firestore.js`)
+    ]);
+
+    return {
+      ...appModule,
+      ...authModule,
+      ...analyticsModule,
+      ...firestoreModule
+    };
+  }
+
+  async function init() {
+    if (initPromise) return initPromise;
+
+    initPromise = (async () => {
+      modules = await loadModules();
+      app = modules.initializeApp(FIREBASE_CONFIG);
+      auth = modules.getAuth(app);
+      firestore = modules.getFirestore(app);
+
+      try {
+        analytics = modules.getAnalytics(app);
+      } catch {
+        analytics = null;
+      }
+
+      modules.onAuthStateChanged(auth, (user) => {
+        currentUser = normalizeUser(user);
+        notifySubscribers(currentUser);
+        if (user) {
+          ensureAutoSaveNextAt();
+        }
+      });
+
+      currentUser = normalizeUser(auth.currentUser);
+      if (currentUser) {
+        ensureAutoSaveNextAt();
+      }
+      return api;
+    })();
+
+    return initPromise;
+  }
+
+  async function ensureReady() {
+    await init();
+    if (!auth || !modules || !firestore) throw new Error('Auth services are unavailable.');
+  }
+
+  function validateEmailPassword(email, password) {
+    if (!email || !email.includes('@')) {
+      throw new Error('Enter a valid email address.');
+    }
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters.');
+    }
+  }
+
+  function getBackupDocRef(uid) {
+    return modules.doc(firestore, CLOUD_BACKUP_COLLECTION, uid);
+  }
+
+  async function signIn(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.signInWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    ensureAutoSaveNextAt();
+    return currentUser;
+  }
+
+  async function signUp(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.createUserWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    ensureAutoSaveNextAt();
+    return currentUser;
+  }
+
+  async function signOut() {
+    await ensureReady();
+    await modules.signOut(auth);
   }
 
   function notifySubscribers(user) {
@@ -161,6 +356,97 @@
     notifySubscribers(currentUser);
   }
 
+  function getCurrentUser() {
+    return currentUser;
+  }
+
+  function onAuthStateChanged(listener) {
+    if (typeof listener !== 'function') {
+      return () => {};
+    }
+
+    subscribers.add(listener);
+    listener(currentUser);
+
+    return () => subscribers.delete(listener);
+  }
+
+  async function setUsername(username) {
+    await ensureReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser) throw new Error('Log in first.');
+    await modules.updateProfile(activeUser, { displayName: username || null });
+    currentUser = normalizeUser(activeUser);
+    notifySubscribers(currentUser);
+    return currentUser;
+  }
+
+  async function deleteAccount(password) {
+    await ensureReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser || !activeUser.email) throw new Error('Log in first.');
+    if (!password) throw new Error('Password is required.');
+
+    const credential = modules.EmailAuthProvider.credential(activeUser.email, password);
+    await modules.reauthenticateWithCredential(activeUser, credential);
+
+    try {
+      await modules.deleteDoc(getBackupDocRef(activeUser.uid));
+    } catch (error) {
+      console.warn('Could not remove cloud backup before account deletion:', error);
+    }
+
+    await modules.deleteUser(activeUser);
+    currentUser = null;
+    notifySubscribers(currentUser);
+  }
+
+  async function saveCloudSnapshot(snapshot, options = {}) {
+    await ensureReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser) throw new Error('Log in first.');
+
+    const normalizedSnapshot = normalizeSnapshot(snapshot || collectLocalSnapshot());
+    const ref = getBackupDocRef(activeUser.uid);
+    const preserveSchedule = options?.preserveSchedule === true;
+    const nextAutoSaveAt = preserveSchedule ? ensureAutoSaveNextAt() : scheduleNextAutoSave();
+    let nextRevision = 1;
+
+    await modules.runTransaction(firestore, async (transaction) => {
+      const existing = await transaction.get(ref);
+      const currentRevision = existing.exists() ? safeReadInt(existing.data()?.revision) : 0;
+      nextRevision = currentRevision + 1;
+      transaction.set(ref, {
+        uid: activeUser.uid,
+        revision: nextRevision,
+        updatedAt: modules.serverTimestamp(),
+        updatedByDeviceId: getAutoSaveDeviceId(),
+        snapshot: normalizedSnapshot
+      }, { merge: true });
+    });
+
+    return { revision: nextRevision, nextAutoSaveAt };
+  }
+
+  async function getCloudSnapshot() {
+    await ensureReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser) return null;
+
+    const cloudDoc = await modules.getDoc(getBackupDocRef(activeUser.uid));
+    if (!cloudDoc.exists()) return null;
+
+    const data = cloudDoc.data() || {};
+    return normalizeSnapshot(data.snapshot || {});
+  }
+
+  async function syncFromCloudNow() {
+    const snapshot = await getCloudSnapshot();
+    return Boolean(snapshot);
+  }
+
+  function getAutoSaveNextAt() {
+    return ensureAutoSaveNextAt();
   // Compatibility methods kept so older settings UI doesn't hard-crash.
   async function saveCloudSnapshot() {
     return null;
