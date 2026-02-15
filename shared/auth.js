@@ -31,6 +31,18 @@
   let autoSaveInFlight = false;
   let cloudSyncUnsubscribe = null;
   let applyingRemoteSnapshot = false;
+  let localSnapshotDirty = false;
+  let lastUploadedSnapshotHash = '';
+
+  function stableStringify(value) {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+    }
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+  }
 
   function isAccountSyncEnabled() {
     try {
@@ -110,6 +122,40 @@
     };
   }
 
+  function getSnapshotHash(snapshot) {
+    return stableStringify({
+      localStorage: snapshot?.localStorage || {},
+      sessionStorage: snapshot?.sessionStorage || {},
+      cookies: String(snapshot?.cookies || '')
+    });
+  }
+
+  function markLocalSnapshotDirty() {
+    localSnapshotDirty = true;
+    maybeRunGlobalAutoSave(true);
+  }
+
+  function installSnapshotDirtyTrackers() {
+    if (installSnapshotDirtyTrackers.installed) return;
+    installSnapshotDirtyTrackers.installed = true;
+
+    const methodsToWrap = ['setItem', 'removeItem', 'clear'];
+    [localStorage, sessionStorage].forEach((storage) => {
+      methodsToWrap.forEach((method) => {
+        const original = storage[method];
+        if (typeof original !== 'function') return;
+        storage[method] = function wrappedStorageMethod(...args) {
+          const result = original.apply(this, args);
+          if (!applyingRemoteSnapshot) {
+            markLocalSnapshotDirty();
+          }
+          return result;
+        };
+      });
+    });
+  }
+  installSnapshotDirtyTrackers.installed = false;
+
   function acquireAutoSaveLock() {
     try {
       const now = Date.now();
@@ -144,13 +190,24 @@
     if (autoSaveInFlight) return;
     if (!auth?.currentUser) return;
 
+    const snapshot = collectAutoSaveSnapshot();
+    const snapshotHash = getSnapshotHash(snapshot);
+    if (snapshotHash === lastUploadedSnapshotHash) {
+      localSnapshotDirty = false;
+      return;
+    }
+
+    if (!force && !localSnapshotDirty) return;
+
     const dueAt = ensureAutoSaveNextAt();
     if (!force && Date.now() < dueAt) return;
     if (!acquireAutoSaveLock()) return;
 
     autoSaveInFlight = true;
     try {
-      await api.saveCloudSnapshot(collectAutoSaveSnapshot());
+      await api.saveCloudSnapshot(snapshot);
+      lastUploadedSnapshotHash = snapshotHash;
+      localSnapshotDirty = false;
       writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
     } catch (error) {
       console.warn('Global auto save failed:', error);
@@ -198,6 +255,8 @@
       console.warn('Applying cloud snapshot failed:', error);
     } finally {
       applyingRemoteSnapshot = false;
+      localSnapshotDirty = false;
+      lastUploadedSnapshotHash = getSnapshotHash(snapshot);
     }
   }
 
@@ -256,7 +315,10 @@
   }
 
   function startGlobalAutoSave() {
+    installSnapshotDirtyTrackers();
     ensureAutoSaveNextAt();
+    lastUploadedSnapshotHash = getSnapshotHash(collectAutoSaveSnapshot());
+    localSnapshotDirty = false;
     if (autoSaveTimer) return;
     autoSaveTimer = setInterval(() => {
       maybeRunGlobalAutoSave(false);
