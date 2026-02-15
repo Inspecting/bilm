@@ -21,7 +21,6 @@
   let firestoreModules;
   let app;
   let auth;
-  let firestore;
   let analytics;
   let currentUser = null;
 
@@ -174,6 +173,143 @@
         firestore = firestoreMod.getFirestore(app);
       }
 
+  }
+
+  async function loadModules() {
+    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+    const [
+      appModule,
+      authModule,
+      analyticsModule,
+      firestoreModule
+    ] = await Promise.all([
+      import(`${base}/firebase-app.js`),
+      import(`${base}/firebase-auth.js`),
+      import(`${base}/firebase-analytics.js`),
+      import(`${base}/firebase-firestore.js`)
+    ]);
+
+    return {
+      ...appModule,
+      ...authModule,
+      ...analyticsModule,
+      ...firestoreModule
+    };
+  }
+
+  async function init() {
+    if (initPromise) return initPromise;
+
+    initPromise = (async () => {
+      modules = await loadModules();
+      app = modules.initializeApp(FIREBASE_CONFIG);
+      auth = modules.getAuth(app);
+      firestore = modules.getFirestore(app);
+
+      try {
+        analytics = modules.getAnalytics(app);
+      } catch {
+        analytics = null;
+      }
+
+      modules.onAuthStateChanged(auth, (user) => {
+        currentUser = normalizeUser(user);
+        notifySubscribers(currentUser);
+        if (user) {
+          ensureAutoSaveNextAt();
+        }
+      });
+
+      currentUser = normalizeUser(auth.currentUser);
+      if (currentUser) {
+        ensureAutoSaveNextAt();
+      }
+      return api;
+    })();
+
+    return initPromise;
+  }
+
+  async function ensureReady() {
+    await init();
+    if (!auth || !modules || !firestore) throw new Error('Auth services are unavailable.');
+  }
+
+  function validateEmailPassword(email, password) {
+    if (!email || !email.includes('@')) {
+      throw new Error('Enter a valid email address.');
+    }
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters.');
+    }
+  }
+
+  function getBackupDocRef(uid) {
+    return modules.doc(firestore, CLOUD_BACKUP_COLLECTION, uid);
+  }
+
+  async function signIn(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.signInWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    ensureAutoSaveNextAt();
+    return currentUser;
+  }
+
+  async function signUp(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.createUserWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    ensureAutoSaveNextAt();
+    return currentUser;
+  }
+
+  async function signOut() {
+    await ensureReady();
+    await modules.signOut(auth);
+  }
+
+  function notifySubscribers(user) {
+    subscribers.forEach((listener) => {
+      try {
+        listener(user);
+      } catch (error) {
+        console.error('Auth listener failed:', error);
+      }
+    });
+  }
+
+  async function loadModules() {
+    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+    const [
+      appModule,
+      authModule,
+      analyticsModule
+    ] = await Promise.all([
+      import(`${base}/firebase-app.js`),
+      import(`${base}/firebase-auth.js`),
+      import(`${base}/firebase-analytics.js`)
+    ]);
+
+    return {
+      ...appModule,
+      ...authModule,
+      ...analyticsModule
+    };
+  }
+
+  async function init() {
+    if (initPromise) return initPromise;
+
+    initPromise = (async () => {
+      modules = await loadModules();
+      app = modules.initializeApp(FIREBASE_CONFIG);
+      auth = modules.getAuth(app);
+
       try {
         analytics = modules.getAnalytics(app);
       } catch {
@@ -253,6 +389,88 @@
   async function signOut() {
     await ensureReady();
     await modules.signOut(auth);
+      });
+
+      currentUser = normalizeUser(auth.currentUser);
+      return api;
+    })();
+
+    return initPromise;
+  }
+
+  async function ensureReady() {
+    await init();
+    if (!auth || !modules) throw new Error('Auth not initialized.');
+  }
+
+  function validateEmailPassword(email, password) {
+    if (!email || !email.includes('@')) {
+      throw new Error('Enter a valid email address.');
+    }
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters.');
+    }
+  }
+
+  async function signIn(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.signInWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    return currentUser;
+  }
+
+  async function signUp(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.createUserWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    return currentUser;
+  }
+
+  async function signOut() {
+    await ensureReady();
+    await modules.signOut(auth);
+    currentUser = null;
+    notifySubscribers(currentUser);
+  }
+
+  function getCurrentUser() {
+    return currentUser;
+  }
+
+  function onAuthStateChanged(listener) {
+    if (typeof listener !== 'function') {
+      return () => {};
+    }
+
+    subscribers.add(listener);
+    listener(currentUser);
+
+    return () => subscribers.delete(listener);
+  }
+
+  async function setUsername(username) {
+    await ensureReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser) throw new Error('Log in first.');
+    await modules.updateProfile(activeUser, { displayName: username || null });
+    currentUser = normalizeUser(activeUser);
+    notifySubscribers(currentUser);
+    return currentUser;
+  }
+
+  async function deleteAccount(password) {
+    await ensureReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser || !activeUser.email) throw new Error('Log in first.');
+    if (!password) throw new Error('Password is required.');
+
+    const credential = modules.EmailAuthProvider.credential(activeUser.email, password);
+    await modules.reauthenticateWithCredential(activeUser, credential);
+    await modules.deleteUser(activeUser);
     currentUser = null;
     notifySubscribers(currentUser);
   }
@@ -296,6 +514,7 @@
         await ensureCloudReady();
         await firestoreModules.deleteDoc(getBackupDocRef(activeUser.uid));
       }
+      await modules.deleteDoc(getBackupDocRef(activeUser.uid));
     } catch (error) {
       console.warn('Could not remove cloud backup before account deletion:', error);
     }
@@ -307,6 +526,7 @@
 
   async function saveCloudSnapshot(snapshot, options = {}) {
     await ensureCloudReady();
+    await ensureReady();
     const activeUser = auth.currentUser;
     if (!activeUser) throw new Error('Log in first.');
 
@@ -317,6 +537,7 @@
     let nextRevision = 1;
 
     await firestoreModules.runTransaction(firestore, async (transaction) => {
+    await modules.runTransaction(firestore, async (transaction) => {
       const existing = await transaction.get(ref);
       const currentRevision = existing.exists() ? safeReadInt(existing.data()?.revision) : 0;
       nextRevision = currentRevision + 1;
@@ -324,6 +545,7 @@
         uid: activeUser.uid,
         revision: nextRevision,
         updatedAt: firestoreModules.serverTimestamp(),
+        updatedAt: modules.serverTimestamp(),
         updatedByDeviceId: getAutoSaveDeviceId(),
         snapshot: normalizedSnapshot
       }, { merge: true });
@@ -338,6 +560,11 @@
     if (!activeUser) return null;
 
     const cloudDoc = await firestoreModules.getDoc(getBackupDocRef(activeUser.uid));
+    await ensureReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser) return null;
+
+    const cloudDoc = await modules.getDoc(getBackupDocRef(activeUser.uid));
     if (!cloudDoc.exists()) return null;
 
     const data = cloudDoc.data() || {};
@@ -351,6 +578,21 @@
 
   function getAutoSaveNextAt() {
     return ensureAutoSaveNextAt();
+  // Compatibility methods kept so older settings UI doesn't hard-crash.
+  async function saveCloudSnapshot() {
+    return null;
+  }
+
+  async function getCloudSnapshot() {
+    return null;
+  }
+
+  async function syncFromCloudNow() {
+    return false;
+  }
+
+  function getAutoSaveNextAt() {
+    return 0;
   }
 
   const api = {
