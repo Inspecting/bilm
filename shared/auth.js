@@ -35,12 +35,18 @@
 
   async function loadFirebaseModules() {
     if (modules) return modules;
-    const [appModule, authModule, firestoreModule, analyticsModule] = await Promise.all([
+    const [appModule, authModule, firestoreModule] = await Promise.all([
       import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
       import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-auth.js`),
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`),
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-analytics.js`)
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`)
     ]);
+
+    let analyticsModule = {};
+    try {
+      analyticsModule = await import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-analytics.js`);
+    } catch (error) {
+      console.warn('Firebase Analytics module unavailable:', error);
+    }
 
     modules = {
       ...appModule,

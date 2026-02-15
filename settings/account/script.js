@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const visible = inputEl.type === 'text';
     inputEl.type = visible ? 'password' : 'text';
     toggleBtn.textContent = visible ? 'Show Password' : 'Hide Password';
+    toggleBtn.classList.add('btn', 'btn-outline');
   }
 
   async function autoSyncAfterSignIn() {
