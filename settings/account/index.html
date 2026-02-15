@@ -42,20 +42,22 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="loginPanel">
         <h2>Log In</h2>
         <div class="stack">
           <input id="loginEmail" type="email" placeholder="Email" autocomplete="email" />
           <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+          <button id="toggleLoginPasswordBtn" class="btn btn-outline" type="button">Show Password</button>
           <button id="loginBtn" class="btn" type="button">Log In</button>
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="signUpPanel">
         <h2>Create Account</h2>
         <div class="stack">
           <input id="signUpEmail" type="email" placeholder="Email" autocomplete="email" />
           <input id="signUpPassword" type="password" placeholder="Password" autocomplete="new-password" />
+          <button id="toggleSignUpPasswordBtn" class="btn btn-outline" type="button">Show Password</button>
           <button id="signUpBtn" class="btn" type="button">Create Account</button>
         </div>
       </section>
@@ -63,7 +65,8 @@
       <section class="panel">
         <h2>Account Actions</h2>
         <div class="actions">
-          <button id="syncNowBtn" class="btn" type="button">Sync Now</button>
+          <button id="syncNowBtn" class="btn" type="button">Save</button>
+          <p id="autoSaveCountdownText" class="muted">Auto save in 60 seconds.</p>
           <button id="logoutBtn" class="btn btn-outline" type="button">Log Out</button>
         </div>
       </section>

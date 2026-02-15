@@ -1,48 +1,23 @@
 (() => {
-  const FIREBASE_COMPAT_VERSION = '10.12.5';
-  const FIREBASE_SCRIPT_BASE = `https://www.gstatic.com/firebasejs/${FIREBASE_COMPAT_VERSION}`;
+  const FIREBASE_VERSION = '12.9.0';
   const FIREBASE_CONFIG = {
-    apiKey: 'AIzaSyAvgC5yuO5qCmPphj0bTHqIqMITX0vbRAE',
-    authDomain: 'bilm-3f205.firebaseapp.com',
-    projectId: 'bilm-3f205',
-    storageBucket: 'bilm-3f205.firebasestorage.app',
-    messagingSenderId: '981687790462',
-    appId: '1:981687790462:web:1e84ca27ca6d04a0a5612f',
-    measurementId: 'G-VDQDLYHGM4'
+    apiKey: 'AIzaSyA9buNkqJFx81VU0sXXVed9SC3cz5H98TE',
+    authDomain: 'bilm-7bfe1.firebaseapp.com',
+    projectId: 'bilm-7bfe1',
+    storageBucket: 'bilm-7bfe1.firebasestorage.app',
+    messagingSenderId: '82694612591',
+    appId: '1:82694612591:web:da15d342bea07878244f9a',
+    measurementId: 'G-3481XXPLFV'
   };
 
   const subscribers = new Set();
   let initPromise;
+  let modules;
+  let app;
   let auth;
   let firestore;
+  let analytics;
   let currentUser = null;
-
-  function loadScriptOnce(src) {
-    return new Promise((resolve, reject) => {
-      const existing = document.querySelector(`script[data-firebase-src="${src}"]`);
-      if (existing) {
-        if (existing.dataset.loaded === 'true') {
-          resolve();
-          return;
-        }
-        existing.addEventListener('load', () => resolve(), { once: true });
-        existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.defer = true;
-      script.dataset.firebaseSrc = src;
-      script.addEventListener('load', () => {
-        script.dataset.loaded = 'true';
-        resolve();
-      }, { once: true });
-      script.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
-      document.head.appendChild(script);
-    });
-  }
 
   function notifySubscribers(user) {
     subscribers.forEach((callback) => {
@@ -58,32 +33,46 @@
     return String(username || '').trim().toLowerCase();
   }
 
+  async function loadFirebaseModules() {
+    if (modules) return modules;
+    const [appModule, authModule, firestoreModule, analyticsModule] = await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-auth.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-analytics.js`)
+    ]);
+
+    modules = {
+      ...appModule,
+      ...authModule,
+      ...firestoreModule,
+      ...analyticsModule
+    };
+    return modules;
+  }
+
   async function init() {
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
       try {
-        await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-app-compat.js`);
-        await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-auth-compat.js`);
-        await loadScriptOnce(`${FIREBASE_SCRIPT_BASE}/firebase-firestore-compat.js`);
+        const m = await loadFirebaseModules();
+        app = m.getApps().length ? m.getApp() : m.initializeApp(FIREBASE_CONFIG);
+        auth = m.getAuth(app);
+        firestore = m.getFirestore(app);
 
-        if (!window.firebase) {
-          throw new Error('Firebase did not initialize.');
+        try {
+          analytics = m.getAnalytics(app);
+        } catch {
+          analytics = null;
         }
 
-        const app = window.firebase.apps?.length
-          ? window.firebase.app()
-          : window.firebase.initializeApp(FIREBASE_CONFIG);
-
-        auth = window.firebase.auth(app);
-        firestore = window.firebase.firestore(app);
-
-        auth.onAuthStateChanged((user) => {
+        m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
           notifySubscribers(currentUser);
         });
 
-        return { auth, firestore };
+        return { auth, firestore, analytics };
       } catch (error) {
         initPromise = null;
         throw error;
@@ -105,25 +94,25 @@
     init,
     async signUp(email, password) {
       await init();
-      return auth.createUserWithEmailAndPassword(email, password);
+      return modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password);
     },
     async signUpWithUsername({ email, password }) {
       await init();
-      return auth.createUserWithEmailAndPassword(String(email || '').trim(), password);
+      return modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password);
     },
     async signIn(email, password) {
       await init();
-      return auth.signInWithEmailAndPassword(email, password);
+      return modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
     },
     async signInWithIdentifier(identifier, password) {
       await init();
-      return auth.signInWithEmailAndPassword(String(identifier || '').trim(), password);
+      return modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
     },
     async reauthenticate(password) {
       await init();
       const user = await requireAuth();
-      const credential = window.firebase.auth.EmailAuthProvider.credential(user.email, password);
-      return user.reauthenticateWithCredential(credential);
+      const credential = modules.EmailAuthProvider.credential(user.email, password);
+      return modules.reauthenticateWithCredential(user, credential);
     },
     async deleteAccount(password) {
       await init();
@@ -131,15 +120,15 @@
       if (!password) throw new Error('Password is required to delete your account.');
       await api.reauthenticate(password);
       const usernameKey = normalizeUsername(user.displayName);
-      await firestore.collection('users').doc(user.uid).delete();
+      await modules.deleteDoc(modules.doc(firestore, 'users', user.uid));
       if (usernameKey) {
-        await firestore.collection('usernames').doc(usernameKey).delete();
+        await modules.deleteDoc(modules.doc(firestore, 'usernames', usernameKey));
       }
-      await user.delete();
+      await modules.deleteUser(user);
     },
     async signOut() {
       await init();
-      return auth.signOut();
+      return modules.signOut(auth);
     },
     getCurrentUser() {
       return auth?.currentUser || currentUser;
@@ -151,18 +140,18 @@
     },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
-      await firestore.collection('users').doc(user.uid).set({
+      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
         cloudBackup: {
           schema: 'bilm-cloud-sync-v1',
-          updatedAt: window.firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: modules.serverTimestamp(),
           snapshot
         }
       }, { merge: true });
     },
     async getCloudSnapshot() {
       const user = await requireAuth();
-      const doc = await firestore.collection('users').doc(user.uid).get();
-      const data = doc.data() || {};
+      const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
+      const data = docSnap.data() || {};
       return data.cloudBackup?.snapshot || null;
     }
   };

@@ -52,7 +52,8 @@ function withBase(path) {
     searchHistory: true,
     continueWatching: true,
     incognito: false,
-    accountAutoSync: true
+    accountAutoSync: true,
+    accountTimedAutosave: true
   };
 
   const backgroundColors = {

@@ -528,6 +528,7 @@
       <div class="backup-tools">
         <input id="loginEmail" name="email" type="email" placeholder="Email" autocomplete="email" />
         <input id="loginPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" />
+        <button class="btn btn-outline" id="toggleLoginPasswordBtn" type="button">Show Password</button>
         <span class="backup-status" id="loginStatus" aria-live="polite"></span>
         <small id="loginHelperText">Don&apos;t have an account? Use Create an Account.</small>
       </div>
@@ -548,6 +549,7 @@
       <div class="backup-tools">
         <input id="signUpEmail" name="email" type="email" placeholder="Email" autocomplete="email" />
         <input id="signUpPassword" name="password" type="password" placeholder="Password" autocomplete="new-password" />
+        <button class="btn btn-outline" id="toggleSignUpPasswordBtn" type="button">Show Password</button>
         <span class="backup-status" id="signUpStatus" aria-live="polite"></span>
       </div>
       <div class="actions-row">
@@ -566,8 +568,8 @@
     <div class="backup-tools">
       <button class="btn" id="smartSyncBtn" type="button">Sync</button>
       <small>Smart sync: merges cloud + local data, then saves the merged result.</small>
-      <button class="btn btn-outline" id="manualSyncBtn" type="button">Manual Sync</button>
-      <small>Manual sync: uploads your current local device data to your account.</small>
+      <button class="btn btn-outline" id="manualSyncBtn" type="button">Save</button>
+      <small id="autoSaveCountdownLabel">Auto save in 60 seconds.</small>
       <button class="btn btn-outline" id="mergeDataBtn" type="button">Merge Data</button>
       <small>Merge data: combines cloud and local data without deleting everything first.</small>
       <span class="backup-status" id="accountSettingsStatus" aria-live="polite"></span>
@@ -642,6 +644,7 @@
   const loginStatus = document.getElementById('loginStatus');
   const loginHelperText = document.getElementById('loginHelperText');
   const loginBtn = document.getElementById('loginBtn');
+  const toggleLoginPasswordBtn = document.getElementById('toggleLoginPasswordBtn');
   const openCreateAccountBtn = document.getElementById('openCreateAccountBtn');
   const closeLoginModalBtn = document.getElementById('closeLoginModalBtn');
   const signUpModal = document.getElementById('signUpModal');
@@ -650,6 +653,7 @@
   const signUpPassword = document.getElementById('signUpPassword');
   const signUpStatus = document.getElementById('signUpStatus');
   const signUpBtn = document.getElementById('signUpBtn');
+  const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
   const backToLoginBtn = document.getElementById('backToLoginBtn');
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
   const accountSettingsModal = document.getElementById('accountSettingsModal');
@@ -657,11 +661,17 @@
   const manualSyncBtn = document.getElementById('manualSyncBtn');
   const mergeDataBtn = document.getElementById('mergeDataBtn');
   const accountSettingsStatus = document.getElementById('accountSettingsStatus');
+  const autoSaveCountdownLabel = document.getElementById('autoSaveCountdownLabel');
   const closeAccountSettingsModalBtn = document.getElementById('closeAccountSettingsModalBtn');
   const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
   const BACKUP_FORMAT_PREFIX = 'BLM1';
   const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   let pendingImportPayload = null;
+  let pendingRefreshAfterOverlayClose = false;
+  let overlaySyncPromise = null;
+  let autoSaveIntervalId = null;
+  let autoSaveTickId = null;
+  let nextAutoSaveAt = 0;
 
   function readStorage(storage) {
     return Object.entries(storage).reduce((all, [key, value]) => {
@@ -874,6 +884,87 @@
   }
 
 
+  function updateAutoSaveCountdownLabel() {
+    if (!autoSaveCountdownLabel) return;
+    const user = window.bilmAuth?.getCurrentUser?.();
+    if (!user) {
+      autoSaveCountdownLabel.textContent = 'Auto save paused until you log in.';
+      return;
+    }
+    const secondsLeft = Math.max(0, Math.ceil((nextAutoSaveAt - Date.now()) / 1000));
+    autoSaveCountdownLabel.textContent = `Auto save in ${secondsLeft} seconds.`;
+  }
+
+  function stopAutoSaveTimer() {
+    if (autoSaveIntervalId) {
+      clearInterval(autoSaveIntervalId);
+      autoSaveIntervalId = null;
+    }
+    if (autoSaveTickId) {
+      clearInterval(autoSaveTickId);
+      autoSaveTickId = null;
+    }
+    nextAutoSaveAt = 0;
+    updateAutoSaveCountdownLabel();
+  }
+
+  async function runSaveNow(reason = 'manual') {
+    await ensureAuthReady();
+    const user = window.bilmAuth.getCurrentUser();
+    if (!user) {
+      openLoginModal();
+      throw new Error('Please log in first.');
+    }
+    await window.bilmAuth.saveCloudSnapshot(collectBackupData());
+    cloudStatus.textContent = reason === 'auto' ? 'Auto save complete.' : 'Save complete. Local data uploaded.';
+    accountSettingsStatus.textContent = reason === 'auto' ? 'Auto save complete.' : 'Save complete.';
+  }
+
+  function startAutoSaveTimer() {
+    stopAutoSaveTimer();
+    const settings = window.bilmTheme?.getSettings?.() || {};
+    if (settings.accountTimedAutosave === false) {
+      autoSaveCountdownLabel.textContent = 'Auto save disabled.';
+      return;
+    }
+    if (!window.bilmAuth?.getCurrentUser?.()) {
+      updateAutoSaveCountdownLabel();
+      return;
+    }
+
+    nextAutoSaveAt = Date.now() + 60000;
+    updateAutoSaveCountdownLabel();
+    autoSaveTickId = setInterval(updateAutoSaveCountdownLabel, 1000);
+    autoSaveIntervalId = setInterval(async () => {
+      try {
+        await runSaveNow('auto');
+      } catch (error) {
+        accountSettingsStatus.textContent = `Auto save failed: ${error.message}`;
+      } finally {
+        nextAutoSaveAt = Date.now() + 60000;
+        updateAutoSaveCountdownLabel();
+      }
+    }, 60000);
+  }
+
+  async function saveCredentialsForAutofill(email, password) {
+    if (!('credentials' in navigator) || !window.PasswordCredential) return;
+    try {
+      const credential = new window.PasswordCredential({ id: email, password, name: email });
+      await navigator.credentials.store(credential);
+    } catch (error) {
+      console.warn('Credential save skipped:', error);
+    }
+  }
+
+  function setPasswordVisibility(inputEl, toggleBtn) {
+    if (!inputEl || !toggleBtn) return;
+    const visible = inputEl.type === 'text';
+    inputEl.type = visible ? 'password' : 'text';
+    toggleBtn.textContent = visible ? 'Show Password' : 'Hide Password';
+  }
+
+
   function openLoginModal() {
     loginStatus.textContent = '';
     loginModal.classList.add('open');
@@ -901,6 +992,7 @@
       openAccountSettingsBtn.disabled = false;
       cloudStatus.textContent = 'Account ready. Open Account Settings to sync or merge data.';
       loginHelperText.textContent = 'Logged in successfully.';
+      startAutoSaveTimer();
     } else {
       accountStatusText.textContent = 'You are in guest mode. Log in to enable account sync.';
       openSignInBtn.hidden = false;
@@ -910,6 +1002,8 @@
       cloudStatus.textContent = 'Log in to use account sync features.';
       loginHelperText.textContent = 'Use email and password to log in.';
       if (accountSettingsModal.classList.contains('open')) accountSettingsModal.classList.remove('open');
+      pendingRefreshAfterOverlayClose = false;
+      stopAutoSaveTimer();
     }
   }
 
@@ -954,7 +1048,7 @@
     }
   }
 
-  async function autoSyncAfterSignIn() {
+  async function autoSyncAfterSignIn({ deferReload = false } = {}) {
     const localSnapshot = collectBackupData();
     const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
 
@@ -967,7 +1061,13 @@
     const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
     applyBackup(merged);
     await window.bilmAuth.saveCloudSnapshot(merged);
-    cloudStatus.textContent = 'Auto Sync complete. Reloading with your account data...';
+    cloudStatus.textContent = deferReload
+      ? 'Auto Sync complete. Close Account Settings to refresh.'
+      : 'Auto Sync complete. Reloading with your account data...';
+    if (deferReload) {
+      pendingRefreshAfterOverlayClose = true;
+      return;
+    }
     setTimeout(() => location.reload(), 300);
   }
 
@@ -989,16 +1089,10 @@
     };
   }
 
-  async function syncLocalToCloud() {
-    await ensureAuthReady();
-    const user = window.bilmAuth.getCurrentUser();
-    if (!user) {
-      openLoginModal();
-      throw new Error('Please log in first.');
-    }
-    await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-    cloudStatus.textContent = 'Manual sync complete. Local data uploaded.';
-    accountSettingsStatus.textContent = 'Manual sync complete.';
+  async function syncLocalToCloud(reason = 'manual') {
+    await runSaveNow(reason);
+    nextAutoSaveAt = Date.now() + 60000;
+    updateAutoSaveCountdownLabel();
   }
 
   async function mergeLocalAndCloud() {
@@ -1189,6 +1283,7 @@
       await ensureAuthReady();
       if (!confirm('Log out of your account?')) return;
       await window.bilmAuth.signOut();
+      stopAutoSaveTimer();
       await clearAllLocalData();
       cloudStatus.textContent = 'Logged out and cleared local data. Reloading...';
       setTimeout(() => location.reload(), 250);
@@ -1199,7 +1294,9 @@
 
   openAccountSettingsBtn.addEventListener('click', () => {
     accountSettingsStatus.textContent = '';
-    window.location.href = new URL('../settings/account/', window.location.href).toString();
+    pendingRefreshAfterOverlayClose = false;
+    accountSettingsModal.classList.add('open');
+    startAutoSaveTimer();
   });
 
   smartSyncBtn.addEventListener('click', async () => {
@@ -1212,9 +1309,9 @@
 
   manualSyncBtn.addEventListener('click', async () => {
     try {
-      await syncLocalToCloud();
+      await syncLocalToCloud('manual');
     } catch (err) {
-      accountSettingsStatus.textContent = `Manual sync failed: ${err.message}`;
+      accountSettingsStatus.textContent = `Save failed: ${err.message}`;
     }
   });
 
@@ -1243,12 +1340,16 @@
       const password = loginPassword.value;
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
+      const deferReload = accountSettingsModal.classList.contains('open');
       if ((window.bilmTheme?.getSettings?.() || {}).accountAutoSync !== false) {
-        await autoSyncAfterSignIn();
+        overlaySyncPromise = autoSyncAfterSignIn({ deferReload });
+        await overlaySyncPromise;
       } else {
         cloudStatus.textContent = 'Logged in successfully.';
+        if (deferReload) pendingRefreshAfterOverlayClose = true;
       }
       loginStatus.textContent = 'Logged in.';
+      startAutoSaveTimer();
       closeLoginModal();
     } catch (err) {
       loginStatus.textContent = `Log in failed: ${err.message}`;
@@ -1262,12 +1363,16 @@
       const password = signUpPassword.value;
       await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
+      const deferReload = accountSettingsModal.classList.contains('open');
       if ((window.bilmTheme?.getSettings?.() || {}).accountAutoSync !== false) {
-        await autoSyncAfterSignIn();
+        overlaySyncPromise = autoSyncAfterSignIn({ deferReload });
+        await overlaySyncPromise;
       } else {
         cloudStatus.textContent = 'Account created. You can sync any time from Account Settings.';
+        if (deferReload) pendingRefreshAfterOverlayClose = true;
       }
       signUpStatus.textContent = 'Account created.';
+      startAutoSaveTimer();
       closeSignUpModal();
     } catch (err) {
       signUpStatus.textContent = `Sign up failed: ${err.message}`;
@@ -1284,6 +1389,9 @@
     openLoginModal();
   });
 
+  toggleLoginPasswordBtn.addEventListener('click', () => setPasswordVisibility(loginPassword, toggleLoginPasswordBtn));
+  toggleSignUpPasswordBtn.addEventListener('click', () => setPasswordVisibility(signUpPassword, toggleSignUpPasswordBtn));
+
   closeLoginModalBtn.addEventListener('click', closeLoginModal);
   closeSignUpModalBtn.addEventListener('click', closeSignUpModal);
 
@@ -1295,11 +1403,31 @@
     if (event.target === signUpModal) closeSignUpModal();
   });
 
-  closeAccountSettingsModalBtn.addEventListener('click', () => {
+  async function closeAccountSettingsModal() {
+    if (overlaySyncPromise) {
+      try {
+        await overlaySyncPromise;
+      } catch (error) {
+        accountSettingsStatus.textContent = `Sync failed before close: ${error.message}`;
+        return;
+      } finally {
+        overlaySyncPromise = null;
+      }
+    }
     accountSettingsModal.classList.remove('open');
+    if (pendingRefreshAfterOverlayClose) {
+      cloudStatus.textContent = 'Refreshing to apply synced account data...';
+      setTimeout(() => location.reload(), 180);
+      return;
+    }
+    stopAutoSaveTimer();
+  }
+
+  closeAccountSettingsModalBtn.addEventListener('click', () => {
+    closeAccountSettingsModal();
   });
   accountSettingsModal.addEventListener('click', (event) => {
-    if (event.target === accountSettingsModal) accountSettingsModal.classList.remove('open');
+    if (event.target === accountSettingsModal) closeAccountSettingsModal();
   });
 
   async function initCloudAuthUi() {
@@ -1324,6 +1452,7 @@
 
   window.addEventListener('DOMContentLoaded', () => {
     syncUI();
+    updateAutoSaveCountdownLabel();
     initCloudAuthUi();
   });
   window.addEventListener('bilm:theme-changed', syncUI);
