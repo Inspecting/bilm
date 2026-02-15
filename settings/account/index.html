@@ -19,26 +19,29 @@
     <section class="account-shell">
       <header class="account-header">
         <h1>Account Settings</h1>
-        <p>Manage log in, profile display, sync behavior, and account safety.</p>
+        <p>Manage log in, save timing, sync behavior, and account safety.</p>
       </header>
 
       <section class="panel">
         <h2>Status</h2>
         <p id="accountStatusText">Checking account status...</p>
-        <p id="accountHintText" class="muted">Auto Sync keeps local data and account cloud backup aligned across page loads.</p>
+        <p id="accountHintText" class="muted">Auto save runs every 30 seconds, then auto sync runs 5 seconds after save when enabled. Use the navbar status menu to log out.</p>
       </section>
 
       <section class="panel">
-        <h2>Auto Sync</h2>
-        <div class="row">
-          <div>
-            <strong>Auto Sync</strong>
-            <p class="muted">When enabled, this device pulls account backup on page load and listens for cloud updates.</p>
+        <h2>Sync</h2>
+        <div class="actions">
+          <button id="syncNowBtn" class="btn btn-outline" type="button">Sync</button>
+          <div class="row">
+            <div>
+              <strong>Auto Sync</strong>
+              <p class="muted">When enabled, this device pulls account backup on page load and listens for cloud updates.</p>
+            </div>
+            <label class="toggle">
+              <input id="autoSyncToggle" type="checkbox" />
+              <span></span>
+            </label>
           </div>
-          <label class="toggle">
-            <input id="autoSyncToggle" type="checkbox" />
-            <span></span>
-          </label>
         </div>
       </section>
 
@@ -62,22 +65,20 @@
         </div>
       </section>
 
+      <section class="panel">
+        <h2>Account Actions</h2>
+        <div class="actions">
+          <button id="saveNowBtn" class="btn" type="button">Save</button>
+          <p id="autoSaveCountdownText" class="muted actions-note">Auto save in 30 seconds.</p>
+        </div>
+      </section>
+
       <section class="panel" id="profilePanel">
         <h2>Profile Display</h2>
         <div class="stack">
           <input id="usernameInput" type="text" maxlength="30" placeholder="Optional username for navbar display" autocomplete="nickname" />
           <button id="saveUsernameBtn" class="btn btn-outline" type="button">Save Username</button>
           <p class="muted">Display only. Sign in and sign up still require email + password.</p>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Account Actions</h2>
-        <div class="actions">
-          <button id="saveNowBtn" class="btn" type="button">Save</button>
-          <button id="syncNowBtn" class="btn btn-outline" type="button">Sync</button>
-          <button id="logoutBtn" class="btn btn-outline" type="button">Log Out</button>
-          <p id="autoSaveCountdownText" class="muted actions-note">Auto save in 60 seconds.</p>
         </div>
       </section>
 

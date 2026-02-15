@@ -35,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const saveNowBtn = document.getElementById('saveNowBtn');
   const syncNowBtn = document.getElementById('syncNowBtn');
   const autoSaveCountdownText = document.getElementById('autoSaveCountdownText');
-  const logoutBtn = document.getElementById('logoutBtn');
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 
@@ -44,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function getGlobalAutoSaveNextAt() {
     const apiNext = window.bilmAuth?.getAutoSaveNextAt?.();
-    return Number.isFinite(apiNext) && apiNext > 0 ? apiNext : (nextAutoSaveAt || (Date.now() + 60000));
+    return Number.isFinite(apiNext) && apiNext > 0 ? apiNext : (nextAutoSaveAt || (Date.now() + 30000));
   }
 
   const getSettings = () => window.bilmTheme?.getSettings?.() || {};
@@ -211,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     accountStatusText.textContent = loggedIn ? `Logged in ${username}${email}` : 'You are not signed in.';
     accountHintText.textContent = loggedIn
-      ? 'Auto Sync keeps this device synced with your account backup.'
+      ? 'Auto save runs every 30 seconds and auto sync runs 5 seconds after save when enabled. Use the navbar status menu to log out.'
       : 'Log in with email and password, or create a new account.';
 
     loginPanel.hidden = loggedIn;
@@ -219,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     saveNowBtn.disabled = !loggedIn;
     syncNowBtn.disabled = !loggedIn;
     saveUsernameBtn.disabled = !loggedIn;
-    logoutBtn.disabled = !loggedIn;
     usernameInput.value = user?.displayName || '';
 
     if (loggedIn) {
@@ -236,38 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!window.bilmAuth) throw new Error('Auth module did not load.');
     await window.bilmAuth.init();
-  }
-
-  async function clearAllLocalData() {
-    localStorage.clear();
-    sessionStorage.clear();
-
-    document.cookie.split(';').forEach((cookie) => {
-      const eqPos = cookie.indexOf('=');
-      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
-      if (name) {
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-      }
-    });
-
-    if (window.indexedDB?.databases) {
-      const databases = await window.indexedDB.databases();
-      await Promise.all((databases || []).map((db) => new Promise((resolve) => {
-        if (!db.name) {
-          resolve();
-          return;
-        }
-        const request = window.indexedDB.deleteDatabase(db.name);
-        request.onsuccess = () => resolve();
-        request.onerror = () => resolve();
-        request.onblocked = () => resolve();
-      })));
-    }
-
-    if (window.caches?.keys) {
-      const cacheKeys = await window.caches.keys();
-      await Promise.all(cacheKeys.map((cacheKey) => window.caches.delete(cacheKey)));
-    }
   }
 
   autoSyncToggle.checked = getSettings().accountAutoSync !== false;
@@ -351,21 +317,6 @@ document.addEventListener('DOMContentLoaded', () => {
       updateUserUi(window.bilmAuth.getCurrentUser());
     } catch (error) {
       statusText.textContent = `Username update failed: ${error.message}`;
-    }
-  });
-
-  logoutBtn.addEventListener('click', async () => {
-    try {
-      await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Already logged out.');
-      if (!confirm('Log out of your account now?')) return;
-      await window.bilmAuth.signOut();
-      stopAutoSave();
-      await clearAllLocalData();
-      statusText.textContent = 'Logged out and cleared local data. Reloading...';
-      setTimeout(() => location.reload(), 250);
-    } catch (error) {
-      statusText.textContent = `Logout failed: ${error.message}`;
     }
   });
 
