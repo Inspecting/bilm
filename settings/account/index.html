@@ -19,13 +19,30 @@
     <section class="account-shell">
       <header class="account-header">
         <h1>Account Settings</h1>
-        <p>Simple email/password account login and cloud sync controls.</p>
+        <p>Manage log in, save timing, sync behavior, and account safety.</p>
       </header>
 
       <section class="panel">
         <h2>Status</h2>
         <p id="accountStatusText">Checking account status...</p>
-        <p id="accountHintText" class="muted">Use the navbar account button to return here anytime.</p>
+        <p id="accountHintText" class="muted">Auto save runs every 30 seconds, then auto sync runs 5 seconds after save when enabled. Use the navbar status menu to log out.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Sync</h2>
+        <div class="actions">
+          <button id="syncNowBtn" class="btn btn-outline" type="button">Sync</button>
+          <div class="row">
+            <div>
+              <strong>Auto Sync</strong>
+              <p class="muted">When enabled, this device pulls account backup on page load and listens for cloud updates.</p>
+            </div>
+            <label class="toggle">
+              <input id="autoSyncToggle" type="checkbox" />
+              <span></span>
+            </label>
+          </div>
+        </div>
       </section>
 
       <section class="panel" id="loginPanel">
@@ -48,13 +65,11 @@
         </div>
       </section>
 
-
-      <section class="panel" id="cloudPanel">
-        <h2>Cloud Sync</h2>
-        <div class="stack">
-          <button id="saveCloudBtn" class="btn btn-outline" type="button">Save to Cloud</button>
-          <button id="syncCloudBtn" class="btn btn-outline" type="button">Sync from Cloud</button>
-          <p class="muted">Login now runs one sync automatically. After that, use these buttons to manually upload or pull cloud data.</p>
+      <section class="panel">
+        <h2>Account Actions</h2>
+        <div class="actions">
+          <button id="saveNowBtn" class="btn" type="button">Save</button>
+          <p id="autoSaveCountdownText" class="muted actions-note">Auto save in 30 seconds.</p>
         </div>
       </section>
 
@@ -69,7 +84,7 @@
 
       <section class="panel danger-panel">
         <h2>Danger Zone</h2>
-        <p class="muted">Delete account permanently from Firebase Authentication.</p>
+        <p class="muted">Delete account permanently from the site and remove account data.</p>
         <div class="stack">
           <input id="deletePassword" type="password" placeholder="Type password to confirm delete" autocomplete="current-password" />
           <button id="deleteAccountBtn" class="btn btn-danger" type="button">Delete Account</button>
