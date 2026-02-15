@@ -42,8 +42,7 @@ const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 const initialSettings = window.bilmTheme?.getSettings?.();
 const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
 const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
-const preferredServer = initialSettings?.defaultServer || (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'multiembed' : 'vidsrc');
-let currentServer = normalizeServer(preferredServer);
+let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 
@@ -81,7 +80,6 @@ const CONTINUE_WATCHING_DELAY = 15000;
 let continueWatchingReady = false;
 let continueWatchingTimer = null;
 let continueWatchingInterval = null;
-let viewerOpenedAt = Date.now();
 let similarPage = 1;
 let similarLoading = false;
 let similarEnded = false;
@@ -112,14 +110,6 @@ function startContinueWatchingTimer() {
   }, CONTINUE_WATCHING_DELAY);
 }
 
-
-function markContinueWatchingIfEligible() {
-  if (!continueWatchingEnabled || continueWatchingReady) return;
-  if (Date.now() - viewerOpenedAt < CONTINUE_WATCHING_DELAY) return;
-  continueWatchingReady = true;
-  updateContinueWatching();
-}
-
 function stopContinueWatchingTimer() {
   if (continueWatchingTimer) {
     clearTimeout(continueWatchingTimer);
@@ -136,7 +126,7 @@ function buildMovieUrl(server) {
   if (!contentId) return '';
   switch (server) {
     case 'vidsrc':
-      return `https://vsrc.su/embed/movie/${contentId}`;
+      return `https://vidsrc.me/embed/${contentId}`;
     case 'godrive':
       return imdbId ? `https://godriveplayer.com/player.php?imdb=${imdbId}` : '';
     case 'multiembed':
@@ -669,17 +659,6 @@ document.addEventListener('fullscreenchange', () => {
     }
     navbarContainer.classList.remove('hide-navbar');
   }
-});
-
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    markContinueWatchingIfEligible();
-  }
-});
-
-window.addEventListener('pagehide', () => {
-  markContinueWatchingIfEligible();
 });
 
 // Initial load
