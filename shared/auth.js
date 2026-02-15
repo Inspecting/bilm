@@ -27,6 +27,13 @@
   const AUTO_SAVE_DEVICE_ID_KEY = 'bilm:autoSaveDeviceId';
   const AUTO_SAVE_LAST_APPLIED_AT_KEY = 'bilm:autoSaveLastAppliedAt';
   const AUTO_SAVE_LAST_APPLIED_REVISION_KEY = 'bilm:autoSaveLastAppliedRevision';
+  const MERGEABLE_HISTORY_KEYS = new Set([
+    'bilm-continue-watching',
+    'bilm-watch-history',
+    'bilm-favorites',
+    'bilm-watch-later',
+    'bilm-search-history'
+  ]);
   const autoSaveTabId = `tab-${Math.random().toString(36).slice(2)}`;
   let autoSaveTimer = null;
   let autoSaveInFlight = false;
@@ -234,6 +241,14 @@
     const favored = preferLocal ? local : remote;
     const other = preferLocal ? remote : local;
 
+    const mergedLocalStorage = { ...(other.localStorage || {}), ...(favored.localStorage || {}) };
+    MERGEABLE_HISTORY_KEYS.forEach((key) => {
+      const mergedList = mergeHistoryList(local.localStorage?.[key], remote.localStorage?.[key]);
+      if (mergedList !== null) {
+        mergedLocalStorage[key] = JSON.stringify(mergedList);
+      }
+    });
+
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date(Math.max(local.savedAtMs, remote.savedAtMs)).toISOString(),
@@ -241,10 +256,41 @@
       savedByDeviceId: local.savedByDeviceId,
       origin: local.origin || remote.origin || location.origin,
       pathname: local.pathname || remote.pathname || location.pathname,
-      localStorage: { ...(other.localStorage || {}), ...(favored.localStorage || {}) },
+      localStorage: mergedLocalStorage,
       sessionStorage: { ...(other.sessionStorage || {}), ...(favored.sessionStorage || {}) },
       cookies: mergeCookieStrings(local.cookies, remote.cookies)
     };
+  }
+
+  function mergeHistoryList(primaryRaw, secondaryRaw) {
+    const parseList = (raw) => {
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const primary = parseList(primaryRaw);
+    const secondary = parseList(secondaryRaw);
+    if (!primary.length && !secondary.length) return null;
+
+    const byKey = new Map();
+    [...secondary, ...primary].forEach((item) => {
+      if (!item || typeof item !== 'object') return;
+      const itemKey = String(item.key || '');
+      if (!itemKey) return;
+      const prev = byKey.get(itemKey);
+      const prevUpdated = Number(prev?.updatedAt || 0);
+      const nextUpdated = Number(item?.updatedAt || 0);
+      if (!prev || nextUpdated >= prevUpdated) {
+        byKey.set(itemKey, item);
+      }
+    });
+
+    return [...byKey.values()].sort((a, b) => Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0));
   }
 
   function applyRemoteSnapshot(snapshot) {
@@ -317,8 +363,9 @@
     const snapshot = backup.snapshot || null;
     if (!snapshot) return false;
     const revision = safeReadInt(backup.revision);
-    applyRemoteSnapshot(snapshot);
-    const remoteSavedAt = Number(snapshot.savedAtMs || Date.now());
+    const mergedSnapshot = mergeSnapshots(collectAutoSaveSnapshot(), snapshot);
+    applyRemoteSnapshot(mergedSnapshot);
+    const remoteSavedAt = Number(mergedSnapshot.savedAtMs || Date.now());
     writeLastAppliedAt(remoteSavedAt);
     if (revision > 0) writeLastAppliedRevision(revision);
     return true;

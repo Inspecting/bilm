@@ -49,7 +49,8 @@ let currentEpisode = 1;
 const initialSettings = window.bilmTheme?.getSettings?.();
 const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
 const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
-let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
+const preferredServer = initialSettings?.defaultServer || (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'multiembed' : 'vidsrc');
+let currentServer = normalizeServer(preferredServer);
 let totalSeasons = 1;
 let episodesPerSeason = {};
 let seasonEpisodeMemory = {};
@@ -100,6 +101,7 @@ let seasonCooldownTimer = null;
 let episodeCooldownTimer = null;
 
 let imdbId = null;
+let viewerOpenedAt = Date.now();
 let similarPage = 1;
 let similarLoading = false;
 let similarEnded = false;
@@ -140,6 +142,14 @@ function stopContinueWatchingTimer() {
     continueWatchingInterval = null;
   }
   continueWatchingReady = false;
+}
+
+
+function markContinueWatchingIfEligible() {
+  if (!continueWatchingEnabled || continueWatchingReady) return;
+  if (Date.now() - viewerOpenedAt < CONTINUE_WATCHING_DELAY) return;
+  continueWatchingReady = true;
+  updateContinueWatching();
 }
 
 function loadList(key) {
@@ -523,6 +533,16 @@ window.addEventListener('bilm:theme-changed', (event) => {
       stopContinueWatchingTimer();
     }
   }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    markContinueWatchingIfEligible();
+  }
+});
+
+window.addEventListener('pagehide', () => {
+  markContinueWatchingIfEligible();
 });
 
 if (moreLikeBox) {
