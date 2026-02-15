@@ -18,6 +18,7 @@
   const subscribers = new Set();
   let initPromise;
   let modules;
+  let firestoreModules;
   let app;
   let auth;
   let analytics;
@@ -124,6 +125,54 @@
       sessionStorage: input.sessionStorage && typeof input.sessionStorage === 'object' ? input.sessionStorage : {},
       cookies: typeof input.cookies === 'string' ? input.cookies : ''
     };
+  }
+
+  async function loadModules() {
+    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+    const [
+      appModule,
+      authModule,
+      analyticsModule
+    ] = await Promise.all([
+      import(`${base}/firebase-app.js`),
+      import(`${base}/firebase-auth.js`),
+      import(`${base}/firebase-analytics.js`)
+    ]);
+
+    return {
+      ...appModule,
+      ...authModule,
+      ...analyticsModule
+    };
+  }
+
+  async function loadFirestoreModules() {
+    if (firestoreModules) return firestoreModules;
+    const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+    try {
+      const mod = await import(`${base}/firebase-firestore.js`);
+      firestoreModules = mod;
+      return firestoreModules;
+    } catch (error) {
+      console.warn('Firestore module unavailable:', error);
+      firestoreModules = null;
+      return null;
+    }
+  }
+
+  async function init() {
+    if (initPromise) return initPromise;
+
+    initPromise = (async () => {
+      modules = await loadModules();
+      app = modules.initializeApp(FIREBASE_CONFIG);
+      auth = modules.getAuth(app);
+
+      const firestoreMod = await loadFirestoreModules();
+      if (firestoreMod?.getFirestore) {
+        firestore = firestoreMod.getFirestore(app);
+      }
+
   }
 
   async function loadModules() {
@@ -270,6 +319,76 @@
       modules.onAuthStateChanged(auth, (user) => {
         currentUser = normalizeUser(user);
         notifySubscribers(currentUser);
+        if (user) {
+          ensureAutoSaveNextAt();
+        }
+      });
+
+      currentUser = normalizeUser(auth.currentUser);
+      if (currentUser) {
+        ensureAutoSaveNextAt();
+      }
+      return api;
+    })();
+
+    return initPromise;
+  }
+
+  async function ensureReady() {
+    await init();
+    if (!auth || !modules) throw new Error('Auth services are unavailable.');
+  }
+
+  async function ensureCloudReady() {
+    await ensureReady();
+    if (firestore) return;
+
+    const firestoreMod = await loadFirestoreModules();
+    if (firestoreMod?.getFirestore && app) {
+      firestore = firestoreMod.getFirestore(app);
+    }
+
+    if (!firestore) {
+      throw new Error('Cloud backup is temporarily unavailable.');
+    }
+  }
+
+  function validateEmailPassword(email, password) {
+    if (!email || !email.includes('@')) {
+      throw new Error('Enter a valid email address.');
+    }
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters.');
+    }
+  }
+
+  function getBackupDocRef(uid) {
+    return firestoreModules.doc(firestore, CLOUD_BACKUP_COLLECTION, uid);
+  }
+
+  async function signIn(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.signInWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    ensureAutoSaveNextAt();
+    return currentUser;
+  }
+
+  async function signUp(email, password) {
+    await ensureReady();
+    validateEmailPassword(email, password);
+    const credential = await modules.createUserWithEmailAndPassword(auth, email.trim(), password);
+    currentUser = normalizeUser(credential.user);
+    notifySubscribers(currentUser);
+    ensureAutoSaveNextAt();
+    return currentUser;
+  }
+
+  async function signOut() {
+    await ensureReady();
+    await modules.signOut(auth);
       });
 
       currentUser = normalizeUser(auth.currentUser);
@@ -391,6 +510,10 @@
     await modules.reauthenticateWithCredential(activeUser, credential);
 
     try {
+      if (firestore) {
+        await ensureCloudReady();
+        await firestoreModules.deleteDoc(getBackupDocRef(activeUser.uid));
+      }
       await modules.deleteDoc(getBackupDocRef(activeUser.uid));
     } catch (error) {
       console.warn('Could not remove cloud backup before account deletion:', error);
@@ -402,6 +525,7 @@
   }
 
   async function saveCloudSnapshot(snapshot, options = {}) {
+    await ensureCloudReady();
     await ensureReady();
     const activeUser = auth.currentUser;
     if (!activeUser) throw new Error('Log in first.');
@@ -412,6 +536,7 @@
     const nextAutoSaveAt = preserveSchedule ? ensureAutoSaveNextAt() : scheduleNextAutoSave();
     let nextRevision = 1;
 
+    await firestoreModules.runTransaction(firestore, async (transaction) => {
     await modules.runTransaction(firestore, async (transaction) => {
       const existing = await transaction.get(ref);
       const currentRevision = existing.exists() ? safeReadInt(existing.data()?.revision) : 0;
@@ -419,6 +544,7 @@
       transaction.set(ref, {
         uid: activeUser.uid,
         revision: nextRevision,
+        updatedAt: firestoreModules.serverTimestamp(),
         updatedAt: modules.serverTimestamp(),
         updatedByDeviceId: getAutoSaveDeviceId(),
         snapshot: normalizedSnapshot
@@ -429,6 +555,11 @@
   }
 
   async function getCloudSnapshot() {
+    await ensureCloudReady();
+    const activeUser = auth.currentUser;
+    if (!activeUser) return null;
+
+    const cloudDoc = await firestoreModules.getDoc(getBackupDocRef(activeUser.uid));
     await ensureReady();
     const activeUser = auth.currentUser;
     if (!activeUser) return null;
