@@ -20,6 +20,7 @@
   let currentUser = null;
 
   const AUTO_SAVE_INTERVAL_MS = 60000;
+  const THEME_SETTINGS_KEY = 'bilm-theme-settings';
   const AUTO_SAVE_NEXT_AT_KEY = 'bilm:autoSaveNextAt';
   const AUTO_SAVE_LOCK_KEY = 'bilm:autoSaveLock';
   const AUTO_SAVE_LOCK_TTL_MS = 15000;
@@ -30,6 +31,17 @@
   let autoSaveInFlight = false;
   let cloudSyncUnsubscribe = null;
   let applyingRemoteSnapshot = false;
+
+  function isAccountSyncEnabled() {
+    try {
+      const raw = localStorage.getItem(THEME_SETTINGS_KEY);
+      if (!raw) return true;
+      const settings = JSON.parse(raw);
+      return settings?.accountAutoSync !== false;
+    } catch {
+      return true;
+    }
+  }
 
   function getAutoSaveDeviceId() {
     try {
@@ -196,6 +208,7 @@
   }
 
   function startCloudSyncListener() {
+    if (!isAccountSyncEnabled()) return;
     if (!auth?.currentUser || !modules?.onSnapshot || !firestore || cloudSyncUnsubscribe) return;
     const userRef = modules.doc(firestore, 'users', auth.currentUser.uid);
     cloudSyncUnsubscribe = modules.onSnapshot(userRef, (docSnap) => {
@@ -217,6 +230,29 @@
     }, (error) => {
       console.warn('Cloud sync listener failed:', error);
     });
+  }
+
+  async function syncFromCloudNow() {
+    if (!isAccountSyncEnabled()) return false;
+    const snapshot = await api.getCloudSnapshot();
+    if (!snapshot) return false;
+    applyRemoteSnapshot(snapshot);
+    const remoteSavedAt = Number(snapshot.savedAtMs || Date.now());
+    writeLastAppliedAt(remoteSavedAt);
+    writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
+    return true;
+  }
+
+  function handleAccountSyncSettingChange() {
+    if (!auth?.currentUser) return;
+    if (isAccountSyncEnabled()) {
+      startCloudSyncListener();
+      syncFromCloudNow().catch((error) => {
+        console.warn('Immediate cloud sync failed:', error);
+      });
+    } else {
+      stopCloudSyncListener();
+    }
   }
 
   function startGlobalAutoSave() {
@@ -293,6 +329,9 @@
           if (currentUser) {
             startGlobalAutoSave();
             startCloudSyncListener();
+            syncFromCloudNow().catch((error) => {
+              console.warn('Startup cloud sync failed:', error);
+            });
             maybeRunGlobalAutoSave(false);
           } else {
             stopGlobalAutoSave();
@@ -336,6 +375,22 @@
     async signInWithIdentifier(identifier, password) {
       await init();
       return modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
+    },
+    async setUsername(username) {
+      await init();
+      const user = await requireAuth();
+      const cleaned = String(username || '').trim();
+      if (cleaned.length > 30) throw new Error('Username must be 30 characters or fewer.');
+      await modules.updateProfile(user, { displayName: cleaned || null });
+      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+        profile: {
+          username: cleaned || null,
+          updatedAt: modules.serverTimestamp()
+        }
+      }, { merge: true });
+      currentUser = { ...user, displayName: cleaned || null };
+      notifySubscribers(auth.currentUser || currentUser);
+      return cleaned;
     },
     async reauthenticate(password) {
       await init();
@@ -388,8 +443,17 @@
       const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
       const data = docSnap.data() || {};
       return data.cloudBackup?.snapshot || null;
+    },
+    async syncFromCloudNow() {
+      await init();
+      return syncFromCloudNow();
     }
   };
+
+  window.addEventListener('storage', (event) => {
+    if (event.key !== THEME_SETTINGS_KEY) return;
+    handleAccountSyncSettingChange();
+  });
 
   window.bilmAuth = api;
 })();
