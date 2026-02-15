@@ -16,18 +16,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const accountHintText = document.getElementById('accountHintText');
   const statusText = document.getElementById('statusText');
 
+  const loginPanel = document.getElementById('loginPanel');
+  const signUpPanel = document.getElementById('signUpPanel');
+
   const loginEmail = document.getElementById('loginEmail');
   const loginPassword = document.getElementById('loginPassword');
   const loginBtn = document.getElementById('loginBtn');
+  const toggleLoginPasswordBtn = document.getElementById('toggleLoginPasswordBtn');
 
   const signUpEmail = document.getElementById('signUpEmail');
   const signUpPassword = document.getElementById('signUpPassword');
   const signUpBtn = document.getElementById('signUpBtn');
+  const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
 
   const syncNowBtn = document.getElementById('syncNowBtn');
+  const autoSaveCountdownText = document.getElementById('autoSaveCountdownText');
   const logoutBtn = document.getElementById('logoutBtn');
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+
+  let autoSaveIntervalId = null;
+  let autoSaveTickId = null;
+  let nextAutoSaveAt = 0;
 
   const getSettings = () => window.bilmTheme?.getSettings?.() || {};
   const setSettings = (partial) => {
@@ -60,22 +70,115 @@ document.addEventListener('DOMContentLoaded', () => {
 
     Object.entries(payload.localStorage || {}).forEach(([key, value]) => localStorage.setItem(key, value));
     Object.entries(payload.sessionStorage || {}).forEach(([key, value]) => sessionStorage.setItem(key, value));
+
+    document.cookie.split(';').forEach((cookie) => {
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+      if (name) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      }
+    });
+
+    const importedCookies = String(payload.cookies || '');
+    importedCookies
+      .split(';')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .forEach((cookieEntry) => {
+        document.cookie = `${cookieEntry};path=/`;
+      });
   }
 
   function mergeSnapshots(localSnapshot, cloudSnapshot) {
+    const localData = localSnapshot || collectBackupData();
+    const cloudData = cloudSnapshot || {};
+    const cookieItems = [
+      ...String(cloudData.cookies || '').split(';').map((item) => item.trim()).filter(Boolean),
+      ...String(localData.cookies || '').split(';').map((item) => item.trim()).filter(Boolean)
+    ];
+
     return {
-      ...localSnapshot,
-      ...cloudSnapshot,
-      localStorage: {
-        ...(localSnapshot.localStorage || {}),
-        ...(cloudSnapshot.localStorage || {})
-      },
-      sessionStorage: {
-        ...(localSnapshot.sessionStorage || {}),
-        ...(cloudSnapshot.sessionStorage || {})
-      },
-      cookies: cloudSnapshot.cookies || localSnapshot.cookies || ''
+      schema: 'bilm-backup-v1',
+      exportedAt: new Date().toISOString(),
+      origin: location.origin,
+      pathname: location.pathname,
+      localStorage: { ...(localData.localStorage || {}), ...(cloudData.localStorage || {}) },
+      sessionStorage: { ...(localData.sessionStorage || {}), ...(cloudData.sessionStorage || {}) },
+      cookies: [...new Set(cookieItems)].join('; ')
     };
+  }
+
+  function updateAutoSaveCountdown() {
+    const user = window.bilmAuth?.getCurrentUser?.();
+    if (!user) {
+      autoSaveCountdownText.textContent = 'Auto save paused until you log in.';
+      return;
+    }
+    const secondsLeft = Math.max(0, Math.ceil((nextAutoSaveAt - Date.now()) / 1000));
+    autoSaveCountdownText.textContent = `Auto save in ${secondsLeft} seconds.`;
+  }
+
+  function stopAutoSave() {
+    if (autoSaveIntervalId) {
+      clearInterval(autoSaveIntervalId);
+      autoSaveIntervalId = null;
+    }
+    if (autoSaveTickId) {
+      clearInterval(autoSaveTickId);
+      autoSaveTickId = null;
+    }
+    nextAutoSaveAt = 0;
+    updateAutoSaveCountdown();
+  }
+
+  async function runManualSave(reason = 'manual') {
+    await ensureAuthReady();
+    if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
+
+    const localSnapshot = collectBackupData();
+    await window.bilmAuth.saveCloudSnapshot(localSnapshot);
+    statusText.textContent = reason === 'auto' ? 'Auto save complete.' : 'Save complete.';
+    nextAutoSaveAt = Date.now() + 60000;
+    updateAutoSaveCountdown();
+  }
+
+  function startAutoSave() {
+    stopAutoSave();
+    if (!window.bilmAuth?.getCurrentUser?.()) {
+      updateAutoSaveCountdown();
+      return;
+    }
+
+    nextAutoSaveAt = Date.now() + 60000;
+    updateAutoSaveCountdown();
+    autoSaveTickId = setInterval(updateAutoSaveCountdown, 1000);
+    autoSaveIntervalId = setInterval(async () => {
+      try {
+        await runManualSave('auto');
+      } catch (error) {
+        statusText.textContent = `Auto save failed: ${error.message}`;
+      } finally {
+        nextAutoSaveAt = Date.now() + 60000;
+        updateAutoSaveCountdown();
+      }
+    }, 60000);
+  }
+
+  async function saveCredentialsForAutofill(email, password) {
+    if (!('credentials' in navigator) || !window.PasswordCredential) return;
+    try {
+      const credential = new window.PasswordCredential({ id: email, password, name: email });
+      await navigator.credentials.store(credential);
+    } catch (error) {
+      console.warn('Credential save skipped:', error);
+    }
+  }
+
+  function setPasswordVisibility(inputEl, toggleBtn) {
+    if (!inputEl || !toggleBtn) return;
+    const visible = inputEl.type === 'text';
+    inputEl.type = visible ? 'password' : 'text';
+    toggleBtn.textContent = visible ? 'Show Password' : 'Hide Password';
   }
 
   async function autoSyncAfterSignIn() {
@@ -111,10 +214,23 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateUserUi(user) {
     const username = user?.displayName ? `@${user.displayName}` : '';
     const email = user?.email ? ` (${user.email})` : '';
-    accountStatusText.textContent = user ? `Logged in ${username}${email}` : 'You are not signed in.';
-    accountHintText.textContent = user
+    const loggedIn = Boolean(user);
+
+    accountStatusText.textContent = loggedIn ? `Logged in ${username}${email}` : 'You are not signed in.';
+    accountHintText.textContent = loggedIn
       ? 'Your account can sync local and cloud data anytime.'
       : 'Log in with email and password, or create a new account.';
+
+    loginPanel.hidden = loggedIn;
+    signUpPanel.hidden = loggedIn;
+    syncNowBtn.disabled = !loggedIn;
+    logoutBtn.disabled = !loggedIn;
+
+    if (loggedIn) {
+      startAutoSave();
+    } else {
+      stopAutoSave();
+    }
   }
 
   async function ensureAuthReady() {
@@ -168,8 +284,12 @@ document.addEventListener('DOMContentLoaded', () => {
   loginBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.signIn(loginEmail.value, loginPassword.value);
+      const email = loginEmail.value.trim();
+      const password = loginPassword.value;
+      await window.bilmAuth.signIn(email, password);
+      await saveCredentialsForAutofill(email, password);
       statusText.textContent = 'Logged in.';
+      startAutoSave();
       if (getSettings().accountAutoSync !== false) {
         await autoSyncAfterSignIn();
       }
@@ -181,8 +301,12 @@ document.addEventListener('DOMContentLoaded', () => {
   signUpBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.signUp(signUpEmail.value, signUpPassword.value);
+      const email = signUpEmail.value.trim();
+      const password = signUpPassword.value;
+      await window.bilmAuth.signUp(email, password);
+      await saveCredentialsForAutofill(email, password);
       statusText.textContent = 'Account created and logged in.';
+      startAutoSave();
       if (getSettings().accountAutoSync !== false) {
         await autoSyncAfterSignIn();
       }
@@ -207,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!window.bilmAuth.getCurrentUser()) throw new Error('Already logged out.');
       if (!confirm('Log out of your account now?')) return;
       await window.bilmAuth.signOut();
+      stopAutoSave();
       await clearAllLocalData();
       statusText.textContent = 'Logged out and cleared local data. Reloading...';
       setTimeout(() => location.reload(), 250);
@@ -230,6 +355,9 @@ document.addEventListener('DOMContentLoaded', () => {
       statusText.textContent = `Delete failed: ${error.message}`;
     }
   });
+
+  toggleLoginPasswordBtn.addEventListener('click', () => setPasswordVisibility(loginPassword, toggleLoginPasswordBtn));
+  toggleSignUpPasswordBtn.addEventListener('click', () => setPasswordVisibility(signUpPassword, toggleSignUpPasswordBtn));
 
   (async () => {
     try {
