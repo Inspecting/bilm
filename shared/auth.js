@@ -145,6 +145,9 @@
   function markLocalSnapshotDirty() {
     localSnapshotDirty = true;
     scheduleLocalChangeAutoSave();
+  function markLocalSnapshotDirty() {
+    localSnapshotDirty = true;
+    maybeRunGlobalAutoSave(true);
   }
 
   function installSnapshotDirtyTrackers() {
@@ -169,6 +172,10 @@
           if (applyingRemoteSnapshot) return result;
           if (storage === localStorage && internalKeys.has(key)) return result;
           markLocalSnapshotDirty();
+          const result = original.apply(this, args);
+          if (!applyingRemoteSnapshot) {
+            markLocalSnapshotDirty();
+          }
           return result;
         };
       });
