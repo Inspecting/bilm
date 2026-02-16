@@ -573,8 +573,10 @@ function buildTvUrl(server) {
   const season = currentSeason;
   const episode = currentEpisode;
   switch (server) {
-    case 'vidsrc':
-      return `https://vidsrc-embed.ru/embed/tv/${tmdbId || imdbId}`;
+    case 'vidsrc': {
+      const id = imdbId || tmdbId;
+      return `https://vidsrc-embed.ru/embed/tv/${id}/${season}-${episode}`;
+    }
     case 'godrive':
       return tmdbId
         ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
