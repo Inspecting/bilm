@@ -25,7 +25,6 @@
       <section class="panel">
         <h2>Status</h2>
         <p id="accountStatusText">Checking account status...</p>
-        <p id="accountHintText" class="muted">Use this page to manage account access and move data between local + cloud backups.</p>
         <p id="accountHintText" class="muted">Use this page to manage account sign-in, profile display, and account safety.</p>
       </section>
 
@@ -43,10 +42,8 @@
         <h2>Data Transfer</h2>
         <p class="muted">Export/import works with local data. Cloud actions use your signed-in account.</p>
         <div class="actions">
-          <button id="exportDataBtn" class="btn" type="button">Export Data</button>
-          <button id="importDataBtn" class="btn btn-outline" type="button">Import Data</button>
-          <button id="cloudExportBtn" class="btn" type="button">Cloud Export</button>
-          <button id="cloudImportBtn" class="btn btn-outline" type="button">Cloud Import</button>
+          <button id="exportDataBtn" class="btn" type="button">Export</button>
+          <button id="importDataBtn" class="btn btn-outline" type="button">Import</button>
           <input id="importFileInput" type="file" accept="application/json,.json,text/plain" hidden />
         </div>
         <p id="transferStatusText" class="muted">No transfer action yet.</p>
@@ -112,6 +109,23 @@
           <button id="closeSignUpModalBtn" class="btn btn-outline" type="button">Close</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="data-modal" id="dataModal" role="dialog" aria-modal="true" aria-labelledby="dataModalTitle">
+    <div class="data-modal__panel">
+      <h3 id="dataModalTitle">Data Transfer</h3>
+      <p id="dataModalMessage">Transfer data using local files or your cloud account.</p>
+      <textarea id="dataCodeField" class="data-code" spellcheck="false"></textarea>
+      <div class="actions modal-actions">
+        <button id="copyDataBtn" class="btn" type="button" hidden>Copy Code</button>
+        <button id="downloadDataBtn" class="btn btn-outline" type="button" hidden>Download File</button>
+        <button id="cloudExportBtn" class="btn btn-outline" type="button" hidden>☁️ Export</button>
+        <button id="uploadImportBtn" class="btn" type="button" hidden>Upload Save File</button>
+        <button id="cloudImportBtn" class="btn btn-outline" type="button" hidden>☁️ Import</button>
+        <button id="applyImportBtn" class="btn btn-outline" type="button" hidden>Apply Import</button>
+        <button id="closeDataModalBtn" class="btn btn-outline" type="button">Close</button>
+      </div>
     </div>
   </div>
 
