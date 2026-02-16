@@ -1023,6 +1023,12 @@
     const confirmReset = confirm('⚠️ This will erase all saved site data on your device. Continue?');
     if (!confirmReset) return;
 
+    const typedConfirmation = prompt('Type RESET to confirm data wipe.');
+    if (typedConfirmation?.trim().toUpperCase() !== 'RESET') {
+      alert('Reset canceled. Confirmation text did not match.');
+      return;
+    }
+
     try {
       localStorage.clear();
       sessionStorage.clear();
