@@ -352,8 +352,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = collectBackupData();
     const code = encodeBackup(payload);
     openDataModal({
-      title: 'Export Data',
-      message: 'Copy or download this secure backup code, or export your local data to cloud storage.',
+      title: 'Export Backup Code',
+      message: 'Copy this secure backup code or download it as a coded file. Keep it private; it contains your site data.',
       code,
       importMode: false
     });
@@ -362,8 +362,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   importDataBtn?.addEventListener('click', () => {
     openDataModal({
-      title: 'Import Data',
-      message: 'Upload a local save file or import from cloud, then apply to replace current local data.',
+      title: 'Import Backup Code',
+      message: 'Paste a backup code or upload a save file, then apply import to replace your current local data.',
       importMode: true
     });
     transferStatusText.textContent = 'Import popup opened.';
@@ -438,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const snapshot = await window.bilmAuth.getCloudSnapshot();
       if (!snapshot) throw new Error('No cloud backup found for this account.');
-      dataCodeField.value = JSON.stringify(snapshot, null, 2);
+      dataCodeField.value = encodeBackup(snapshot);
       transferStatusText.textContent = 'Cloud backup loaded into the import box. Review it, then select Apply Import when ready.';
     } catch (error) {
       transferStatusText.textContent = `Cloud import failed: ${error.message}`;

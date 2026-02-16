@@ -1262,7 +1262,7 @@
       }
       const snapshot = await window.bilmAuth.getCloudSnapshot();
       if (!snapshot) throw new Error('No cloud backup found for this account.');
-      dataCodeField.value = JSON.stringify(snapshot, null, 2);
+      dataCodeField.value = encodeBackup(snapshot);
       backupStatus.textContent = 'Cloud backup loaded into the import box. Review it, then click Apply Import when ready.';
     } catch (err) {
       backupStatus.textContent = `Cloud import failed: ${err.message}`;
