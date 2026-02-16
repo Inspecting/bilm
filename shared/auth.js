@@ -19,6 +19,8 @@
   let analytics;
   let currentUser = null;
 
+  const CLOUD_IMPORT_ONCE_KEY = 'bilm-cloud-import-once';
+
   function applyRemoteSnapshot(snapshot) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
     try {
@@ -38,6 +40,12 @@
     } catch (error) {
       console.warn('Applying cloud snapshot failed:', error);
     }
+  }
+
+  function consumeCloudImportOnceFlag() {
+    if (sessionStorage.getItem(CLOUD_IMPORT_ONCE_KEY) !== '1') return false;
+    sessionStorage.removeItem(CLOUD_IMPORT_ONCE_KEY);
+    return true;
   }
 
   async function syncFromCloudNow() {
@@ -104,6 +112,11 @@
 
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
+          if (currentUser && consumeCloudImportOnceFlag()) {
+            syncFromCloudNow().catch((error) => {
+              console.warn('One-time cloud import failed:', error);
+            });
+          }
           notifySubscribers(currentUser);
         });
 
@@ -183,6 +196,9 @@
     },
     getCurrentUser() {
       return auth?.currentUser || currentUser;
+    },
+    requestCloudImportOnce() {
+      sessionStorage.setItem(CLOUD_IMPORT_ONCE_KEY, '1');
     },
     onAuthStateChanged(callback) {
       subscribers.add(callback);

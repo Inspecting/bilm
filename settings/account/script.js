@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginPassword = document.getElementById('loginPassword');
   const loginBtn = document.getElementById('loginBtn');
   const toggleLoginPasswordBtn = document.getElementById('toggleLoginPasswordBtn');
+  const loginImportOnce = document.getElementById('loginImportOnce');
 
   const signUpEmail = document.getElementById('signUpEmail');
   const signUpPassword = document.getElementById('signUpPassword');
@@ -462,9 +463,13 @@ document.addEventListener('DOMContentLoaded', () => {
       await ensureAuthReady();
       const email = loginEmail.value.trim();
       const password = loginPassword.value;
+      if (loginImportOnce?.checked) {
+        window.bilmAuth.requestCloudImportOnce();
+      }
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
       closeModal(loginModal);
+      if (loginImportOnce) loginImportOnce.checked = false;
       statusText.textContent = 'Logged in.';
     } catch (error) {
       statusText.textContent = `Log in failed: ${error.message}`;
