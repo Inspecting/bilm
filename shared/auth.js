@@ -19,185 +19,8 @@
   let analytics;
   let currentUser = null;
 
-  const AUTO_SAVE_INTERVAL_MS = 30000;
-  const AUTO_SYNC_DELAY_AFTER_SAVE_MS = 5000;
-  const THEME_SETTINGS_KEY = 'bilm-theme-settings';
-  const AUTO_SAVE_NEXT_AT_KEY = 'bilm:autoSaveNextAt';
-  const AUTO_SAVE_LOCK_KEY = 'bilm:autoSaveLock';
-  const AUTO_SAVE_LOCK_TTL_MS = 15000;
-  const AUTO_SAVE_DEVICE_ID_KEY = 'bilm:autoSaveDeviceId';
-  const AUTO_SAVE_LAST_APPLIED_AT_KEY = 'bilm:autoSaveLastAppliedAt';
-  const autoSaveTabId = `tab-${Math.random().toString(36).slice(2)}`;
-  let autoSaveTimer = null;
-  let autoSaveInFlight = false;
-  let autoSyncAfterSaveTimer = null;
-  let cloudSyncUnsubscribe = null;
-  let applyingRemoteSnapshot = false;
-
-  function isAccountSyncEnabled() {
-    try {
-      const raw = localStorage.getItem(THEME_SETTINGS_KEY);
-      if (!raw) return true;
-      const settings = JSON.parse(raw);
-      return settings?.accountAutoSync !== false;
-    } catch {
-      return true;
-    }
-  }
-
-  function getAutoSaveDeviceId() {
-    try {
-      const existing = localStorage.getItem(AUTO_SAVE_DEVICE_ID_KEY);
-      if (existing) return existing;
-      const next = `device-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
-      localStorage.setItem(AUTO_SAVE_DEVICE_ID_KEY, next);
-      return next;
-    } catch {
-      return `device-volatile-${Math.random().toString(36).slice(2)}`;
-    }
-  }
-
-  const autoSaveDeviceId = getAutoSaveDeviceId();
-
-  function safeReadInt(value) {
-    const parsed = Number.parseInt(String(value || ''), 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  function readAutoSaveNextAt() {
-    try {
-      return safeReadInt(localStorage.getItem(AUTO_SAVE_NEXT_AT_KEY));
-    } catch {
-      return 0;
-    }
-  }
-
-  function writeAutoSaveNextAt(timestamp) {
-    try {
-      localStorage.setItem(AUTO_SAVE_NEXT_AT_KEY, String(timestamp));
-    } catch {
-      // no-op if storage is unavailable
-    }
-    return timestamp;
-  }
-
-  function ensureAutoSaveNextAt() {
-    const existing = readAutoSaveNextAt();
-    if (existing > 0) return existing;
-    return writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
-  }
-
-  function readStorageSnapshot(storage) {
-    try {
-      return Object.entries(storage).reduce((all, [key, value]) => {
-        all[key] = value;
-        return all;
-      }, {});
-    } catch {
-      return {};
-    }
-  }
-
-  function collectAutoSaveSnapshot() {
-    return {
-      schema: 'bilm-backup-v1',
-      exportedAt: new Date().toISOString(),
-      savedAtMs: Date.now(),
-      savedByDeviceId: autoSaveDeviceId,
-      origin: location.origin,
-      pathname: location.pathname,
-      localStorage: readStorageSnapshot(localStorage),
-      sessionStorage: readStorageSnapshot(sessionStorage),
-      cookies: document.cookie
-    };
-  }
-
-  function acquireAutoSaveLock() {
-    try {
-      const now = Date.now();
-      const raw = localStorage.getItem(AUTO_SAVE_LOCK_KEY);
-      if (raw) {
-        const lock = JSON.parse(raw);
-        if (lock?.expiresAt && lock.expiresAt > now && lock?.owner !== autoSaveTabId) {
-          return false;
-        }
-      }
-      localStorage.setItem(AUTO_SAVE_LOCK_KEY, JSON.stringify({ owner: autoSaveTabId, expiresAt: now + AUTO_SAVE_LOCK_TTL_MS }));
-      return true;
-    } catch {
-      return true;
-    }
-  }
-
-  function releaseAutoSaveLock() {
-    try {
-      const raw = localStorage.getItem(AUTO_SAVE_LOCK_KEY);
-      if (!raw) return;
-      const lock = JSON.parse(raw);
-      if (lock?.owner === autoSaveTabId) {
-        localStorage.removeItem(AUTO_SAVE_LOCK_KEY);
-      }
-    } catch {
-      // no-op
-    }
-  }
-
-  async function maybeRunGlobalAutoSave(force = false) {
-    if (autoSaveInFlight) return;
-    if (!auth?.currentUser) return;
-
-    const dueAt = ensureAutoSaveNextAt();
-    if (!force && Date.now() < dueAt) return;
-    if (!acquireAutoSaveLock()) return;
-
-    autoSaveInFlight = true;
-    try {
-      await api.saveCloudSnapshot(collectAutoSaveSnapshot());
-      writeAutoSaveNextAt(Date.now() + AUTO_SAVE_INTERVAL_MS);
-    } catch (error) {
-      console.warn('Global auto save failed:', error);
-    } finally {
-      autoSaveInFlight = false;
-      releaseAutoSaveLock();
-    }
-  }
-
-  function scheduleAutoSyncAfterSave() {
-    if (autoSyncAfterSaveTimer) {
-      clearTimeout(autoSyncAfterSaveTimer);
-      autoSyncAfterSaveTimer = null;
-    }
-
-    if (!auth?.currentUser || !isAccountSyncEnabled()) return;
-
-    autoSyncAfterSaveTimer = setTimeout(() => {
-      autoSyncAfterSaveTimer = null;
-      syncFromCloudNow().catch((error) => {
-        console.warn('Post-save auto sync failed:', error);
-      });
-    }, AUTO_SYNC_DELAY_AFTER_SAVE_MS);
-  }
-
-  function readLastAppliedAt() {
-    try {
-      return safeReadInt(localStorage.getItem(AUTO_SAVE_LAST_APPLIED_AT_KEY));
-    } catch {
-      return 0;
-    }
-  }
-
-  function writeLastAppliedAt(timestamp) {
-    try {
-      localStorage.setItem(AUTO_SAVE_LAST_APPLIED_AT_KEY, String(timestamp));
-    } catch {
-      // no-op if storage is unavailable
-    }
-    return timestamp;
-  }
-
   function applyRemoteSnapshot(snapshot) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
-    applyingRemoteSnapshot = true;
     try {
       Object.entries(snapshot.localStorage || {}).forEach(([key, value]) => {
         localStorage.setItem(key, value);
@@ -214,79 +37,14 @@
         });
     } catch (error) {
       console.warn('Applying cloud snapshot failed:', error);
-    } finally {
-      applyingRemoteSnapshot = false;
     }
-  }
-
-  function stopCloudSyncListener() {
-    if (!cloudSyncUnsubscribe) return;
-    cloudSyncUnsubscribe();
-    cloudSyncUnsubscribe = null;
-  }
-
-  function startCloudSyncListener() {
-    if (!isAccountSyncEnabled()) return;
-    if (!auth?.currentUser || !modules?.onSnapshot || !firestore || cloudSyncUnsubscribe) return;
-    const userRef = modules.doc(firestore, 'users', auth.currentUser.uid);
-    cloudSyncUnsubscribe = modules.onSnapshot(userRef, (docSnap) => {
-      const data = docSnap.data() || {};
-      const backup = data.cloudBackup || {};
-      const snapshot = backup.snapshot;
-      if (!snapshot) return;
-      if (snapshot.savedByDeviceId === autoSaveDeviceId) return;
-
-      const remoteSavedAt = Number(snapshot.savedAtMs || 0);
-      if (!Number.isFinite(remoteSavedAt) || remoteSavedAt <= 0) return;
-
-      const lastAppliedAt = readLastAppliedAt();
-      if (remoteSavedAt <= lastAppliedAt || applyingRemoteSnapshot) return;
-
-      applyRemoteSnapshot(snapshot);
-      writeLastAppliedAt(remoteSavedAt);
-    }, (error) => {
-      console.warn('Cloud sync listener failed:', error);
-    });
   }
 
   async function syncFromCloudNow() {
-    if (!isAccountSyncEnabled()) return false;
     const snapshot = await api.getCloudSnapshot();
     if (!snapshot) return false;
     applyRemoteSnapshot(snapshot);
-    const remoteSavedAt = Number(snapshot.savedAtMs || Date.now());
-    writeLastAppliedAt(remoteSavedAt);
     return true;
-  }
-
-  function handleAccountSyncSettingChange() {
-    if (!auth?.currentUser) return;
-    if (isAccountSyncEnabled()) {
-      startCloudSyncListener();
-      syncFromCloudNow().catch((error) => {
-        console.warn('Immediate cloud sync failed:', error);
-      });
-    } else {
-      stopCloudSyncListener();
-    }
-  }
-
-  function startGlobalAutoSave() {
-    ensureAutoSaveNextAt();
-    if (autoSaveTimer) return;
-    autoSaveTimer = setInterval(() => {
-      maybeRunGlobalAutoSave(false);
-    }, 1000);
-  }
-
-  function stopGlobalAutoSave() {
-    if (!autoSaveTimer) return;
-    clearInterval(autoSaveTimer);
-    autoSaveTimer = null;
-    if (autoSyncAfterSaveTimer) {
-      clearTimeout(autoSyncAfterSaveTimer);
-      autoSyncAfterSaveTimer = null;
-    }
   }
 
 
@@ -346,17 +104,6 @@
 
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
-          if (currentUser) {
-            startGlobalAutoSave();
-            startCloudSyncListener();
-            syncFromCloudNow().catch((error) => {
-              console.warn('Startup cloud sync failed:', error);
-            });
-            maybeRunGlobalAutoSave(false);
-          } else {
-            stopGlobalAutoSave();
-            stopCloudSyncListener();
-          }
           notifySubscribers(currentUser);
         });
 
@@ -378,6 +125,14 @@
     return auth.currentUser;
   }
 
+  async function syncAfterExplicitLogin() {
+    try {
+      await syncFromCloudNow();
+    } catch (error) {
+      console.warn('Login cloud sync failed:', error);
+    }
+  }
+
   const api = {
     init,
     async signUp(email, password) {
@@ -390,11 +145,15 @@
     },
     async signIn(email, password) {
       await init();
-      return modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
+      const credentials = await modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
+      await syncAfterExplicitLogin();
+      return credentials;
     },
     async signInWithIdentifier(identifier, password) {
       await init();
-      return modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
+      const credentials = await modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
+      await syncAfterExplicitLogin();
+      return credentials;
     },
     async setUsername(username) {
       await init();
@@ -432,8 +191,6 @@
     },
     async signOut() {
       await init();
-      stopGlobalAutoSave();
-      stopCloudSyncListener();
       return modules.signOut(auth);
     },
     getCurrentUser() {
@@ -444,9 +201,6 @@
       if (currentUser !== null) callback(currentUser);
       return () => subscribers.delete(callback);
     },
-    getAutoSaveNextAt() {
-      return ensureAutoSaveNextAt();
-    },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
       await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
@@ -456,7 +210,6 @@
           snapshot
         }
       }, { merge: true });
-      scheduleAutoSyncAfterSave();
     },
     async getCloudSnapshot() {
       const user = await requireAuth();
@@ -469,11 +222,5 @@
       return syncFromCloudNow();
     }
   };
-
-  window.addEventListener('storage', (event) => {
-    if (event.key !== THEME_SETTINGS_KEY) return;
-    handleAccountSyncSettingChange();
-  });
-
   window.bilmAuth = api;
 })();
