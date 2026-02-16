@@ -13,7 +13,6 @@ function withBase(path) {
 document.addEventListener('DOMContentLoaded', () => {
   const accountStatusText = document.getElementById('accountStatusText');
   const accountHintText = document.getElementById('accountHintText');
-  const transferStatusText = document.getElementById('transferStatusText');
   const statusText = document.getElementById('statusText');
 
   const authPanel = document.getElementById('authPanel');
@@ -37,12 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const signUpPassword = document.getElementById('signUpPassword');
   const signUpBtn = document.getElementById('signUpBtn');
   const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
-
-  const exportDataBtn = document.getElementById('exportDataBtn');
-  const importDataBtn = document.getElementById('importDataBtn');
-  const cloudExportBtn = document.getElementById('cloudExportBtn');
-  const cloudImportBtn = document.getElementById('cloudImportBtn');
-  const importFileInput = document.getElementById('importFileInput');
 
   const usernameInput = document.getElementById('usernameInput');
   const saveUsernameBtn = document.getElementById('saveUsernameBtn');
@@ -90,40 +83,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return payload;
   }
 
-  function applyBackup(payload) {
-    localStorage.clear();
-    sessionStorage.clear();
-
-    Object.entries(payload.localStorage || {}).forEach(([key, value]) => localStorage.setItem(key, value));
-    Object.entries(payload.sessionStorage || {}).forEach(([key, value]) => sessionStorage.setItem(key, value));
-
-    document.cookie.split(';').forEach((cookie) => {
-      const eqPos = cookie.indexOf('=');
-      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
-      if (name) {
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-      }
-    });
-
-    String(payload.cookies || '')
-      .split(';')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .forEach((cookieEntry) => {
-        document.cookie = `${cookieEntry};path=/`;
-      });
+  function closeModal(modal) {
+    if (modal) modal.classList.remove('open');
   }
 
-  function downloadBackup(payload) {
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  function closeAllModals() {
+    closeModal(loginModal);
+    closeModal(signUpModal);
   }
 
   async function ensureAuthReady() {
@@ -170,13 +136,13 @@ document.addEventListener('DOMContentLoaded', () => {
     accountHintText.textContent = loggedIn
       ? 'Account ready. You can use cloud transfer, update display name, and manage account safety below.'
       : 'Use Log In or Sign Up for cloud transfer and account options.';
+      ? 'Account ready. You can update your display name and manage account safety below.'
+      : 'Use Log In or Sign Up to access account options.';
 
     authPanel.hidden = loggedIn;
 
     saveUsernameBtn.disabled = !loggedIn;
     deleteAccountBtn.disabled = !loggedIn;
-    cloudExportBtn.disabled = !loggedIn;
-    cloudImportBtn.disabled = !loggedIn;
 
     usernameInput.value = user?.displayName || '';
   }
@@ -229,49 +195,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  importDataBtn.addEventListener('click', () => {
-    importFileInput.click();
+  openSignUpModalBtn.addEventListener('click', () => {
+    closeModal(loginModal);
+    openModal(signUpModal);
   });
 
-  importFileInput.addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const payload = parseBackup(await file.text());
-      if (!confirm('Import this backup now? This will overwrite current local data.')) return;
-      applyBackup(payload);
-      transferStatusText.textContent = 'Import Data complete. Reloading...';
-      setTimeout(() => location.reload(), 250);
-    } catch (error) {
-      transferStatusText.textContent = `Import failed: ${error.message}`;
-    } finally {
-      importFileInput.value = '';
-    }
+  closeLoginModalBtn.addEventListener('click', () => closeModal(loginModal));
+  closeSignUpModalBtn.addEventListener('click', () => closeModal(signUpModal));
+
+  openCreateAccountBtn.addEventListener('click', () => {
+    closeModal(loginModal);
+    openModal(signUpModal);
   });
 
-  cloudExportBtn.addEventListener('click', async () => {
-    try {
-      await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
-      await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-      transferStatusText.textContent = 'Cloud Export complete.';
-    } catch (error) {
-      transferStatusText.textContent = `Cloud Export failed: ${error.message}`;
-    }
+  backToLoginBtn.addEventListener('click', () => {
+    closeModal(signUpModal);
+    openModal(loginModal);
   });
 
-  cloudImportBtn.addEventListener('click', async () => {
-    try {
-      await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
-      const payload = await window.bilmAuth.getCloudSnapshot();
-      if (!payload) throw new Error('No cloud backup found for this account.');
-      if (!confirm('Cloud Import will overwrite current local data. Continue?')) return;
-      applyBackup(payload);
-      transferStatusText.textContent = 'Cloud Import complete. Reloading...';
-      setTimeout(() => location.reload(), 250);
-    } catch (error) {
-      transferStatusText.textContent = `Cloud Import failed: ${error.message}`;
+  [loginModal, signUpModal].forEach((modal) => {
+    if (!modal) return;
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal(modal);
+      }
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAllModals();
     }
   });
 
