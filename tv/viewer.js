@@ -100,6 +100,7 @@ let seasonCooldownTimer = null;
 let episodeCooldownTimer = null;
 
 let imdbId = null;
+let iframeRefreshToken = 0;
 let similarPage = 1;
 let similarLoading = false;
 let similarEnded = false;
@@ -573,7 +574,10 @@ function buildTvUrl(server) {
   const episode = currentEpisode;
   switch (server) {
     case 'vidsrc':
-      return `https://vsrc.su/embed/${imdbId || tmdbId}/${season}-${episode}`;
+      if (imdbId) {
+        return `https://vidsrcme.ru/embed/tv/${imdbId}/${season}/${episode}`;
+      }
+      return `https://vidsrcme.ru/embed/tv/${tmdbId}/${season}/${episode}?tmdb=1`;
     case 'godrive':
       return tmdbId
         ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
@@ -585,6 +589,25 @@ function buildTvUrl(server) {
     default:
       return '';
   }
+}
+
+function buildReloadableUrl(url) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    parsed.searchParams.set('bilm_refresh', Date.now().toString());
+    return parsed.toString();
+  } catch {
+    return `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
+  }
+}
+
+function refreshIframe(url) {
+  const token = ++iframeRefreshToken;
+  iframe.src = 'about:blank';
+  window.setTimeout(() => {
+    if (token !== iframeRefreshToken) return;
+    iframe.src = buildReloadableUrl(url);
+  }, 60);
 }
 
 function updateIframe() {
@@ -602,7 +625,7 @@ function updateIframe() {
     setActiveServer('vidsrc');
     url = buildTvUrl('vidsrc');
   }
-  iframe.src = url;
+  refreshIframe(url);
 
   if (continueWatchingReady) {
     updateContinueWatching();

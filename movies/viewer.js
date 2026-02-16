@@ -54,6 +54,7 @@ function toSlug(value) {
 }
 
 let imdbId = null;
+let iframeRefreshToken = 0;
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
@@ -126,7 +127,7 @@ function buildMovieUrl(server) {
   if (!contentId) return '';
   switch (server) {
     case 'vidsrc':
-      return `https://vidsrc.me/embed/${contentId}`;
+      return `https://vidsrcme.ru/embed/movie/${contentId}`;
     case 'godrive':
       return imdbId ? `https://godriveplayer.com/player.php?imdb=${imdbId}` : '';
     case 'multiembed':
@@ -136,6 +137,25 @@ function buildMovieUrl(server) {
     default:
       return '';
   }
+}
+
+function buildReloadableUrl(url) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    parsed.searchParams.set('bilm_refresh', Date.now().toString());
+    return parsed.toString();
+  } catch {
+    return `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
+  }
+}
+
+function refreshIframe(url) {
+  const token = ++iframeRefreshToken;
+  iframe.src = 'about:blank';
+  window.setTimeout(() => {
+    if (token !== iframeRefreshToken) return;
+    iframe.src = buildReloadableUrl(url);
+  }, 60);
 }
 
 function updateIframe() {
@@ -153,7 +173,7 @@ function updateIframe() {
     setActiveServer(fallbackServer);
     url = buildMovieUrl(fallbackServer);
   }
-  iframe.src = url;
+  refreshIframe(url);
   if (continueWatchingReady) {
     updateContinueWatching();
   }
