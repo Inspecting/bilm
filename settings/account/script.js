@@ -14,18 +14,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const accountStatusText = document.getElementById('accountStatusText');
   const accountHintText = document.getElementById('accountHintText');
   const statusText = document.getElementById('statusText');
-
+  const transferStatusText = document.getElementById('transferStatusText');
   const authPanel = document.getElementById('authPanel');
 
   const openLoginModalBtn = document.getElementById('openLoginModalBtn');
   const openSignUpModalBtn = document.getElementById('openSignUpModalBtn');
 
+  const exportDataBtn = document.getElementById('exportDataBtn');
+  const importDataBtn = document.getElementById('importDataBtn');
+  const importFileInput = document.getElementById('importFileInput');
+
   const loginModal = document.getElementById('loginModal');
   const signUpModal = document.getElementById('signUpModal');
+  const dataModal = document.getElementById('dataModal');
+
   const closeLoginModalBtn = document.getElementById('closeLoginModalBtn');
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
+  const closeDataModalBtn = document.getElementById('closeDataModalBtn');
   const openCreateAccountBtn = document.getElementById('openCreateAccountBtn');
   const backToLoginBtn = document.getElementById('backToLoginBtn');
+
+  const loginForm = document.getElementById('loginForm');
+  const signUpForm = document.getElementById('signUpForm');
 
   const loginEmail = document.getElementById('loginEmail');
   const loginPassword = document.getElementById('loginPassword');
@@ -37,23 +47,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const signUpBtn = document.getElementById('signUpBtn');
   const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
 
+  const dataModalTitle = document.getElementById('dataModalTitle');
+  const dataModalMessage = document.getElementById('dataModalMessage');
+  const dataCodeField = document.getElementById('dataCodeField');
+  const copyDataBtn = document.getElementById('copyDataBtn');
+  const downloadDataBtn = document.getElementById('downloadDataBtn');
+  const cloudExportBtn = document.getElementById('cloudExportBtn');
+  const uploadImportBtn = document.getElementById('uploadImportBtn');
+  const cloudImportBtn = document.getElementById('cloudImportBtn');
+  const applyImportBtn = document.getElementById('applyImportBtn');
+
   const usernameInput = document.getElementById('usernameInput');
   const saveUsernameBtn = document.getElementById('saveUsernameBtn');
 
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
 
+  let pendingImportPayload = null;
+
   function openModal(modal) {
-    if (modal) modal.classList.add('open');
+    modal?.classList.add('open');
   }
 
   function closeModal(modal) {
-    if (modal) modal.classList.remove('open');
+    modal?.classList.remove('open');
   }
 
   function closeAllModals() {
     closeModal(loginModal);
     closeModal(signUpModal);
+    closeModal(dataModal);
+    pendingImportPayload = null;
   }
 
   function readStorage(storage) {
@@ -75,41 +99,158 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  const BACKUP_FORMAT_PREFIX = 'BLM1';
+  const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+  function hashSeed(input) {
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function buildKeystream(length, nonceHex) {
+    let state = hashSeed(`${nonceHex}|bilm-backup`);
+    const stream = new Uint8Array(length);
+    for (let i = 0; i < length; i += 1) {
+      state ^= state << 13;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      stream[i] = state & 0xff;
+    }
+    return stream;
+  }
+
+  function checksumBytes(bytes) {
+    let checksum = 2166136261;
+    bytes.forEach((byte) => {
+      checksum ^= byte;
+      checksum = Math.imul(checksum, 16777619);
+    });
+    return checksum >>> 0;
+  }
+
+  function bytesToBase62(bytes) {
+    if (!bytes.length) return BASE62_ALPHABET[0];
+    let value = 0n;
+    bytes.forEach((byte) => {
+      value = (value << 8n) | BigInt(byte);
+    });
+    const base = 62n;
+    let output = '';
+    while (value > 0n) {
+      const remainder = Number(value % base);
+      output = BASE62_ALPHABET[remainder] + output;
+      value /= base;
+    }
+    return output || BASE62_ALPHABET[0];
+  }
+
+  function base62ToBytes(input) {
+    const text = String(input || '').trim();
+    if (!text) return new Uint8Array();
+    const base = 62n;
+    let value = 0n;
+    for (const char of text) {
+      const index = BASE62_ALPHABET.indexOf(char);
+      if (index < 0) throw new Error('Backup code has invalid characters.');
+      value = value * base + BigInt(index);
+    }
+    const bytes = [];
+    while (value > 0n) {
+      bytes.unshift(Number(value & 255n));
+      value >>= 8n;
+    }
+    return new Uint8Array(bytes);
+  }
+
+  function encodeBackup(payload) {
+    const encoder = new TextEncoder();
+    const plainBytes = encoder.encode(JSON.stringify(payload));
+    const nonce = crypto.getRandomValues(new Uint8Array(12));
+    const nonceHex = Array.from(nonce).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const keystream = buildKeystream(plainBytes.length, nonceHex);
+    const encrypted = plainBytes.map((byte, index) => byte ^ keystream[index]);
+    const check = checksumBytes(plainBytes);
+    const packed = new Uint8Array(nonce.length + encrypted.length + 4);
+    packed.set(nonce, 0);
+    packed.set(encrypted, nonce.length);
+    packed[packed.length - 4] = (check >>> 24) & 0xff;
+    packed[packed.length - 3] = (check >>> 16) & 0xff;
+    packed[packed.length - 2] = (check >>> 8) & 0xff;
+    packed[packed.length - 1] = check & 0xff;
+    return `${BACKUP_FORMAT_PREFIX}${bytesToBase62(packed)}`;
+  }
+
+  function decodeBackup(code) {
+    if (!String(code || '').startsWith(BACKUP_FORMAT_PREFIX)) {
+      return JSON.parse(code);
+    }
+    const packed = base62ToBytes(String(code).slice(BACKUP_FORMAT_PREFIX.length));
+    if (packed.length < 17) {
+      throw new Error('Backup code is too short.');
+    }
+    const nonce = packed.slice(0, 12);
+    const checksumOffset = packed.length - 4;
+    const encrypted = packed.slice(12, checksumOffset);
+    const expectedChecksum = ((packed[checksumOffset] << 24) | (packed[checksumOffset + 1] << 16) | (packed[checksumOffset + 2] << 8) | packed[checksumOffset + 3]) >>> 0;
+    const nonceHex = Array.from(nonce).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const keystream = buildKeystream(encrypted.length, nonceHex);
+    const decrypted = encrypted.map((byte, index) => byte ^ keystream[index]);
+    const actualChecksum = checksumBytes(decrypted);
+    if (actualChecksum !== expectedChecksum) {
+      throw new Error('Backup code failed verification.');
+    }
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(decrypted));
+  }
+
   function parseBackup(raw) {
-    const payload = JSON.parse(raw);
+    const payload = decodeBackup(raw);
     if (!payload || payload.schema !== 'bilm-backup-v1') {
       throw new Error('Invalid backup schema.');
     }
     return payload;
   }
 
-  function closeModal(modal) {
-    if (modal) modal.classList.remove('open');
-  }
+  function applyBackup(payload) {
+    localStorage.clear();
+    sessionStorage.clear();
 
-  function closeAllModals() {
-    closeModal(loginModal);
-    closeModal(signUpModal);
+    Object.entries(payload.localStorage || {}).forEach(([key, value]) => {
+      localStorage.setItem(key, value);
+    });
+
+    Object.entries(payload.sessionStorage || {}).forEach(([key, value]) => {
+      sessionStorage.setItem(key, value);
+    });
+
+    document.cookie.split(';').forEach((cookie) => {
+      const eqPos = cookie.indexOf('=');
+      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+      if (name) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+      }
+    });
+
+    String(payload.cookies || '')
+      .split(';')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .forEach((cookieEntry) => {
+        document.cookie = `${cookieEntry};path=/`;
+      });
   }
 
   async function ensureAuthReady() {
     const start = Date.now();
-    while (!window.bilmAuth && Date.now() - start < 15000) {
-      await new Promise((resolve) => setTimeout(resolve, 80));
+    while (!window.bilmAuth && Date.now() - start < 10000) {
+      await new Promise((resolve) => setTimeout(resolve, 60));
     }
     if (!window.bilmAuth) throw new Error('Account services did not load in time.');
-
-    if (typeof window.bilmAuth.ready === 'function') {
-      await window.bilmAuth.ready();
-      return;
-    }
-
-    if (typeof window.bilmAuth.init === 'function') {
-      await window.bilmAuth.init();
-      return;
-    }
-
-    throw new Error('Account services are unavailable.');
+    await window.bilmAuth.init();
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -132,103 +273,175 @@ document.addEventListener('DOMContentLoaded', () => {
     const loggedIn = Boolean(user);
     accountStatusText.textContent = loggedIn
       ? `Logged in as ${user.email || 'account user'}.`
-      : 'Not logged in.';
+      : 'You are in guest mode. Log in to enable account features.';
     accountHintText.textContent = loggedIn
       ? 'Account ready. You can use cloud transfer, update display name, and manage account safety below.'
       : 'Use Log In or Sign Up for cloud transfer and account options.';
-      ? 'Account ready. You can update your display name and manage account safety below.'
-      : 'Use Log In or Sign Up to access account options.';
 
     authPanel.hidden = loggedIn;
-
     saveUsernameBtn.disabled = !loggedIn;
     deleteAccountBtn.disabled = !loggedIn;
-
     usernameInput.value = user?.displayName || '';
   }
 
-  openLoginModalBtn.addEventListener('click', () => {
+  function openDataModal({ title, message, code = '', importMode = false }) {
+    dataModalTitle.textContent = title;
+    dataModalMessage.textContent = message;
+    dataCodeField.value = code;
+    dataCodeField.readOnly = !importMode;
+
+    copyDataBtn.hidden = importMode;
+    downloadDataBtn.hidden = importMode;
+    cloudExportBtn.hidden = importMode;
+    uploadImportBtn.hidden = !importMode;
+    cloudImportBtn.hidden = !importMode;
+    applyImportBtn.hidden = !importMode;
+
+    openModal(dataModal);
+  }
+
+  openLoginModalBtn?.addEventListener('click', () => {
     closeModal(signUpModal);
     openModal(loginModal);
   });
 
-  openSignUpModalBtn.addEventListener('click', () => {
+  openSignUpModalBtn?.addEventListener('click', () => {
     closeModal(loginModal);
     openModal(signUpModal);
   });
 
-  closeLoginModalBtn.addEventListener('click', () => closeModal(loginModal));
-  closeSignUpModalBtn.addEventListener('click', () => closeModal(signUpModal));
+  closeLoginModalBtn?.addEventListener('click', () => closeModal(loginModal));
+  closeSignUpModalBtn?.addEventListener('click', () => closeModal(signUpModal));
+  closeDataModalBtn?.addEventListener('click', () => closeModal(dataModal));
 
-  openCreateAccountBtn.addEventListener('click', () => {
+  openCreateAccountBtn?.addEventListener('click', () => {
     closeModal(loginModal);
     openModal(signUpModal);
   });
 
-  backToLoginBtn.addEventListener('click', () => {
+  backToLoginBtn?.addEventListener('click', () => {
     closeModal(signUpModal);
     openModal(loginModal);
   });
 
-  [loginModal, signUpModal].forEach((modal) => {
-    if (!modal) return;
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
-        closeModal(modal);
-      }
+  [loginModal, signUpModal, dataModal].forEach((modal) => {
+    modal?.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal(modal);
     });
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      closeAllModals();
-    }
+    if (event.key === 'Escape') closeAllModals();
   });
 
-  exportDataBtn.addEventListener('click', () => {
+  loginForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    loginBtn.click();
+  });
+
+  signUpForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    signUpBtn.click();
+  });
+
+  exportDataBtn?.addEventListener('click', () => {
+    const payload = collectBackupData();
+    const code = encodeBackup(payload);
+    openDataModal({
+      title: 'Export Data',
+      message: 'Copy or download this secure backup code, or export your local data to cloud storage.',
+      code,
+      importMode: false
+    });
+    transferStatusText.textContent = 'Export popup opened.';
+  });
+
+  importDataBtn?.addEventListener('click', () => {
+    openDataModal({
+      title: 'Import Data',
+      message: 'Upload a local save file or import from cloud, then apply to replace current local data.',
+      importMode: true
+    });
+    transferStatusText.textContent = 'Import popup opened.';
+  });
+
+  copyDataBtn?.addEventListener('click', async () => {
     try {
-      const payload = collectBackupData();
-      downloadBackup(payload);
-      transferStatusText.textContent = 'Export Data complete. JSON file downloaded.';
+      await navigator.clipboard.writeText(dataCodeField.value);
+      transferStatusText.textContent = 'Backup code copied.';
     } catch (error) {
-      transferStatusText.textContent = `Export failed: ${error.message}`;
+      transferStatusText.textContent = 'Clipboard blocked. Copy manually from the text box.';
     }
   });
 
-  openSignUpModalBtn.addEventListener('click', () => {
-    closeModal(loginModal);
-    openModal(signUpModal);
+  downloadDataBtn?.addEventListener('click', () => {
+    const blob = new Blob([dataCodeField.value], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.bilm`; 
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    transferStatusText.textContent = 'Export downloaded.';
   });
 
-  closeLoginModalBtn.addEventListener('click', () => closeModal(loginModal));
-  closeSignUpModalBtn.addEventListener('click', () => closeModal(signUpModal));
-
-  openCreateAccountBtn.addEventListener('click', () => {
-    closeModal(loginModal);
-    openModal(signUpModal);
+  uploadImportBtn?.addEventListener('click', () => {
+    importFileInput.click();
   });
 
-  backToLoginBtn.addEventListener('click', () => {
-    closeModal(signUpModal);
-    openModal(loginModal);
+  importFileInput?.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    dataCodeField.value = await file.text();
+    transferStatusText.textContent = `Loaded ${file.name}.`;
+    importFileInput.value = '';
   });
 
-  [loginModal, signUpModal].forEach((modal) => {
-    if (!modal) return;
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) {
-        closeModal(modal);
+  cloudExportBtn?.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth.getCurrentUser()) {
+        openModal(loginModal);
+        throw new Error('Please log in first.');
       }
-    });
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      closeAllModals();
+      await window.bilmAuth.saveCloudSnapshot(collectBackupData());
+      transferStatusText.textContent = 'Cloud export complete.';
+    } catch (error) {
+      transferStatusText.textContent = `Cloud export failed: ${error.message}`;
     }
   });
 
-  loginBtn.addEventListener('click', async () => {
+  cloudImportBtn?.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth.getCurrentUser()) {
+        openModal(loginModal);
+        throw new Error('Please log in first.');
+      }
+      const snapshot = await window.bilmAuth.getCloudSnapshot();
+      if (!snapshot) throw new Error('No cloud backup found for this account.');
+      dataCodeField.value = JSON.stringify(snapshot, null, 2);
+      transferStatusText.textContent = 'Cloud backup code loaded. Review and apply import.';
+    } catch (error) {
+      transferStatusText.textContent = `Cloud import failed: ${error.message}`;
+    }
+  });
+
+  applyImportBtn?.addEventListener('click', () => {
+    try {
+      pendingImportPayload = parseBackup(dataCodeField.value);
+      if (!confirm('Import this backup now? This will overwrite current local data.')) return;
+      applyBackup(pendingImportPayload);
+      transferStatusText.textContent = 'Import complete. Reloading...';
+      setTimeout(() => location.reload(), 250);
+    } catch (error) {
+      transferStatusText.textContent = `Import failed: ${error.message}`;
+    }
+  });
+
+  loginBtn?.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
       const email = loginEmail.value.trim();
@@ -242,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  signUpBtn.addEventListener('click', async () => {
+  signUpBtn?.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
       const email = signUpEmail.value.trim();
@@ -256,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  saveUsernameBtn.addEventListener('click', async () => {
+  saveUsernameBtn?.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
       await window.bilmAuth.setUsername(usernameInput.value.trim());
@@ -266,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  deleteAccountBtn.addEventListener('click', async () => {
+  deleteAccountBtn?.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
       const password = deletePassword.value;
@@ -282,8 +495,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  toggleLoginPasswordBtn.addEventListener('click', () => setPasswordVisibility(loginPassword, toggleLoginPasswordBtn));
-  toggleSignUpPasswordBtn.addEventListener('click', () => setPasswordVisibility(signUpPassword, toggleSignUpPasswordBtn));
+  toggleLoginPasswordBtn?.addEventListener('click', () => setPasswordVisibility(loginPassword, toggleLoginPasswordBtn));
+  toggleSignUpPasswordBtn?.addEventListener('click', () => setPasswordVisibility(signUpPassword, toggleSignUpPasswordBtn));
 
   (async () => {
     try {

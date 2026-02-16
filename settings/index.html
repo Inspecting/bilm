@@ -427,10 +427,8 @@
         </div>
         <div class="backup-tools">
           <div class="actions-row">
-            <button class="btn" id="exportDataBtn">Export Data</button>
-            <button class="btn btn-outline" id="importDataBtn">Import Data</button>
-            <button class="btn" id="cloudExportBtn">Cloud Export</button>
-            <button class="btn btn-outline" id="cloudImportBtn">Cloud Import</button>
+            <button class="btn" id="exportDataBtn">Export</button>
+            <button class="btn btn-outline" id="importDataBtn">Import</button>
           </div>
           <input id="importFileInput" type="file" accept="application/json,.json,text/plain" hidden />
           <span class="backup-status" id="backupStatus" aria-live="polite">No transfer action yet.</span>
@@ -568,8 +566,10 @@
     <div class="actions-row">
       <button class="btn" id="copyDataBtn">Copy Code</button>
       <button class="btn btn-outline" id="downloadDataBtn">Download JSON</button>
+      <button class="btn" id="cloudExportBtn" hidden>☁️ Export</button>
       <button class="btn" id="pasteImportBtn" hidden>Paste from Clipboard</button>
       <button class="btn btn-outline" id="uploadImportBtn" hidden>Upload Save File</button>
+      <button class="btn btn-outline" id="cloudImportBtn" hidden>☁️ Import</button>
       <button class="btn btn-outline" id="applyImportBtn" hidden>Apply Import</button>
       <button class="btn btn-outline" id="closeDataModalBtn">Close</button>
     </div>
@@ -788,15 +788,17 @@
   }
 
   function openDataModal({ title, message, code = '', importMode = false }) {
-    if (!dataModal || !dataModalTitle || !dataModalMessage || !dataCodeField || !copyDataBtn || !downloadDataBtn || !pasteImportBtn || !uploadImportBtn || !applyImportBtn) return;
+    if (!dataModal || !dataModalTitle || !dataModalMessage || !dataCodeField || !copyDataBtn || !downloadDataBtn || !pasteImportBtn || !uploadImportBtn || !applyImportBtn || !cloudExportBtn || !cloudImportBtn) return;
     dataModalTitle.textContent = title;
     dataModalMessage.textContent = message;
     dataCodeField.value = code;
     dataCodeField.readOnly = !importMode;
     copyDataBtn.hidden = importMode;
     downloadDataBtn.hidden = importMode;
+    cloudExportBtn.hidden = importMode;
     pasteImportBtn.hidden = !importMode;
     uploadImportBtn.hidden = !importMode;
+    cloudImportBtn.hidden = !importMode;
     applyImportBtn.hidden = !importMode;
     dataModal.classList.add('open');
   }
