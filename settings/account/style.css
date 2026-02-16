@@ -143,3 +143,14 @@ input {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   line-height: 1.4;
 }
+
+
+.status-actions {
+  margin-top: 12px;
+  grid-template-columns: minmax(140px, 220px);
+}
+
+.data-modal__panel {
+  max-height: min(92vh, 720px);
+  overflow: auto;
+}
