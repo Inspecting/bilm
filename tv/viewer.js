@@ -575,9 +575,6 @@ function buildTvUrl(server) {
   switch (server) {
     case 'vidsrc':
       if (imdbId) {
-        return `https://vidsrcme.ru/embed/tv/${imdbId}/${season}/${episode}`;
-      }
-      return `https://vidsrcme.ru/embed/tv/${tmdbId}/${season}/${episode}?tmdb=1`;
         return `https://vsrc.su/embed/tv/${imdbId}/${season}/${episode}`;
       }
       return `https://vsrc.su/embed/tv/${tmdbId}/${season}/${episode}?tmdb=1`;
