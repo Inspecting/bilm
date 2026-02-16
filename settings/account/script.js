@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const copyDataBtn = document.getElementById('copyDataBtn');
   const downloadDataBtn = document.getElementById('downloadDataBtn');
   const cloudExportBtn = document.getElementById('cloudExportBtn');
+  const pasteImportBtn = document.getElementById('pasteImportBtn');
   const uploadImportBtn = document.getElementById('uploadImportBtn');
   const cloudImportBtn = document.getElementById('cloudImportBtn');
   const applyImportBtn = document.getElementById('applyImportBtn');
@@ -62,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+  const signOutBtn = document.getElementById('signOutBtn');
 
   let pendingImportPayload = null;
 
@@ -279,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
       : 'Use Log In or Sign Up for cloud transfer and account options.';
 
     authPanel.hidden = loggedIn;
+    signOutBtn.hidden = !loggedIn;
     saveUsernameBtn.disabled = !loggedIn;
     deleteAccountBtn.disabled = !loggedIn;
     usernameInput.value = user?.displayName || '';
@@ -293,6 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
     copyDataBtn.hidden = importMode;
     downloadDataBtn.hidden = importMode;
     cloudExportBtn.hidden = importMode;
+    pasteImportBtn.hidden = !importMode;
     uploadImportBtn.hidden = !importMode;
     cloudImportBtn.hidden = !importMode;
     applyImportBtn.hidden = !importMode;
@@ -399,6 +403,16 @@ document.addEventListener('DOMContentLoaded', () => {
     importFileInput.value = '';
   });
 
+  pasteImportBtn?.addEventListener('click', async () => {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      dataCodeField.value = clipboardText;
+      transferStatusText.textContent = 'Backup code pasted from clipboard.';
+    } catch (error) {
+      transferStatusText.textContent = 'Clipboard read blocked. Paste manually into the text box.';
+    }
+  });
+
   cloudExportBtn?.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
@@ -407,7 +421,8 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('Please log in first.');
       }
       await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-      transferStatusText.textContent = 'Cloud export complete.';
+      transferStatusText.textContent = 'Export successful.';
+      alert('Export successful.');
     } catch (error) {
       transferStatusText.textContent = `Cloud export failed: ${error.message}`;
     }
@@ -423,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const snapshot = await window.bilmAuth.getCloudSnapshot();
       if (!snapshot) throw new Error('No cloud backup found for this account.');
       dataCodeField.value = JSON.stringify(snapshot, null, 2);
-      transferStatusText.textContent = 'Cloud backup code loaded. Review and apply import.';
+      transferStatusText.textContent = 'Cloud backup loaded into the import box. Review it, then select Apply Import when ready.';
     } catch (error) {
       transferStatusText.textContent = `Cloud import failed: ${error.message}`;
     }
@@ -492,6 +507,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 400);
     } catch (error) {
       statusText.textContent = `Delete failed: ${error.message}`;
+    }
+  });
+
+  signOutBtn?.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!confirm('Sign out of your account?')) return;
+      await window.bilmAuth.signOut();
+      transferStatusText.textContent = 'Signed out successfully.';
+      statusText.textContent = 'Signed out.';
+    } catch (error) {
+      statusText.textContent = `Sign out failed: ${error.message}`;
     }
   });
 

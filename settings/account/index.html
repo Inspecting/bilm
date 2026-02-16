@@ -26,6 +26,9 @@
         <h2>Status</h2>
         <p id="accountStatusText">Checking account status...</p>
         <p id="accountHintText" class="muted">Use this page to manage account sign-in, profile display, and account safety.</p>
+        <div class="actions status-actions">
+          <button id="signOutBtn" class="btn btn-outline" type="button" hidden>Sign Out</button>
+        </div>
       </section>
 
       <section class="panel" id="authPanel">
@@ -121,7 +124,8 @@
         <button id="copyDataBtn" class="btn" type="button" hidden>Copy Code</button>
         <button id="downloadDataBtn" class="btn btn-outline" type="button" hidden>Download File</button>
         <button id="cloudExportBtn" class="btn btn-outline" type="button" hidden>☁️ Export</button>
-        <button id="uploadImportBtn" class="btn" type="button" hidden>Upload Save File</button>
+        <button id="pasteImportBtn" class="btn" type="button" hidden>Paste from Clipboard</button>
+        <button id="uploadImportBtn" class="btn btn-outline" type="button" hidden>Upload Save File</button>
         <button id="cloudImportBtn" class="btn btn-outline" type="button" hidden>☁️ Import</button>
         <button id="applyImportBtn" class="btn btn-outline" type="button" hidden>Apply Import</button>
         <button id="closeDataModalBtn" class="btn btn-outline" type="button">Close</button>
