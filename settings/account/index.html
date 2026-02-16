@@ -25,40 +25,17 @@
       <section class="panel">
         <h2>Status</h2>
         <p id="accountStatusText">Checking account status...</p>
-        <p id="accountHintText" class="muted">Use this page to manage account sign-in, cloud export/import, and local transfer.</p>
+        <p id="accountHintText" class="muted">Use this page to manage account sign-in, profile display, and account safety.</p>
       </section>
 
-      <section class="panel" id="loginPanel">
-        <h2>Log In</h2>
+      <section class="panel" id="authPanel">
+        <h2>Account Access</h2>
         <div class="stack">
-          <input id="loginEmail" type="email" placeholder="Email" autocomplete="email" />
-          <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
-          <button id="toggleLoginPasswordBtn" class="btn btn-outline" type="button">Show Password</button>
-          <button id="loginBtn" class="btn" type="button">Log In</button>
+          <div class="actions">
+            <button id="openLoginModalBtn" class="btn" type="button">Log In</button>
+            <button id="openSignUpModalBtn" class="btn btn-outline" type="button">Sign Up</button>
+          </div>
         </div>
-      </section>
-
-      <section class="panel" id="signUpPanel">
-        <h2>Create Account</h2>
-        <div class="stack">
-          <input id="signUpEmail" type="email" placeholder="Email" autocomplete="email" />
-          <input id="signUpPassword" type="password" placeholder="Password" autocomplete="new-password" />
-          <button id="toggleSignUpPasswordBtn" class="btn btn-outline" type="button">Show Password</button>
-          <button id="signUpBtn" class="btn" type="button">Create Account</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Data Transfer</h2>
-        <p class="muted">Regular transfer works with local files. Cloud actions use your signed-in account.</p>
-        <div class="actions">
-          <button id="exportDataBtn" class="btn" type="button">Export Data</button>
-          <button id="importDataBtn" class="btn btn-outline" type="button">Import Data</button>
-          <button id="cloudExportBtn" class="btn" type="button">Cloud Export</button>
-          <button id="cloudImportBtn" class="btn btn-outline" type="button">Cloud Import</button>
-          <input id="importFileInput" type="file" accept="application/json,.json,text/plain" hidden />
-        </div>
-        <p id="transferStatusText" class="muted actions-note">No transfer action yet.</p>
       </section>
 
       <section class="panel" id="profilePanel">
@@ -66,7 +43,7 @@
         <div class="stack">
           <input id="usernameInput" type="text" maxlength="30" placeholder="Optional username for navbar display" autocomplete="nickname" />
           <button id="saveUsernameBtn" class="btn btn-outline" type="button">Save Username</button>
-          <p class="muted">Display only. Sign in and sign up still require email + password.</p>
+          <p class="muted">Display only.</p>
         </div>
       </section>
 
@@ -85,6 +62,45 @@
 
   <script src="../../shared/auth.js" defer></script>
   <script src="../../shared/navbar.js" defer></script>
+
+  <div class="data-modal" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+    <div class="data-modal__panel">
+      <h3 id="loginModalTitle">Log In</h3>
+      <p>Use your email and password to log in.</p>
+      <form id="loginForm" autocomplete="on">
+        <div class="stack">
+          <input id="loginEmail" name="email" type="email" placeholder="Email" autocomplete="email" />
+          <input id="loginPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" />
+          <button id="toggleLoginPasswordBtn" class="btn btn-outline" type="button">Show Password</button>
+        </div>
+        <div class="actions modal-actions">
+          <button id="loginBtn" class="btn" type="button">Log In</button>
+          <button id="openCreateAccountBtn" class="btn btn-outline" type="button">Create an Account</button>
+          <button id="closeLoginModalBtn" class="btn btn-outline" type="button">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="data-modal" id="signUpModal" role="dialog" aria-modal="true" aria-labelledby="signUpModalTitle">
+    <div class="data-modal__panel">
+      <h3 id="signUpModalTitle">Sign Up</h3>
+      <p>Create an account with your email and password.</p>
+      <form id="signUpForm" autocomplete="on">
+        <div class="stack">
+          <input id="signUpEmail" name="email" type="email" placeholder="Email" autocomplete="email" />
+          <input id="signUpPassword" name="password" type="password" placeholder="Password" autocomplete="new-password" />
+          <button id="toggleSignUpPasswordBtn" class="btn btn-outline" type="button">Show Password</button>
+        </div>
+        <div class="actions modal-actions">
+          <button id="signUpBtn" class="btn" type="button">Create Account</button>
+          <button id="backToLoginBtn" class="btn btn-outline" type="button">Back to Log In</button>
+          <button id="closeSignUpModalBtn" class="btn btn-outline" type="button">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="./script.js" defer></script>
 </body>
 </html>
