@@ -104,11 +104,6 @@
 
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
-          if (currentUser) {
-            syncFromCloudNow().catch((error) => {
-              console.warn('Startup cloud sync failed:', error);
-            });
-          }
           notifySubscribers(currentUser);
         });
 
