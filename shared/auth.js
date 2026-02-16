@@ -19,6 +19,8 @@
   let analytics;
   let currentUser = null;
 
+  const CLOUD_IMPORT_ONCE_KEY = 'bilm-cloud-import-once';
+
   function applyRemoteSnapshot(snapshot) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
     try {
@@ -38,6 +40,12 @@
     } catch (error) {
       console.warn('Applying cloud snapshot failed:', error);
     }
+  }
+
+  function consumeCloudImportOnceFlag() {
+    if (sessionStorage.getItem(CLOUD_IMPORT_ONCE_KEY) !== '1') return false;
+    sessionStorage.removeItem(CLOUD_IMPORT_ONCE_KEY);
+    return true;
   }
 
   async function syncFromCloudNow() {
@@ -104,9 +112,9 @@
 
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
-          if (currentUser) {
+          if (currentUser && consumeCloudImportOnceFlag()) {
             syncFromCloudNow().catch((error) => {
-              console.warn('Startup cloud sync failed:', error);
+              console.warn('One-time cloud import failed:', error);
             });
           }
           notifySubscribers(currentUser);
@@ -130,14 +138,6 @@
     return auth.currentUser;
   }
 
-  async function syncAfterExplicitLogin() {
-    try {
-      await syncFromCloudNow();
-    } catch (error) {
-      console.warn('Login cloud sync failed:', error);
-    }
-  }
-
   const api = {
     init,
     async signUp(email, password) {
@@ -150,15 +150,11 @@
     },
     async signIn(email, password) {
       await init();
-      const credentials = await modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
-      await syncAfterExplicitLogin();
-      return credentials;
+      return modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
     },
     async signInWithIdentifier(identifier, password) {
       await init();
-      const credentials = await modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
-      await syncAfterExplicitLogin();
-      return credentials;
+      return modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
     },
     async setUsername(username) {
       await init();
@@ -200,6 +196,9 @@
     },
     getCurrentUser() {
       return auth?.currentUser || currentUser;
+    },
+    requestCloudImportOnce() {
+      sessionStorage.setItem(CLOUD_IMPORT_ONCE_KEY, '1');
     },
     onAuthStateChanged(callback) {
       subscribers.add(callback);
