@@ -11,9 +11,9 @@ function withBase(path) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const autoSyncToggle = document.getElementById('autoSyncToggle');
   const accountStatusText = document.getElementById('accountStatusText');
   const accountHintText = document.getElementById('accountHintText');
+  const transferStatusText = document.getElementById('transferStatusText');
   const statusText = document.getElementById('statusText');
 
   const loginPanel = document.getElementById('loginPanel');
@@ -29,28 +29,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const signUpBtn = document.getElementById('signUpBtn');
   const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
 
+  const exportDataBtn = document.getElementById('exportDataBtn');
+  const importDataBtn = document.getElementById('importDataBtn');
+  const cloudExportBtn = document.getElementById('cloudExportBtn');
+  const cloudImportBtn = document.getElementById('cloudImportBtn');
+  const importFileInput = document.getElementById('importFileInput');
+
   const usernameInput = document.getElementById('usernameInput');
   const saveUsernameBtn = document.getElementById('saveUsernameBtn');
 
-  const saveNowBtn = document.getElementById('saveNowBtn');
-  const syncNowBtn = document.getElementById('syncNowBtn');
-  const autoSaveCountdownText = document.getElementById('autoSaveCountdownText');
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
-
-  let autoSaveTickId = null;
-  let nextAutoSaveAt = 0;
-
-  function getGlobalAutoSaveNextAt() {
-    const apiNext = window.bilmAuth?.getAutoSaveNextAt?.();
-    return Number.isFinite(apiNext) && apiNext > 0 ? apiNext : (nextAutoSaveAt || (Date.now() + 30000));
-  }
-
-  const getSettings = () => window.bilmTheme?.getSettings?.() || {};
-  const setSettings = (partial) => {
-    const current = getSettings();
-    window.bilmTheme?.setSettings?.({ ...current, ...partial });
-  };
 
   function readStorage(storage) {
     return Object.entries(storage).reduce((all, [key, value]) => {
@@ -69,6 +58,14 @@ document.addEventListener('DOMContentLoaded', () => {
       sessionStorage: readStorage(sessionStorage),
       cookies: document.cookie
     };
+  }
+
+  function parseBackup(raw) {
+    const payload = JSON.parse(raw);
+    if (!payload || payload.schema !== 'bilm-backup-v1') {
+      throw new Error('Invalid backup schema.');
+    }
+    return payload;
   }
 
   function applyBackup(payload) {
@@ -95,159 +92,130 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
-  function mergeSnapshots(localSnapshot, cloudSnapshot) {
-    const localData = localSnapshot || collectBackupData();
-    const cloudData = cloudSnapshot || {};
-    const cookieItems = [
-      ...String(cloudData.cookies || '').split(';').map((item) => item.trim()).filter(Boolean),
-      ...String(localData.cookies || '').split(';').map((item) => item.trim()).filter(Boolean)
-    ];
-
-    return {
-      schema: 'bilm-backup-v1',
-      exportedAt: new Date().toISOString(),
-      origin: location.origin,
-      pathname: location.pathname,
-      localStorage: { ...(localData.localStorage || {}), ...(cloudData.localStorage || {}) },
-      sessionStorage: { ...(localData.sessionStorage || {}), ...(cloudData.sessionStorage || {}) },
-      cookies: [...new Set(cookieItems)].join('; ')
-    };
+  function downloadBackup(payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
-  function updateAutoSaveCountdown() {
-    const user = window.bilmAuth?.getCurrentUser?.();
-    if (!user) {
-      autoSaveCountdownText.textContent = 'Auto save paused until you log in.';
+  async function ensureAuthReady() {
+    if (window.bilmAuth?.ready) {
+      await window.bilmAuth.ready();
       return;
     }
-    nextAutoSaveAt = getGlobalAutoSaveNextAt();
-    const secondsLeft = Math.max(0, Math.ceil((nextAutoSaveAt - Date.now()) / 1000));
-    autoSaveCountdownText.textContent = `Auto save in ${secondsLeft} seconds.`;
-  }
-
-  function stopAutoSave() {
-    if (autoSaveTickId) {
-      clearInterval(autoSaveTickId);
-      autoSaveTickId = null;
-    }
-    nextAutoSaveAt = 0;
-    updateAutoSaveCountdown();
-  }
-
-  async function runManualSave() {
-    await ensureAuthReady();
-    if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
-
-    const localSnapshot = collectBackupData();
-    await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-    statusText.textContent = 'Save complete.';
-    nextAutoSaveAt = getGlobalAutoSaveNextAt();
-    updateAutoSaveCountdown();
-  }
-
-  function startAutoSave() {
-    stopAutoSave();
-    if (!window.bilmAuth?.getCurrentUser?.()) {
-      updateAutoSaveCountdown();
-      return;
-    }
-    updateAutoSaveCountdown();
-    autoSaveTickId = setInterval(updateAutoSaveCountdown, 1000);
+    await new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      const timer = setInterval(() => {
+        if (window.bilmAuth?.ready) {
+          clearInterval(timer);
+          window.bilmAuth.ready().then(resolve).catch(reject);
+          return;
+        }
+        if (Date.now() - startedAt > 15000) {
+          clearInterval(timer);
+          reject(new Error('Account services did not load in time.'));
+        }
+      }, 80);
+    });
   }
 
   async function saveCredentialsForAutofill(email, password) {
     if (!('credentials' in navigator) || !window.PasswordCredential) return;
     try {
-      const credential = new window.PasswordCredential({ id: email, password, name: email });
+      const credential = new window.PasswordCredential({ id: email, password, name: 'Bilm User' });
       await navigator.credentials.store(credential);
     } catch (error) {
       console.warn('Credential save skipped:', error);
     }
   }
 
-  function setPasswordVisibility(inputEl, toggleBtn) {
-    if (!inputEl || !toggleBtn) return;
-    const visible = inputEl.type === 'text';
-    inputEl.type = visible ? 'password' : 'text';
-    toggleBtn.textContent = visible ? 'Show Password' : 'Hide Password';
-    toggleBtn.classList.add('btn', 'btn-outline');
+  function setPasswordVisibility(input, button) {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    button.textContent = show ? 'Hide Password' : 'Show Password';
   }
 
-  async function autoSyncAfterSignIn() {
-    const localSnapshot = collectBackupData();
-    const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
-    if (!cloudSnapshot) {
-      await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-      statusText.textContent = 'New account detected. Local data was uploaded to your account.';
-      return;
-    }
-    const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
-    applyBackup(merged);
-    await window.bilmAuth.saveCloudSnapshot(merged);
-    statusText.textContent = 'Auto Sync complete. Reloading with your account data...';
-    setTimeout(() => location.reload(), 300);
-  }
-
-  async function runManualSync() {
-    const localSnapshot = collectBackupData();
-    const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
-    if (!cloudSnapshot) {
-      await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-      statusText.textContent = 'No cloud data existed. Uploaded your local data.';
-      return;
-    }
-    const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
-    applyBackup(merged);
-    await window.bilmAuth.saveCloudSnapshot(merged);
-    statusText.textContent = 'Sync complete. Reloading...';
-    setTimeout(() => location.reload(), 250);
-  }
-
-  function updateUserUi(user) {
-    const username = user?.displayName ? `@${user.displayName}` : '';
-    const email = user?.email ? ` (${user.email})` : '';
+  function updateAccountUi(user) {
     const loggedIn = Boolean(user);
-
-    accountStatusText.textContent = loggedIn ? `Logged in ${username}${email}` : 'You are not signed in.';
+    accountStatusText.textContent = loggedIn
+      ? `Logged in as ${user.email || 'account user'}.`
+      : 'Not logged in.';
     accountHintText.textContent = loggedIn
-      ? 'Auto save runs every 30 seconds and auto sync runs 5 seconds after save when enabled. Use the navbar status menu to log out.'
-      : 'Log in with email and password, or create a new account.';
+      ? 'Use Cloud Export and Cloud Import to move your data across devices.'
+      : 'Log in to use Cloud Export and Cloud Import.';
 
     loginPanel.hidden = loggedIn;
     signUpPanel.hidden = loggedIn;
-    saveNowBtn.disabled = !loggedIn;
-    syncNowBtn.disabled = !loggedIn;
+
     saveUsernameBtn.disabled = !loggedIn;
-    usernameInput.value = user?.displayName || '';
+    deleteAccountBtn.disabled = !loggedIn;
+    cloudExportBtn.disabled = !loggedIn;
+    cloudImportBtn.disabled = !loggedIn;
 
-    if (loggedIn) {
-      startAutoSave();
-    } else {
-      stopAutoSave();
-    }
+    const profile = user?.profile || {};
+    usernameInput.value = profile.username || '';
   }
 
-  async function ensureAuthReady() {
-    const start = Date.now();
-    while (!window.bilmAuth && Date.now() - start < 7000) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
+  exportDataBtn.addEventListener('click', () => {
+    try {
+      const payload = collectBackupData();
+      downloadBackup(payload);
+      transferStatusText.textContent = 'Export Data complete. JSON file downloaded.';
+    } catch (error) {
+      transferStatusText.textContent = `Export failed: ${error.message}`;
     }
-    if (!window.bilmAuth) throw new Error('Auth module did not load.');
-    await window.bilmAuth.init();
-  }
+  });
 
-  autoSyncToggle.checked = getSettings().accountAutoSync !== false;
-  autoSyncToggle.addEventListener('change', async () => {
-    setSettings({ accountAutoSync: autoSyncToggle.checked });
-    if (autoSyncToggle.checked && window.bilmAuth?.getCurrentUser?.()) {
-      try {
-        await window.bilmAuth.syncFromCloudNow?.();
-      } catch (error) {
-        statusText.textContent = `Auto Sync refresh failed: ${error.message}`;
-        return;
-      }
+  importDataBtn.addEventListener('click', () => {
+    importFileInput.click();
+  });
+
+  importFileInput.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const payload = parseBackup(await file.text());
+      if (!confirm('Import this backup now? This will overwrite current local data.')) return;
+      applyBackup(payload);
+      transferStatusText.textContent = 'Import Data complete. Reloading...';
+      setTimeout(() => location.reload(), 250);
+    } catch (error) {
+      transferStatusText.textContent = `Import failed: ${error.message}`;
+    } finally {
+      importFileInput.value = '';
     }
-    statusText.textContent = `Auto Sync ${autoSyncToggle.checked ? 'enabled' : 'disabled'}.`;
+  });
+
+  cloudExportBtn.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
+      await window.bilmAuth.saveCloudSnapshot(collectBackupData());
+      transferStatusText.textContent = 'Cloud Export complete.';
+    } catch (error) {
+      transferStatusText.textContent = `Cloud Export failed: ${error.message}`;
+    }
+  });
+
+  cloudImportBtn.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
+      const payload = await window.bilmAuth.getCloudSnapshot();
+      if (!payload) throw new Error('No cloud backup found for this account.');
+      if (!confirm('Cloud Import will overwrite current local data. Continue?')) return;
+      applyBackup(payload);
+      transferStatusText.textContent = 'Cloud Import complete. Reloading...';
+      setTimeout(() => location.reload(), 250);
+    } catch (error) {
+      transferStatusText.textContent = `Cloud Import failed: ${error.message}`;
+    }
   });
 
   loginBtn.addEventListener('click', async () => {
@@ -258,10 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
       statusText.textContent = 'Logged in.';
-      startAutoSave();
-      if (getSettings().accountAutoSync !== false) {
-        await autoSyncAfterSignIn();
-      }
     } catch (error) {
       statusText.textContent = `Log in failed: ${error.message}`;
     }
@@ -274,47 +238,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const password = signUpPassword.value;
       await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
-      statusText.textContent = 'Account created and logged in.';
-      startAutoSave();
-      if (getSettings().accountAutoSync !== false) {
-        await autoSyncAfterSignIn();
-      }
+      statusText.textContent = 'Account created.';
     } catch (error) {
       statusText.textContent = `Sign up failed: ${error.message}`;
-    }
-  });
-
-  saveNowBtn.addEventListener('click', async () => {
-    try {
-      await runManualSave();
-    } catch (error) {
-      statusText.textContent = `Save failed: ${error.message}`;
-    }
-  });
-
-  syncNowBtn.addEventListener('click', async () => {
-    try {
-      await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
-      await runManualSync();
-    } catch (error) {
-      statusText.textContent = `Sync failed: ${error.message}`;
     }
   });
 
   saveUsernameBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
-      const username = usernameInput.value.trim();
-      if (username && !/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
-        throw new Error('Username must be 3-30 chars and use letters, numbers, ., _, or -.');
-      }
-      await window.bilmAuth.setUsername(username);
-      statusText.textContent = username
-        ? `Username updated to @${username}.`
-        : 'Username cleared. Navbar will show email.';
-      updateUserUi(window.bilmAuth.getCurrentUser());
+      await window.bilmAuth.updateProfile({ username: usernameInput.value.trim() });
+      statusText.textContent = 'Username saved.';
     } catch (error) {
       statusText.textContent = `Username update failed: ${error.message}`;
     }
@@ -323,14 +257,14 @@ document.addEventListener('DOMContentLoaded', () => {
   deleteAccountBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) throw new Error('Log in first.');
-      if (!deletePassword.value) throw new Error('Enter your password to confirm delete.');
+      const password = deletePassword.value;
+      if (!password) throw new Error('Enter your password first.');
       if (!confirm('Delete account permanently? This cannot be undone.')) return;
-      await window.bilmAuth.deleteAccount(deletePassword.value);
-      statusText.textContent = 'Account deleted permanently.';
+      await window.bilmAuth.deleteAccount(password);
+      statusText.textContent = 'Account deleted. Redirecting...';
       setTimeout(() => {
         window.location.href = withBase('/settings/');
-      }, 450);
+      }, 400);
     } catch (error) {
       statusText.textContent = `Delete failed: ${error.message}`;
     }
@@ -342,11 +276,13 @@ document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     try {
       await ensureAuthReady();
-      updateUserUi(window.bilmAuth.getCurrentUser());
-      window.bilmAuth.onAuthStateChanged((user) => updateUserUi(user));
+      updateAccountUi(window.bilmAuth.getCurrentUser());
+      window.bilmAuth.onAuthStateChanged((user) => {
+        updateAccountUi(user);
+      });
     } catch (error) {
-      accountStatusText.textContent = 'Account services are temporarily unavailable.';
-      statusText.textContent = error.message;
+      accountStatusText.textContent = 'Account tools unavailable right now. Refresh and try again.';
+      statusText.textContent = `Auth setup failed: ${error.message}`;
     }
   })();
 });

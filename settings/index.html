@@ -420,7 +420,7 @@
 
     <section class="settings-card">
       <h2>Account</h2>
-      <p>Simple account controls: log in, sign up, log out, and open account sync settings.</p>
+      <p>Simple account controls: log in, sign up, log out, and open account settings.</p>
 
       <div class="control-row">
         <div>
@@ -437,14 +437,14 @@
       <div class="control-row">
         <div>
           <label>Account Settings</label>
-          <small>Open sync tools and data merge options.</small>
+          <small>Open account tools, including data export/import.</small>
         </div>
         <div class="actions-row">
           <button class="btn" id="openAccountSettingsBtn">Open Account Settings</button>
         </div>
       </div>
 
-      <span class="backup-status" id="cloudStatus" aria-live="polite"></span>
+      <span class="backup-status" id="cloudStatus" aria-live="polite" hidden></span>
     </section>
 
     <section class="settings-card">
@@ -488,7 +488,7 @@
       </div>
     </section>
 
-    <section class="settings-card">
+    <section class="settings-card" hidden>
       <h2>Backup & Transfer</h2>
       <p>Export a full backup code of your local Bilm data or import one from another device.</p>
 
@@ -967,18 +967,16 @@
       openSignUpBtn.hidden = true;
       logoutBtn.hidden = false;
       openAccountSettingsBtn.disabled = false;
-      cloudStatus.textContent = 'Account ready. Open Account Settings to sync or merge data.';
+      cloudStatus.textContent = 'Account ready. Open Account Settings for cloud and transfer tools.';
       loginHelperText.textContent = 'Logged in successfully.';
-      startAutoSaveTimer();
     } else {
       accountStatusText.textContent = 'You are in guest mode. Log in to enable account sync.';
       openSignInBtn.hidden = false;
       openSignUpBtn.hidden = false;
       logoutBtn.hidden = true;
       openAccountSettingsBtn.disabled = false;
-      cloudStatus.textContent = 'Log in to use account sync features.';
+      cloudStatus.textContent = 'Log in to use account features.';
       loginHelperText.textContent = 'Use email and password to log in.';
-      stopAutoSaveTimer();
     }
   }
 
@@ -1252,7 +1250,6 @@
       await ensureAuthReady();
       if (!confirm('Log out of your account?')) return;
       await window.bilmAuth.signOut();
-      stopAutoSaveTimer();
       await clearAllLocalData();
       cloudStatus.textContent = 'Logged out and cleared local data. Reloading...';
       setTimeout(() => location.reload(), 250);
@@ -1282,13 +1279,8 @@
       const password = loginPassword.value;
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
-      if ((window.bilmTheme?.getSettings?.() || {}).accountAutoSync !== false) {
-        await autoSyncAfterSignIn();
-      } else {
-        cloudStatus.textContent = 'Logged in successfully.';
-      }
+      cloudStatus.textContent = 'Logged in successfully.';
       loginStatus.textContent = 'Logged in.';
-      startAutoSaveTimer();
       closeLoginModal();
     } catch (err) {
       loginStatus.textContent = `Log in failed: ${err.message}`;
@@ -1302,13 +1294,8 @@
       const password = signUpPassword.value;
       await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
-      if ((window.bilmTheme?.getSettings?.() || {}).accountAutoSync !== false) {
-        await autoSyncAfterSignIn();
-      } else {
-        cloudStatus.textContent = 'Account created. You can sync any time from Account Settings.';
-      }
+      cloudStatus.textContent = 'Account created successfully.';
       signUpStatus.textContent = 'Account created.';
-      startAutoSaveTimer();
       closeSignUpModal();
     } catch (err) {
       signUpStatus.textContent = `Sign up failed: ${err.message}`;
