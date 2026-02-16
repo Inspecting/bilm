@@ -1244,6 +1244,8 @@
   cloudExportBtn?.addEventListener('click', async () => {
     try {
       await syncLocalToCloud('manual');
+      backupStatus.textContent = 'Export successful.';
+      alert('Export successful.');
       backupStatus.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
     } catch (err) {
       backupStatus.textContent = `Cloud export failed: ${err.message}`;
