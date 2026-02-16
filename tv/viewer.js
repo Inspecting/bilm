@@ -578,6 +578,9 @@ function buildTvUrl(server) {
         return `https://vidsrcme.ru/embed/tv/${imdbId}/${season}/${episode}`;
       }
       return `https://vidsrcme.ru/embed/tv/${tmdbId}/${season}/${episode}?tmdb=1`;
+        return `https://vsrc.su/embed/tv/${imdbId}/${season}/${episode}`;
+      }
+      return `https://vsrc.su/embed/tv/${tmdbId}/${season}/${episode}?tmdb=1`;
     case 'godrive':
       return tmdbId
         ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
