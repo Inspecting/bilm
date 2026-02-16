@@ -127,7 +127,7 @@ function buildMovieUrl(server) {
   if (!contentId) return '';
   switch (server) {
     case 'vidsrc':
-      return `https://vidsrc-embed.ru/embed/movie/${tmdbId || imdbId}`;
+      return `https://vidsrc-embed.ru/embed/movie/${imdbId || contentId}`;
     case 'godrive':
       return imdbId ? `https://godriveplayer.com/player.php?imdb=${imdbId}` : '';
     case 'multiembed':
