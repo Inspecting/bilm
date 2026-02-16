@@ -16,8 +16,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const transferStatusText = document.getElementById('transferStatusText');
   const statusText = document.getElementById('statusText');
 
-  const loginPanel = document.getElementById('loginPanel');
-  const signUpPanel = document.getElementById('signUpPanel');
+  const authPanel = document.getElementById('authPanel');
+
+  const openLoginModalBtn = document.getElementById('openLoginModalBtn');
+  const openSignUpModalBtn = document.getElementById('openSignUpModalBtn');
+
+  const loginModal = document.getElementById('loginModal');
+  const signUpModal = document.getElementById('signUpModal');
+  const closeLoginModalBtn = document.getElementById('closeLoginModalBtn');
+  const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
+  const openCreateAccountBtn = document.getElementById('openCreateAccountBtn');
+  const backToLoginBtn = document.getElementById('backToLoginBtn');
 
   const loginEmail = document.getElementById('loginEmail');
   const loginPassword = document.getElementById('loginPassword');
@@ -40,6 +49,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+
+  function openModal(modal) {
+    if (modal) modal.classList.add('open');
+  }
+
+  function closeModal(modal) {
+    if (modal) modal.classList.remove('open');
+  }
+
+  function closeAllModals() {
+    closeModal(loginModal);
+    closeModal(signUpModal);
+  }
 
   function readStorage(storage) {
     return Object.entries(storage).reduce((all, [key, value]) => {
@@ -105,24 +127,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function ensureAuthReady() {
-    if (window.bilmAuth?.ready) {
+    const start = Date.now();
+    while (!window.bilmAuth && Date.now() - start < 15000) {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+    if (!window.bilmAuth) throw new Error('Account services did not load in time.');
+
+    if (typeof window.bilmAuth.ready === 'function') {
       await window.bilmAuth.ready();
       return;
     }
-    await new Promise((resolve, reject) => {
-      const startedAt = Date.now();
-      const timer = setInterval(() => {
-        if (window.bilmAuth?.ready) {
-          clearInterval(timer);
-          window.bilmAuth.ready().then(resolve).catch(reject);
-          return;
-        }
-        if (Date.now() - startedAt > 15000) {
-          clearInterval(timer);
-          reject(new Error('Account services did not load in time.'));
-        }
-      }, 80);
-    });
+
+    if (typeof window.bilmAuth.init === 'function') {
+      await window.bilmAuth.init();
+      return;
+    }
+
+    throw new Error('Account services are unavailable.');
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -147,20 +168,56 @@ document.addEventListener('DOMContentLoaded', () => {
       ? `Logged in as ${user.email || 'account user'}.`
       : 'Not logged in.';
     accountHintText.textContent = loggedIn
-      ? 'Use Cloud Export and Cloud Import to move your data across devices.'
-      : 'Log in to use Cloud Export and Cloud Import.';
+      ? 'Account ready. You can use cloud transfer, update display name, and manage account safety below.'
+      : 'Use Log In or Sign Up for cloud transfer and account options.';
 
-    loginPanel.hidden = loggedIn;
-    signUpPanel.hidden = loggedIn;
+    authPanel.hidden = loggedIn;
 
     saveUsernameBtn.disabled = !loggedIn;
     deleteAccountBtn.disabled = !loggedIn;
     cloudExportBtn.disabled = !loggedIn;
     cloudImportBtn.disabled = !loggedIn;
 
-    const profile = user?.profile || {};
-    usernameInput.value = profile.username || '';
+    usernameInput.value = user?.displayName || '';
   }
+
+  openLoginModalBtn.addEventListener('click', () => {
+    closeModal(signUpModal);
+    openModal(loginModal);
+  });
+
+  openSignUpModalBtn.addEventListener('click', () => {
+    closeModal(loginModal);
+    openModal(signUpModal);
+  });
+
+  closeLoginModalBtn.addEventListener('click', () => closeModal(loginModal));
+  closeSignUpModalBtn.addEventListener('click', () => closeModal(signUpModal));
+
+  openCreateAccountBtn.addEventListener('click', () => {
+    closeModal(loginModal);
+    openModal(signUpModal);
+  });
+
+  backToLoginBtn.addEventListener('click', () => {
+    closeModal(signUpModal);
+    openModal(loginModal);
+  });
+
+  [loginModal, signUpModal].forEach((modal) => {
+    if (!modal) return;
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal(modal);
+      }
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAllModals();
+    }
+  });
 
   exportDataBtn.addEventListener('click', () => {
     try {
@@ -225,6 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const password = loginPassword.value;
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
+      closeModal(loginModal);
       statusText.textContent = 'Logged in.';
     } catch (error) {
       statusText.textContent = `Log in failed: ${error.message}`;
@@ -238,6 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const password = signUpPassword.value;
       await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
+      closeModal(signUpModal);
       statusText.textContent = 'Account created.';
     } catch (error) {
       statusText.textContent = `Sign up failed: ${error.message}`;
@@ -247,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
   saveUsernameBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.updateProfile({ username: usernameInput.value.trim() });
+      await window.bilmAuth.setUsername(usernameInput.value.trim());
       statusText.textContent = 'Username saved.';
     } catch (error) {
       statusText.textContent = `Username update failed: ${error.message}`;

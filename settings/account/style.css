@@ -87,3 +87,46 @@ input {
 }
 .toggle input:checked + span { background: linear-gradient(135deg, var(--accent), #7c3aed); }
 .toggle input:checked + span::after { transform: translateX(20px); }
+
+.data-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 5, 15, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.data-modal.open {
+  display: flex;
+}
+
+.data-modal__panel {
+  width: min(860px, 100%);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.data-modal__panel h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.data-modal__panel p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.modal-actions {
+  margin-top: 4px;
+}

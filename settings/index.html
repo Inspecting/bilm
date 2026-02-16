@@ -18,10 +18,10 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../shared/theme.css" />
-    
+
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
-  
+
   <style>
     * {
       margin: 0;
@@ -420,7 +420,22 @@
 
     <section class="settings-card">
       <h2>Account</h2>
-      <p>Simple account controls: log in, sign up, log out, and open account settings.</p>
+      <div class="control-row">
+        <div>
+          <label>Data Transfer</label>
+          <small>Export/import local data or use cloud transfer while signed in.</small>
+        </div>
+        <div class="backup-tools">
+          <div class="actions-row">
+            <button class="btn" id="exportDataBtn">Export Data</button>
+            <button class="btn btn-outline" id="importDataBtn">Import Data</button>
+            <button class="btn" id="cloudExportBtn">Cloud Export</button>
+            <button class="btn btn-outline" id="cloudImportBtn">Cloud Import</button>
+          </div>
+          <input id="importFileInput" type="file" accept="application/json,.json,text/plain" hidden />
+          <span class="backup-status" id="backupStatus" aria-live="polite">No transfer action yet.</span>
+        </div>
+      </div>
 
       <div class="control-row">
         <div>
@@ -437,7 +452,7 @@
       <div class="control-row">
         <div>
           <label>Account Settings</label>
-          <small>Open account tools, including data export/import.</small>
+          <small>Open your account settings and profile options.</small>
         </div>
         <div class="actions-row">
           <button class="btn" id="openAccountSettingsBtn">Open Account Settings</button>
@@ -488,23 +503,7 @@
       </div>
     </section>
 
-    <section class="settings-card" hidden>
-      <h2>Backup & Transfer</h2>
-      <p>Export a full backup code of your local Bilm data or import one from another device.</p>
 
-      <div class="control-row">
-        <div>
-          <label>Data Backup</label>
-          <small>Includes local storage, session storage, and site cookies.</small>
-        </div>
-        <div class="backup-tools">
-          <button class="btn" id="exportDataBtn">Export Data</button>
-          <button class="btn btn-outline" id="importDataBtn">Import Data</button>
-          <input id="importFileInput" type="file" accept="application/json,.json,text/plain" hidden />
-          <span class="backup-status" id="backupStatus" aria-live="polite"></span>
-        </div>
-      </div>
-    </section>
 
     <section class="settings-card">
       <h2>Reset & Maintenance</h2>
@@ -600,6 +599,8 @@
   const resetDataBtn = document.getElementById('resetDataBtn');
   const exportDataBtn = document.getElementById('exportDataBtn');
   const importDataBtn = document.getElementById('importDataBtn');
+  const cloudExportBtn = document.getElementById('cloudExportBtn');
+  const cloudImportBtn = document.getElementById('cloudImportBtn');
   const importFileInput = document.getElementById('importFileInput');
   const backupStatus = document.getElementById('backupStatus');
   const dataModal = document.getElementById('dataModal');
@@ -787,6 +788,7 @@
   }
 
   function openDataModal({ title, message, code = '', importMode = false }) {
+    if (!dataModal || !dataModalTitle || !dataModalMessage || !dataCodeField || !copyDataBtn || !downloadDataBtn || !pasteImportBtn || !uploadImportBtn || !applyImportBtn) return;
     dataModalTitle.textContent = title;
     dataModalMessage.textContent = message;
     dataCodeField.value = code;
@@ -800,6 +802,7 @@
   }
 
   function closeDataModal() {
+    if (!dataModal) return;
     dataModal.classList.remove('open');
     pendingImportPayload = null;
   }
@@ -967,7 +970,7 @@
       openSignUpBtn.hidden = true;
       logoutBtn.hidden = false;
       openAccountSettingsBtn.disabled = false;
-      cloudStatus.textContent = 'Account ready. Open Account Settings for cloud and transfer tools.';
+      cloudStatus.textContent = 'Account ready. Open Account Settings to manage account options.';
       loginHelperText.textContent = 'Logged in successfully.';
     } else {
       accountStatusText.textContent = 'You are in guest mode. Log in to enable account sync.';
@@ -1159,7 +1162,7 @@
     }
   });
 
-  exportDataBtn.addEventListener('click', () => {
+  exportDataBtn?.addEventListener('click', () => {
     const code = encodeBackup(collectBackupData());
     openDataModal({
       title: 'Export Backup Code',
@@ -1169,7 +1172,7 @@
     backupStatus.textContent = `Export ready (${code.length.toLocaleString()} chars).`;
   });
 
-  importDataBtn.addEventListener('click', () => {
+  importDataBtn?.addEventListener('click', () => {
     openDataModal({
       title: 'Import Backup Code',
       message: 'Paste a backup code or upload a save file, then apply import to replace your current local data.',
@@ -1178,7 +1181,7 @@
     backupStatus.textContent = 'Import popup opened.';
   });
 
-  importFileInput.addEventListener('change', async (event) => {
+  importFileInput?.addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const raw = await file.text();
@@ -1187,7 +1190,7 @@
     importFileInput.value = '';
   });
 
-  pasteImportBtn.addEventListener('click', async () => {
+  pasteImportBtn?.addEventListener('click', async () => {
     try {
       const clipboardText = await navigator.clipboard.readText();
       dataCodeField.value = clipboardText;
@@ -1197,11 +1200,11 @@
     }
   });
 
-  uploadImportBtn.addEventListener('click', () => {
+  uploadImportBtn?.addEventListener('click', () => {
     importFileInput.click();
   });
 
-  copyDataBtn.addEventListener('click', async () => {
+  copyDataBtn?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(dataCodeField.value);
       backupStatus.textContent = 'Backup code copied to clipboard.';
@@ -1210,7 +1213,7 @@
     }
   });
 
-  downloadDataBtn.addEventListener('click', () => {
+  downloadDataBtn?.addEventListener('click', () => {
     const blob = new Blob([dataCodeField.value], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1223,7 +1226,7 @@
     backupStatus.textContent = 'Backup code downloaded.';
   });
 
-  applyImportBtn.addEventListener('click', () => {
+  applyImportBtn?.addEventListener('click', () => {
     try {
       pendingImportPayload = parseBackup(dataCodeField.value);
       if (!confirm('Import this backup now? This will overwrite current local data.')) return;
@@ -1233,6 +1236,24 @@
     } catch (err) {
       console.error('Import failed:', err);
       backupStatus.textContent = `Import failed: ${err.message}`;
+    }
+  });
+
+  cloudExportBtn?.addEventListener('click', async () => {
+    try {
+      await syncLocalToCloud('manual');
+      backupStatus.textContent = 'Cloud Export complete.';
+    } catch (err) {
+      backupStatus.textContent = `Cloud Export failed: ${err.message}`;
+    }
+  });
+
+  cloudImportBtn?.addEventListener('click', async () => {
+    try {
+      await mergeLocalAndCloud();
+      backupStatus.textContent = 'Cloud Import complete.';
+    } catch (err) {
+      backupStatus.textContent = `Cloud Import failed: ${err.message}`;
     }
   });
 
@@ -1343,8 +1364,8 @@
     }
   }
 
-  closeDataModalBtn.addEventListener('click', closeDataModal);
-  dataModal.addEventListener('click', (event) => {
+  closeDataModalBtn?.addEventListener('click', closeDataModal);
+  dataModal?.addEventListener('click', (event) => {
     if (event.target === dataModal) closeDataModal();
   });
 
