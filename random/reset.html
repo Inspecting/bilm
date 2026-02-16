@@ -56,7 +56,7 @@
 <body>
   <main>
     <h1>Reset &amp; return home</h1>
-    <p>Pressing reset will clear this session and send you back to the homepage.</p>
+    <p>Type <strong>reset</strong> when prompted to clear this session and return to the homepage.</p>
     <button id="resetButton" type="button">Reset</button>
   </main>
 
@@ -64,8 +64,8 @@
     const resetButton = document.getElementById('resetButton');
 
     resetButton.addEventListener('click', () => {
-      const confirmed = window.confirm('Are you sure you want to reset? This will clear saved data.');
-      if (!confirmed) return;
+      const response = window.prompt('Type reset to continue.');
+      if (String(response || '').trim().toLowerCase() !== 'reset') return;
       localStorage.clear();
       sessionStorage.clear();
       window.location.href = '../';
