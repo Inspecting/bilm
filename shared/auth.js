@@ -130,6 +130,14 @@
     return auth.currentUser;
   }
 
+  async function syncAfterExplicitLogin() {
+    try {
+      await syncFromCloudNow();
+    } catch (error) {
+      console.warn('Login cloud sync failed:', error);
+    }
+  }
+
   const api = {
     init,
     async signUp(email, password) {
@@ -142,11 +150,15 @@
     },
     async signIn(email, password) {
       await init();
-      return modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
+      const credentials = await modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
+      await syncAfterExplicitLogin();
+      return credentials;
     },
     async signInWithIdentifier(identifier, password) {
       await init();
-      return modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
+      const credentials = await modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
+      await syncAfterExplicitLogin();
+      return credentials;
     },
     async setUsername(username) {
       await init();

@@ -642,14 +642,6 @@
   const BACKUP_FORMAT_PREFIX = 'BLM1';
   const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   let pendingImportPayload = null;
-  let autoSaveIntervalId = null;
-  let autoSaveTickId = null;
-  let nextAutoSaveAt = 0;
-
-  function getGlobalAutoSaveNextAt() {
-    const apiNext = window.bilmAuth?.getAutoSaveNextAt?.();
-    return Number.isFinite(apiNext) && apiNext > 0 ? apiNext : (nextAutoSaveAt || (Date.now() + 60000));
-  }
 
   function readStorage(storage) {
     return Object.entries(storage).reduce((all, [key, value]) => {
@@ -866,30 +858,6 @@
   }
 
 
-  function updateAutoSaveCountdownLabel() {
-    const user = window.bilmAuth?.getCurrentUser?.();
-    if (!user) {
-      cloudStatus.textContent = 'Auto save paused until you log in.';
-      return;
-    }
-    nextAutoSaveAt = getGlobalAutoSaveNextAt();
-    const secondsLeft = Math.max(0, Math.ceil((nextAutoSaveAt - Date.now()) / 1000));
-    cloudStatus.textContent = `Auto save in ${secondsLeft} seconds.`;
-  }
-
-  function stopAutoSaveTimer() {
-    if (autoSaveIntervalId) {
-      clearInterval(autoSaveIntervalId);
-      autoSaveIntervalId = null;
-    }
-    if (autoSaveTickId) {
-      clearInterval(autoSaveTickId);
-      autoSaveTickId = null;
-    }
-    nextAutoSaveAt = 0;
-    updateAutoSaveCountdownLabel();
-  }
-
   async function runSaveNow(reason = 'manual') {
     await ensureAuthReady();
     const user = window.bilmAuth.getCurrentUser();
@@ -899,33 +867,6 @@
     }
     await window.bilmAuth.saveCloudSnapshot(collectBackupData());
     if (reason !== 'auto') cloudStatus.textContent = 'Save complete. Local data uploaded.';
-  }
-
-  function startAutoSaveTimer() {
-    stopAutoSaveTimer();
-    const settings = window.bilmTheme?.getSettings?.() || {};
-    if (settings.accountTimedAutosave === false) {
-      cloudStatus.textContent = 'Auto save disabled.';
-      return;
-    }
-    if (!window.bilmAuth?.getCurrentUser?.()) {
-      updateAutoSaveCountdownLabel();
-      return;
-    }
-
-    nextAutoSaveAt = getGlobalAutoSaveNextAt();
-    updateAutoSaveCountdownLabel();
-    autoSaveTickId = setInterval(updateAutoSaveCountdownLabel, 1000);
-    autoSaveIntervalId = setInterval(async () => {
-      try {
-        await runSaveNow('auto');
-      } catch (error) {
-        cloudStatus.textContent = `Auto save failed: ${error.message}`;
-      } finally {
-        nextAutoSaveAt = getGlobalAutoSaveNextAt();
-        updateAutoSaveCountdownLabel();
-      }
-    }, 60000);
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -975,7 +916,7 @@
       cloudStatus.textContent = 'Account ready. Open Account Settings to manage account options.';
       loginHelperText.textContent = 'Logged in successfully.';
     } else {
-      accountStatusText.textContent = 'You are in guest mode. Log in to enable account sync.';
+      accountStatusText.textContent = 'You are in guest mode. Log in to use account transfer tools.';
       openSignInBtn.hidden = false;
       openSignUpBtn.hidden = false;
       logoutBtn.hidden = true;
@@ -1024,70 +965,6 @@
       const cacheKeys = await window.caches.keys();
       await Promise.all(cacheKeys.map((cacheKey) => window.caches.delete(cacheKey)));
     }
-  }
-
-  async function autoSyncAfterSignIn() {
-    const localSnapshot = collectBackupData();
-    const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
-
-    if (!cloudSnapshot) {
-      await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-      cloudStatus.textContent = 'New account detected. Local data was merged into your account.';
-      return;
-    }
-
-    const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
-    applyBackup(merged);
-    await window.bilmAuth.saveCloudSnapshot(merged);
-    cloudStatus.textContent = 'Auto Sync complete. Reloading with your account data...';
-    setTimeout(() => location.reload(), 300);
-  }
-
-  function mergeSnapshots(localSnapshot, cloudSnapshot) {
-    const localData = localSnapshot || collectBackupData();
-    const cloudData = cloudSnapshot || {};
-    const cookieItems = [
-      ...String(cloudData.cookies || '').split(';').map((item) => item.trim()).filter(Boolean),
-      ...String(localData.cookies || '').split(';').map((item) => item.trim()).filter(Boolean)
-    ];
-    return {
-      schema: 'bilm-backup-v1',
-      exportedAt: new Date().toISOString(),
-      origin: location.origin,
-      pathname: location.pathname,
-      localStorage: { ...(localData.localStorage || {}), ...(cloudData.localStorage || {}) },
-      sessionStorage: { ...(localData.sessionStorage || {}), ...(cloudData.sessionStorage || {}) },
-      cookies: [...new Set(cookieItems)].join('; ')
-    };
-  }
-
-  async function syncLocalToCloud(reason = 'manual') {
-    await runSaveNow(reason);
-    nextAutoSaveAt = getGlobalAutoSaveNextAt();
-    updateAutoSaveCountdownLabel();
-  }
-
-  async function mergeLocalAndCloud() {
-    await ensureAuthReady();
-    const user = window.bilmAuth.getCurrentUser();
-    if (!user) {
-      openLoginModal();
-      throw new Error('Please log in first.');
-    }
-    const localSnapshot = collectBackupData();
-    const cloudSnapshot = await window.bilmAuth.getCloudSnapshot();
-    if (!cloudSnapshot) {
-      cloudStatus.textContent = 'No cloud data yet. Uploading local data now.';
-      await window.bilmAuth.saveCloudSnapshot(localSnapshot);
-      cloudStatus.textContent = 'No cloud data existed, so local data was saved to your account.';
-      return;
-    }
-    const merged = mergeSnapshots(localSnapshot, cloudSnapshot);
-    applyBackup(merged);
-    await window.bilmAuth.saveCloudSnapshot(merged);
-    cloudStatus.textContent = 'Merge complete. Local + cloud data were combined and synced.';
-    cloudStatus.textContent = 'Merge complete. Reloading...';
-    setTimeout(() => location.reload(), 250);
   }
 
   accentPresets.forEach(({ value, label }) => {
@@ -1243,7 +1120,7 @@
 
   cloudExportBtn?.addEventListener('click', async () => {
     try {
-      await syncLocalToCloud('manual');
+      await runSaveNow('manual');
       backupStatus.textContent = 'Export successful.';
       alert('Export successful.');
       backupStatus.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
@@ -1383,7 +1260,6 @@
 
   window.addEventListener('DOMContentLoaded', () => {
     syncUI();
-    updateAutoSaveCountdownLabel();
     initCloudAuthUi();
   });
   window.addEventListener('bilm:theme-changed', syncUI);
