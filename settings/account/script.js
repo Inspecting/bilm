@@ -56,25 +56,60 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal(signUpModal);
   }
 
+  function readStorage(storage) {
+    return Object.entries(storage).reduce((all, [key, value]) => {
+      all[key] = value;
+      return all;
+    }, {});
+  }
+
+  function collectBackupData() {
+    return {
+      schema: 'bilm-backup-v1',
+      exportedAt: new Date().toISOString(),
+      origin: location.origin,
+      pathname: location.pathname,
+      localStorage: readStorage(localStorage),
+      sessionStorage: readStorage(sessionStorage),
+      cookies: document.cookie
+    };
+  }
+
+  function parseBackup(raw) {
+    const payload = JSON.parse(raw);
+    if (!payload || payload.schema !== 'bilm-backup-v1') {
+      throw new Error('Invalid backup schema.');
+    }
+    return payload;
+  }
+
+  function closeModal(modal) {
+    if (modal) modal.classList.remove('open');
+  }
+
+  function closeAllModals() {
+    closeModal(loginModal);
+    closeModal(signUpModal);
+  }
+
   async function ensureAuthReady() {
-    if (window.bilmAuth?.ready) {
+    const start = Date.now();
+    while (!window.bilmAuth && Date.now() - start < 15000) {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+    if (!window.bilmAuth) throw new Error('Account services did not load in time.');
+
+    if (typeof window.bilmAuth.ready === 'function') {
       await window.bilmAuth.ready();
       return;
     }
-    await new Promise((resolve, reject) => {
-      const startedAt = Date.now();
-      const timer = setInterval(() => {
-        if (window.bilmAuth?.ready) {
-          clearInterval(timer);
-          window.bilmAuth.ready().then(resolve).catch(reject);
-          return;
-        }
-        if (Date.now() - startedAt > 15000) {
-          clearInterval(timer);
-          reject(new Error('Account services did not load in time.'));
-        }
-      }, 80);
-    });
+
+    if (typeof window.bilmAuth.init === 'function') {
+      await window.bilmAuth.init();
+      return;
+    }
+
+    throw new Error('Account services are unavailable.');
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -99,6 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
       ? `Logged in as ${user.email || 'account user'}.`
       : 'Not logged in.';
     accountHintText.textContent = loggedIn
+      ? 'Account ready. You can use cloud transfer, update display name, and manage account safety below.'
+      : 'Use Log In or Sign Up for cloud transfer and account options.';
       ? 'Account ready. You can update your display name and manage account safety below.'
       : 'Use Log In or Sign Up to access account options.';
 
@@ -107,13 +144,55 @@ document.addEventListener('DOMContentLoaded', () => {
     saveUsernameBtn.disabled = !loggedIn;
     deleteAccountBtn.disabled = !loggedIn;
 
-    const profile = user?.profile || {};
-    usernameInput.value = profile.username || '';
+    usernameInput.value = user?.displayName || '';
   }
 
   openLoginModalBtn.addEventListener('click', () => {
     closeModal(signUpModal);
     openModal(loginModal);
+  });
+
+  openSignUpModalBtn.addEventListener('click', () => {
+    closeModal(loginModal);
+    openModal(signUpModal);
+  });
+
+  closeLoginModalBtn.addEventListener('click', () => closeModal(loginModal));
+  closeSignUpModalBtn.addEventListener('click', () => closeModal(signUpModal));
+
+  openCreateAccountBtn.addEventListener('click', () => {
+    closeModal(loginModal);
+    openModal(signUpModal);
+  });
+
+  backToLoginBtn.addEventListener('click', () => {
+    closeModal(signUpModal);
+    openModal(loginModal);
+  });
+
+  [loginModal, signUpModal].forEach((modal) => {
+    if (!modal) return;
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) {
+        closeModal(modal);
+      }
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAllModals();
+    }
+  });
+
+  exportDataBtn.addEventListener('click', () => {
+    try {
+      const payload = collectBackupData();
+      downloadBackup(payload);
+      transferStatusText.textContent = 'Export Data complete. JSON file downloaded.';
+    } catch (error) {
+      transferStatusText.textContent = `Export failed: ${error.message}`;
+    }
   });
 
   openSignUpModalBtn.addEventListener('click', () => {
@@ -180,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
   saveUsernameBtn.addEventListener('click', async () => {
     try {
       await ensureAuthReady();
-      await window.bilmAuth.updateProfile({ username: usernameInput.value.trim() });
+      await window.bilmAuth.setUsername(usernameInput.value.trim());
       statusText.textContent = 'Username saved.';
     } catch (error) {
       statusText.textContent = `Username update failed: ${error.message}`;
