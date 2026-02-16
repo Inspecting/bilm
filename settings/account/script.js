@@ -423,6 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await window.bilmAuth.saveCloudSnapshot(collectBackupData());
       transferStatusText.textContent = 'Export successful.';
       alert('Export successful.');
+      transferStatusText.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
     } catch (error) {
       transferStatusText.textContent = `Cloud export failed: ${error.message}`;
     }
