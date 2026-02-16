@@ -574,10 +574,7 @@ function buildTvUrl(server) {
   const episode = currentEpisode;
   switch (server) {
     case 'vidsrc':
-      if (imdbId) {
-        return `https://vsrc.su/embed/tv/${imdbId}/${season}/${episode}`;
-      }
-      return `https://vsrc.su/embed/tv/${tmdbId}/${season}/${episode}?tmdb=1`;
+      return `https://vidsrc-embed.ru/embed/tv/${tmdbId || imdbId}`;
     case 'godrive':
       return tmdbId
         ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
@@ -840,18 +837,29 @@ async function fetchTMDBData() {
   if (!tmdbId) {
     mediaTitle.textContent = 'Unknown title';
     mediaMeta.textContent = 'Release date unavailable';
+    updateIframe();
     return;
   }
 
   try {
     // First get external IDs (like imdb_id)
-    const externalRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`);
-    const externalData = await externalRes.json();
+    const externalData = await fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`) || {};
     imdbId = externalData.imdb_id || null;
 
     // Get season info
-    const detailsRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
-    const details = await detailsRes.json();
+    const details = await fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
+    if (!details) {
+      mediaTitle.textContent = 'Unknown title';
+      mediaMeta.textContent = 'Release date unavailable';
+      totalSeasons = 1;
+      episodesPerSeason = { 1: 1 };
+      populateSeasons(totalSeasons);
+      populateEpisodes(episodesPerSeason[1]);
+      updateControls();
+      updateIframe();
+      startContinueWatchingTimer();
+      return;
+    }
 
     totalSeasons = details.number_of_seasons || 1;
     const showTitle = details.name || details.original_name || 'Unknown title';
@@ -885,7 +893,7 @@ async function fetchTMDBData() {
     document.title = `Bilm 💜 - ${showTitle}`;
 
     episodesPerSeason = {};
-    details.seasons.forEach(season => {
+    (details.seasons || []).forEach(season => {
       episodesPerSeason[season.season_number] = season.episode_count || 1;
     });
 
