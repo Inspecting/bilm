@@ -154,8 +154,8 @@ button.search-btn {
   border: none;
   cursor: pointer;
   color: white;
-  background: linear-gradient(135deg, var(--accent), #7c3aed);
-  box-shadow: 0 12px 24px rgba(124, 58, 237, 0.35);
+  background: linear-gradient(135deg, var(--button-accent, var(--accent)), color-mix(in srgb, var(--button-accent, var(--accent)) 78%, #ffffff 22%));
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--button-accent, var(--accent)) 42%, transparent);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   user-select: none;
   flex: 1;
@@ -165,7 +165,7 @@ button.search-btn {
 
 button.search-btn:hover {
   transform: translateY(-1px) scale(1.01);
-  box-shadow: 0 16px 30px rgba(124, 58, 237, 0.45);
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--button-accent, var(--accent)) 58%, transparent);
 }
 
 /* Sections (for Continue Watching, Favorites, etc.) */

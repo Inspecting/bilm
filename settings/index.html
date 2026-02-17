@@ -194,7 +194,7 @@
     }
 
     .toggle input:checked + span {
-      background: linear-gradient(135deg, var(--accent), #7c3aed);
+      background: linear-gradient(135deg, var(--button-accent, var(--accent)), color-mix(in srgb, var(--button-accent, var(--accent)) 78%, #ffffff 22%));
       box-shadow: 0 0 12px var(--accent-glow);
     }
 
@@ -239,14 +239,14 @@
       cursor: pointer;
       font-weight: 600;
       color: white;
-      background: linear-gradient(135deg, var(--accent), #7c3aed);
-      box-shadow: 0 10px 20px rgba(124, 58, 237, 0.35);
+      background: linear-gradient(135deg, var(--button-accent, var(--accent)), color-mix(in srgb, var(--button-accent, var(--accent)) 78%, #ffffff 22%));
+      box-shadow: 0 10px 20px color-mix(in srgb, var(--button-accent, var(--accent)) 42%, transparent);
       transition: transform var(--transition-fast), box-shadow var(--transition-fast);
     }
 
     .btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 14px 26px rgba(124, 58, 237, 0.45);
+      box-shadow: 0 14px 26px color-mix(in srgb, var(--button-accent, var(--accent)) 58%, transparent);
     }
 
     .btn-outline {
@@ -357,7 +357,7 @@
   <div class="settings-grid">
     <section class="settings-card">
       <h2>Theme & Accent</h2>
-      <p>Fine tune your accent glow and choose your background mode.</p>
+      <p>Fine tune your accent glow, button accents, and background mode.</p>
 
       <div class="control-row">
         <div>
@@ -370,6 +370,25 @@
         </div>
       </div>
 
+
+      <div class="control-row">
+        <div>
+          <label for="buttonAccentSelect">Button Accent</label>
+          <small>Pick a preset mode or choose a custom color for buttons.</small>
+        </div>
+        <div class="preset-control">
+          <input id="buttonAccentPicker" class="inline-picker" type="color" aria-label="Custom button accent color" />
+          <select id="buttonAccentSelect" class="preset-select">
+            <option value="accent">Match Accent</option>
+            <option value="#a855f7">Purple</option>
+            <option value="#c084fc">Lilac</option>
+            <option value="#7c3aed">Violet</option>
+            <option value="#ec4899">Pink</option>
+            <option value="#38bdf8">Sky Blue</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+      </div>
 
       <div class="control-row">
         <div>
@@ -591,6 +610,8 @@
   const accentPresetsSelect = document.getElementById('accentPresetsSelect');
   const accentPicker = document.getElementById('accentPicker');
   const backgroundSelect = document.getElementById('backgroundSelect');
+  const buttonAccentSelect = document.getElementById('buttonAccentSelect');
+  const buttonAccentPicker = document.getElementById('buttonAccentPicker');
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
@@ -853,6 +874,14 @@
       accentPresetsSelect.value = accentValue;
     } else {
       accentPresetsSelect.value = 'custom';
+    const buttonAccentValue = settings.buttonAccent || settings.accent || '#a855f7';
+    buttonAccentPicker.value = buttonAccentValue;
+    if (buttonAccentValue === (settings.accent || '#a855f7')) {
+      buttonAccentSelect.value = 'accent';
+    } else if ([...buttonAccentSelect.options].some(option => option.value === buttonAccentValue)) {
+      buttonAccentSelect.value = buttonAccentValue;
+    } else {
+      buttonAccentSelect.value = 'custom';
     }
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
@@ -992,6 +1021,14 @@
     }
     accentPicker.value = selected;
     applySettings({ accent: selected });
+    const color = event.target.value;
+    accentPicker.value = color;
+    const currentSettings = window.bilmTheme?.getSettings?.() || {};
+    const updates = { accent: color };
+    if ((currentSettings.buttonAccent || '#a855f7') === (currentSettings.accent || '#a855f7')) {
+      updates.buttonAccent = color;
+    }
+    applySettings(updates);
   });
 
   accentPicker.addEventListener('input', (event) => {
@@ -1001,6 +1038,40 @@
       accentPresetsSelect.value = color;
     } else {
       accentPresetsSelect.value = 'custom';
+    const currentSettings = window.bilmTheme?.getSettings?.() || {};
+    const updates = { accent: color };
+    if ((currentSettings.buttonAccent || '#a855f7') === (currentSettings.accent || '#a855f7')) {
+      updates.buttonAccent = color;
+    }
+    applySettings(updates);
+    if ([...accentPresetsSelect.options].some(option => option.value === color)) {
+      accentPresetsSelect.value = color;
+    }
+  });
+
+  buttonAccentSelect.addEventListener('change', (event) => {
+    const selected = event.target.value;
+    if (selected === 'accent') {
+      const accentValue = (window.bilmTheme?.getSettings?.() || {}).accent || '#a855f7';
+      buttonAccentPicker.value = accentValue;
+      applySettings({ buttonAccent: accentValue });
+      return;
+    }
+    if (selected === 'custom') {
+      applySettings({ buttonAccent: buttonAccentPicker.value });
+      return;
+    }
+    buttonAccentPicker.value = selected;
+    applySettings({ buttonAccent: selected });
+  });
+
+  buttonAccentPicker.addEventListener('input', (event) => {
+    const color = event.target.value;
+    applySettings({ buttonAccent: color });
+    if ([...buttonAccentSelect.options].some(option => option.value === color)) {
+      buttonAccentSelect.value = color;
+    } else {
+      buttonAccentSelect.value = 'custom';
     }
   });
 
