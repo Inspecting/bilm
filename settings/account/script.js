@@ -247,16 +247,98 @@ document.addEventListener('DOMContentLoaded', () => {
     return payload;
   }
 
-  function mergeBackupPayloads(payloadA, payloadB) {
+  function mergeBackupPayloads(payloadA, payloadB, payloadLocal) {
     if (!payloadA || !payloadB) throw new Error('Both import slots are required to merge data.');
+
+    const sources = [payloadA, payloadB, payloadLocal].filter(Boolean);
+    const mergeAsHistoryKeys = new Set([
+      'bilm-continue-watching',
+      'bilm-watch-history',
+      'bilm-favorites',
+      'bilm-watch-later',
+      'bilm-search-history'
+    ]);
+
+    const parseJson = (value, fallback) => {
+      if (typeof value !== 'string') return fallback;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return fallback;
+      }
+    };
+
+    const sortByRecent = (items) => [...items].sort((left, right) => {
+      const leftTime = Number(left?.updatedAt) || 0;
+      const rightTime = Number(right?.updatedAt) || 0;
+      if (leftTime === rightTime) return 0;
+      return rightTime - leftTime;
+    });
+
+    const mergeList = (key) => {
+      const merged = [];
+      const seen = new Set();
+
+      sources.forEach((source) => {
+        const list = parseJson(source?.localStorage?.[key], []);
+        if (!Array.isArray(list)) return;
+        list.forEach((entry) => {
+          const identity = entry && typeof entry === 'object'
+            ? (entry.key || entry.query || `${entry.type || 'item'}-${entry.id || ''}-${entry.title || ''}`)
+            : String(entry);
+          if (!identity || seen.has(identity)) return;
+          seen.add(identity);
+          merged.push(entry);
+        });
+      });
+
+      return JSON.stringify(sortByRecent(merged));
+    };
+
+    const mergeStorageMap = (bucket) => {
+      const allKeys = new Set();
+      sources.forEach((source) => {
+        Object.keys(source?.[bucket] || {}).forEach((key) => allKeys.add(key));
+      });
+
+      const merged = {};
+      allKeys.forEach((key) => {
+        if (mergeAsHistoryKeys.has(key)) {
+          merged[key] = mergeList(key);
+          return;
+        }
+        const firstValue = sources.find((source) => Object.prototype.hasOwnProperty.call(source?.[bucket] || {}, key))?.[bucket]?.[key];
+        if (typeof firstValue !== 'undefined') {
+          merged[key] = firstValue;
+        }
+      });
+      return merged;
+    };
+
+    const mergeCookies = () => {
+      const cookieMap = new Map();
+      sources.forEach((source) => {
+        String(source?.cookies || '')
+          .split(';')
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+          .forEach((entry) => {
+            const [name] = entry.split('=');
+            if (!name || cookieMap.has(name)) return;
+            cookieMap.set(name, entry);
+          });
+      });
+      return [...cookieMap.values()].join('; ');
+    };
+
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
       origin: location.origin,
       pathname: location.pathname,
-      localStorage: { ...(payloadA.localStorage || {}), ...(payloadB.localStorage || {}) },
-      sessionStorage: { ...(payloadA.sessionStorage || {}), ...(payloadB.sessionStorage || {}) },
-      cookies: [payloadA.cookies || '', payloadB.cookies || ''].filter(Boolean).join('; ')
+      localStorage: mergeStorageMap('localStorage'),
+      sessionStorage: mergeStorageMap('sessionStorage'),
+      cookies: mergeCookies()
     };
   }
 
@@ -532,6 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const canProceed = await requestCloudLoginPermission();
       if (!canProceed) throw new Error('Cloud export cancelled until you choose to log in.');
       await window.bilmAuth.saveCloudSnapshot(collectBackupData());
+      alert('Export successful.');
       transferStatusText.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
     } catch (error) {
       transferStatusText.textContent = `Cloud export failed: ${error.message}`;
@@ -663,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
   mergeDataBtn?.addEventListener('click', () => {
     try {
       if (mergeDataBtn.disabled) return;
-      const merged = mergeBackupPayloads(importSlots.one, importSlots.two);
+      const merged = mergeBackupPayloads(importSlots.one, importSlots.two, collectBackupData());
       if (!confirm('Merge Import 1 and Import 2 and apply now? This will overwrite current local data.')) return;
       applyBackup(merged);
       transferStatusText.textContent = 'Merged data applied. Reloading...';
