@@ -224,6 +224,13 @@
       min-width: 0;
       flex: 1 1 0;
       max-width: 340px;
+      border-color: color-mix(in srgb, var(--preview-color, var(--accent)) 55%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--preview-color, var(--accent)) 24%, transparent);
+    }
+
+    .preset-select:focus {
+      border-color: var(--preview-color, var(--accent));
+      box-shadow: 0 0 10px color-mix(in srgb, var(--preview-color, var(--accent)) 32%, transparent);
     }
 
     .actions-row {
@@ -588,6 +595,14 @@
     { value: '#ec4899', label: 'Pink' },
     { value: '#38bdf8', label: 'Sky Blue' }
   ];
+  const backgroundPresetColors = {
+    deep: '#0b0b14',
+    midnight: '#05050b',
+    velvet: '#120818',
+    aurora: '#062a2a',
+    slate: '#111827',
+    sunset: '#2a1326'
+  };
   const accentPresetsSelect = document.getElementById('accentPresetsSelect');
   const accentPicker = document.getElementById('accentPicker');
   const backgroundSelect = document.getElementById('backgroundSelect');
@@ -842,6 +857,15 @@
     window.bilmTheme?.setSettings?.({ ...current, ...partial });
   }
 
+  function updatePresetVisuals() {
+    accentPresetsSelect.style.setProperty('--preview-color', accentPicker.value || '#a855f7');
+    const selectedBackground = backgroundSelect.value;
+    const previewBackgroundColor = selectedBackground === 'custom'
+      ? (customBackgroundPicker.value || '#0b0b14')
+      : (backgroundPresetColors[selectedBackground] || '#0b0b14');
+    backgroundSelect.style.setProperty('--preview-color', previewBackgroundColor);
+  }
+
   function syncUI() {
     const settings = window.bilmTheme?.getSettings?.() || {};
     const accentValue = settings.accent || '#a855f7';
@@ -853,12 +877,16 @@
     }
     const backgroundValue = settings.background || 'deep';
     backgroundSelect.value = backgroundValue;
-    customBackgroundPicker.value = settings.customBackground || '#0b0b14';
+    const customBackgroundValue = settings.customBackground || '#0b0b14';
+    customBackgroundPicker.value = backgroundValue === 'custom'
+      ? customBackgroundValue
+      : (backgroundPresetColors[backgroundValue] || customBackgroundValue);
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'vidsrc';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'vidsrc';
+    updatePresetVisuals();
   }
 
 
@@ -991,6 +1019,7 @@
     }
     accentPicker.value = color;
     applySettings({ accent: color });
+    updatePresetVisuals();
   });
 
 
@@ -1002,15 +1031,22 @@
     } else {
       accentPresetsSelect.value = 'custom';
     }
+    updatePresetVisuals();
   });
 
   backgroundSelect.addEventListener('change', (event) => {
-    applySettings({ background: event.target.value });
+    const mode = event.target.value;
+    if (mode !== 'custom') {
+      customBackgroundPicker.value = backgroundPresetColors[mode] || '#0b0b14';
+    }
+    applySettings({ background: mode });
+    updatePresetVisuals();
   });
 
   customBackgroundPicker.addEventListener('input', (event) => {
     applySettings({ customBackground: event.target.value, background: 'custom' });
     backgroundSelect.value = 'custom';
+    updatePresetVisuals();
   });
 
   motionToggle.addEventListener('change', (event) => {
