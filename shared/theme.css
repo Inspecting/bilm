@@ -1,5 +1,6 @@
 :root {
   --accent: #a855f7;
+  --button-accent: #a855f7;
   --accent-soft: rgba(168, 85, 247, 0.2);
   --accent-glow: rgba(168, 85, 247, 0.45);
   --accent-strong: rgba(168, 85, 247, 0.75);

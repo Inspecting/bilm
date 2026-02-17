@@ -80,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let pendingImportPayload = null;
   let activeImportSlot = null;
+  let reopenMergeAfterImportClose = false;
   const importSlots = { one: null, two: null };
   const CLEAR_ON_LOGOUT_KEY = 'bilm-clear-local-on-logout';
 
@@ -91,6 +92,16 @@ document.addEventListener('DOMContentLoaded', () => {
     modal?.classList.remove('open');
   }
 
+  function closeDataImportModal() {
+    activeImportSlot = null;
+    closeModal(dataModal);
+    if (reopenMergeAfterImportClose) {
+      reopenMergeAfterImportClose = false;
+      updateMergeUi();
+      openModal(mergeModal);
+    }
+  }
+
   function closeAllModals() {
     closeModal(loginModal);
     closeModal(signUpModal);
@@ -98,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal(mergeModal);
     closeModal(cloudAuthPromptModal);
     pendingImportPayload = null;
+    reopenMergeAfterImportClose = false;
   }
 
   function readStorage(storage) {
@@ -379,8 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
   closeLoginModalBtn?.addEventListener('click', () => closeModal(loginModal));
   closeSignUpModalBtn?.addEventListener('click', () => closeModal(signUpModal));
   closeDataModalBtn?.addEventListener('click', () => {
-    activeImportSlot = null;
-    closeModal(dataModal);
+    closeDataImportModal();
   });
   closeMergeModalBtn?.addEventListener('click', () => closeModal(mergeModal));
 
@@ -397,7 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
   [loginModal, signUpModal, dataModal, mergeModal, cloudAuthPromptModal].forEach((modal) => {
     modal?.addEventListener('click', (event) => {
       if (event.target === modal) {
-        if (modal === dataModal) activeImportSlot = null;
+        if (modal === dataModal) {
+          closeDataImportModal();
+          return;
+        }
         closeModal(modal);
       }
     });
@@ -431,6 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   importDataBtn?.addEventListener('click', () => {
     activeImportSlot = null;
+    reopenMergeAfterImportClose = false;
     openDataModal({
       title: 'Import Backup Code',
       message: 'Paste a backup code or upload a save file, then apply import to replace your current local data.',
@@ -446,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   importOneBtn?.addEventListener('click', () => {
     activeImportSlot = 'one';
+    reopenMergeAfterImportClose = true;
     closeModal(mergeModal);
     openDataModal({
       title: 'Import 1',
@@ -457,6 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   importTwoBtn?.addEventListener('click', () => {
     activeImportSlot = 'two';
+    reopenMergeAfterImportClose = true;
     closeModal(mergeModal);
     openDataModal({
       title: 'Import 2',
@@ -541,6 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
         importSlots[activeImportSlot] = pendingImportPayload;
         transferStatusText.textContent = `Import ${activeImportSlot === 'one' ? '1' : '2'} loaded for merge.`;
         activeImportSlot = null;
+        reopenMergeAfterImportClose = false;
         closeModal(dataModal);
         updateMergeUi();
         openModal(mergeModal);
