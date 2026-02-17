@@ -866,6 +866,11 @@
     backgroundSelect.style.setProperty('--preview-color', previewBackgroundColor);
   }
 
+  function findBackgroundPresetByColor(color) {
+    const normalized = (color || '').trim().toLowerCase();
+    return Object.entries(backgroundPresetColors).find(([, value]) => value.toLowerCase() === normalized)?.[0] || null;
+  }
+
   function syncUI() {
     const settings = window.bilmTheme?.getSettings?.() || {};
     const accentValue = settings.accent || '#a855f7';
@@ -875,12 +880,18 @@
     } else {
       accentPresetsSelect.value = 'custom';
     }
-    const backgroundValue = settings.background || 'deep';
-    backgroundSelect.value = backgroundValue;
     const customBackgroundValue = settings.customBackground || '#0b0b14';
-    customBackgroundPicker.value = backgroundValue === 'custom'
-      ? customBackgroundValue
-      : (backgroundPresetColors[backgroundValue] || customBackgroundValue);
+    const backgroundValue = settings.background || 'deep';
+    const matchingPreset = findBackgroundPresetByColor(customBackgroundValue);
+    if (backgroundValue === 'custom' && matchingPreset) {
+      backgroundSelect.value = matchingPreset;
+      customBackgroundPicker.value = backgroundPresetColors[matchingPreset];
+    } else {
+      backgroundSelect.value = backgroundValue;
+      customBackgroundPicker.value = backgroundValue === 'custom'
+        ? customBackgroundValue
+        : (backgroundPresetColors[backgroundValue] || customBackgroundValue);
+    }
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
     incognitoToggle.checked = settings.incognito === true;
@@ -1044,8 +1055,15 @@
   });
 
   customBackgroundPicker.addEventListener('input', (event) => {
-    applySettings({ customBackground: event.target.value, background: 'custom' });
-    backgroundSelect.value = 'custom';
+    const color = event.target.value;
+    const matchingPreset = findBackgroundPresetByColor(color);
+    if (matchingPreset) {
+      backgroundSelect.value = matchingPreset;
+      applySettings({ customBackground: color, background: matchingPreset });
+    } else {
+      backgroundSelect.value = 'custom';
+      applySettings({ customBackground: color, background: 'custom' });
+    }
     updatePresetVisuals();
   });
 
