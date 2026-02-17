@@ -867,12 +867,13 @@
     const settings = window.bilmTheme?.getSettings?.() || {};
     const accentValue = settings.accent || '#a855f7';
     accentPicker.value = accentValue;
-    if ([...accentPresetsSelect.options].some(option => option.value === accentValue)) {
-      accentPresetsSelect.value = accentValue;
-    }
     const backgroundValue = settings.background || 'deep';
     backgroundSelect.value = backgroundValue;
     customBackgroundPicker.value = settings.customBackground || '#0b0b14';
+    if ([...accentPresetsSelect.options].some(option => option.value === accentValue)) {
+      accentPresetsSelect.value = accentValue;
+    } else {
+      accentPresetsSelect.value = 'custom';
     const buttonAccentValue = settings.buttonAccent || settings.accent || '#a855f7';
     buttonAccentPicker.value = buttonAccentValue;
     if (buttonAccentValue === (settings.accent || '#a855f7')) {
@@ -1007,7 +1008,19 @@
     accentPresetsSelect.appendChild(option);
   });
 
+  const customAccentOption = document.createElement('option');
+  customAccentOption.value = 'custom';
+  customAccentOption.textContent = 'Custom';
+  accentPresetsSelect.appendChild(customAccentOption);
+
   accentPresetsSelect.addEventListener('change', (event) => {
+    const selected = event.target.value;
+    if (selected === 'custom') {
+      applySettings({ accent: accentPicker.value });
+      return;
+    }
+    accentPicker.value = selected;
+    applySettings({ accent: selected });
     const color = event.target.value;
     accentPicker.value = color;
     const currentSettings = window.bilmTheme?.getSettings?.() || {};
@@ -1018,9 +1031,13 @@
     applySettings(updates);
   });
 
-
   accentPicker.addEventListener('input', (event) => {
     const color = event.target.value;
+    applySettings({ accent: color });
+    if ([...accentPresetsSelect.options].some(option => option.value === color)) {
+      accentPresetsSelect.value = color;
+    } else {
+      accentPresetsSelect.value = 'custom';
     const currentSettings = window.bilmTheme?.getSettings?.() || {};
     const updates = { accent: color };
     if ((currentSettings.buttonAccent || '#a855f7') === (currentSettings.accent || '#a855f7')) {
@@ -1057,6 +1074,7 @@
       buttonAccentSelect.value = 'custom';
     }
   });
+
 
   backgroundSelect.addEventListener('change', (event) => {
     applySettings({ background: event.target.value });
