@@ -370,6 +370,7 @@
         </div>
       </div>
 
+
       <div class="control-row">
         <div>
           <label for="backgroundSelect">Background Mode</label>
@@ -845,12 +846,14 @@
     const settings = window.bilmTheme?.getSettings?.() || {};
     const accentValue = settings.accent || '#a855f7';
     accentPicker.value = accentValue;
-    if ([...accentPresetsSelect.options].some(option => option.value === accentValue)) {
-      accentPresetsSelect.value = accentValue;
-    }
     const backgroundValue = settings.background || 'deep';
     backgroundSelect.value = backgroundValue;
     customBackgroundPicker.value = settings.customBackground || '#0b0b14';
+    if ([...accentPresetsSelect.options].some(option => option.value === accentValue)) {
+      accentPresetsSelect.value = accentValue;
+    } else {
+      accentPresetsSelect.value = 'custom';
+    }
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
     incognitoToggle.checked = settings.incognito === true;
@@ -976,19 +979,31 @@
     accentPresetsSelect.appendChild(option);
   });
 
-  accentPresetsSelect.addEventListener('change', (event) => {
-    const color = event.target.value;
-    accentPicker.value = color;
-    applySettings({ accent: color });
-  });
+  const customAccentOption = document.createElement('option');
+  customAccentOption.value = 'custom';
+  customAccentOption.textContent = 'Custom';
+  accentPresetsSelect.appendChild(customAccentOption);
 
+  accentPresetsSelect.addEventListener('change', (event) => {
+    const selected = event.target.value;
+    if (selected === 'custom') {
+      applySettings({ accent: accentPicker.value });
+      return;
+    }
+    accentPicker.value = selected;
+    applySettings({ accent: selected });
+  });
 
   accentPicker.addEventListener('input', (event) => {
-    applySettings({ accent: event.target.value });
-    if ([...accentPresetsSelect.options].some(option => option.value === event.target.value)) {
-      accentPresetsSelect.value = event.target.value;
+    const color = event.target.value;
+    applySettings({ accent: color });
+    if ([...accentPresetsSelect.options].some(option => option.value === color)) {
+      accentPresetsSelect.value = color;
+    } else {
+      accentPresetsSelect.value = 'custom';
     }
   });
+
 
   backgroundSelect.addEventListener('change', (event) => {
     applySettings({ background: event.target.value });
