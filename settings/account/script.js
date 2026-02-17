@@ -446,6 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   importOneBtn?.addEventListener('click', () => {
     activeImportSlot = 'one';
+    closeModal(mergeModal);
     openDataModal({
       title: 'Import 1',
       message: 'Load backup code for slot 1. Apply Import saves this slot for merge.',
@@ -456,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   importTwoBtn?.addEventListener('click', () => {
     activeImportSlot = 'two';
+    closeModal(mergeModal);
     openDataModal({
       title: 'Import 2',
       message: 'Load backup code for slot 2. Apply Import saves this slot for merge.',
