@@ -532,13 +532,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const canProceed = await requestCloudLoginPermission();
       if (!canProceed) throw new Error('Cloud export cancelled until you choose to log in.');
       await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-      const successMessage = 'Cloud export successful. Your latest local data is now saved to your account.';
-      transferStatusText.textContent = successMessage;
-      alert(successMessage);
+      transferStatusText.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
     } catch (error) {
-      const failureMessage = `Cloud export failed: ${error.message}`;
-      transferStatusText.textContent = failureMessage;
-      alert(failureMessage);
+      transferStatusText.textContent = `Cloud export failed: ${error.message}`;
     }
   });
 
