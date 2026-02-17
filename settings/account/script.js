@@ -22,15 +22,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const exportDataBtn = document.getElementById('exportDataBtn');
   const importDataBtn = document.getElementById('importDataBtn');
+  const openMergeModalBtn = document.getElementById('openMergeModalBtn');
+  const importOneBtn = document.getElementById('importOneBtn');
+  const importTwoBtn = document.getElementById('importTwoBtn');
+  const mergeDataBtn = document.getElementById('mergeDataBtn');
+  const importOneStatus = document.getElementById('importOneStatus');
+  const importTwoStatus = document.getElementById('importTwoStatus');
   const importFileInput = document.getElementById('importFileInput');
 
   const loginModal = document.getElementById('loginModal');
   const signUpModal = document.getElementById('signUpModal');
   const dataModal = document.getElementById('dataModal');
+  const mergeModal = document.getElementById('mergeModal');
+  const cloudAuthPromptModal = document.getElementById('cloudAuthPromptModal');
 
   const closeLoginModalBtn = document.getElementById('closeLoginModalBtn');
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
   const closeDataModalBtn = document.getElementById('closeDataModalBtn');
+  const closeMergeModalBtn = document.getElementById('closeMergeModalBtn');
+  const confirmCloudLoginBtn = document.getElementById('confirmCloudLoginBtn');
+  const cancelCloudLoginBtn = document.getElementById('cancelCloudLoginBtn');
   const openCreateAccountBtn = document.getElementById('openCreateAccountBtn');
   const backToLoginBtn = document.getElementById('backToLoginBtn');
 
@@ -65,8 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const deletePassword = document.getElementById('deletePassword');
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
   const signOutBtn = document.getElementById('signOutBtn');
+  const clearOnLogoutToggle = document.getElementById('clearOnLogoutToggle');
 
   let pendingImportPayload = null;
+  let activeImportSlot = null;
+  const importSlots = { one: null, two: null };
+  const CLEAR_ON_LOGOUT_KEY = 'bilm-clear-local-on-logout';
 
   function openModal(modal) {
     modal?.classList.add('open');
@@ -80,6 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal(loginModal);
     closeModal(signUpModal);
     closeModal(dataModal);
+    closeModal(mergeModal);
+    closeModal(cloudAuthPromptModal);
     pendingImportPayload = null;
   }
 
@@ -218,6 +235,50 @@ document.addEventListener('DOMContentLoaded', () => {
     return payload;
   }
 
+  function mergeBackupPayloads(payloadA, payloadB) {
+    if (!payloadA || !payloadB) throw new Error('Both import slots are required to merge data.');
+    return {
+      schema: 'bilm-backup-v1',
+      exportedAt: new Date().toISOString(),
+      origin: location.origin,
+      pathname: location.pathname,
+      localStorage: { ...(payloadA.localStorage || {}), ...(payloadB.localStorage || {}) },
+      sessionStorage: { ...(payloadA.sessionStorage || {}), ...(payloadB.sessionStorage || {}) },
+      cookies: [payloadA.cookies || '', payloadB.cookies || ''].filter(Boolean).join('; ')
+    };
+  }
+
+  function getClearOnLogoutSetting() {
+    return localStorage.getItem(CLEAR_ON_LOGOUT_KEY) !== '0';
+  }
+
+  function setClearOnLogoutSetting(value) {
+    localStorage.setItem(CLEAR_ON_LOGOUT_KEY, value ? '1' : '0');
+  }
+
+  async function requestCloudLoginPermission() {
+    await ensureAuthReady();
+    if (window.bilmAuth.getCurrentUser()) return true;
+    openModal(cloudAuthPromptModal);
+    return false;
+  }
+
+  function updateMergeUi() {
+    const oneReady = Boolean(importSlots.one);
+    const twoReady = Boolean(importSlots.two);
+    if (importOneStatus) {
+      importOneStatus.textContent = oneReady ? '✓ Loaded' : '○ Not loaded';
+      importOneStatus.classList.toggle('is-ready', oneReady);
+    }
+    if (importTwoStatus) {
+      importTwoStatus.textContent = twoReady ? '✓ Loaded' : '○ Not loaded';
+      importTwoStatus.classList.toggle('is-ready', twoReady);
+    }
+    if (mergeDataBtn) {
+      mergeDataBtn.disabled = !(oneReady && twoReady);
+    }
+  }
+
   function applyBackup(payload) {
     localStorage.clear();
     sessionStorage.clear();
@@ -317,7 +378,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   closeLoginModalBtn?.addEventListener('click', () => closeModal(loginModal));
   closeSignUpModalBtn?.addEventListener('click', () => closeModal(signUpModal));
-  closeDataModalBtn?.addEventListener('click', () => closeModal(dataModal));
+  closeDataModalBtn?.addEventListener('click', () => {
+    activeImportSlot = null;
+    closeModal(dataModal);
+  });
+  closeMergeModalBtn?.addEventListener('click', () => closeModal(mergeModal));
 
   openCreateAccountBtn?.addEventListener('click', () => {
     closeModal(loginModal);
@@ -329,9 +394,12 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal(loginModal);
   });
 
-  [loginModal, signUpModal, dataModal].forEach((modal) => {
+  [loginModal, signUpModal, dataModal, mergeModal, cloudAuthPromptModal].forEach((modal) => {
     modal?.addEventListener('click', (event) => {
-      if (event.target === modal) closeModal(modal);
+      if (event.target === modal) {
+        if (modal === dataModal) activeImportSlot = null;
+        closeModal(modal);
+      }
     });
   });
 
@@ -362,12 +430,40 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   importDataBtn?.addEventListener('click', () => {
+    activeImportSlot = null;
     openDataModal({
       title: 'Import Backup Code',
       message: 'Paste a backup code or upload a save file, then apply import to replace your current local data.',
       importMode: true
     });
     transferStatusText.textContent = 'Import popup opened.';
+  });
+
+  openMergeModalBtn?.addEventListener('click', () => {
+    updateMergeUi();
+    openModal(mergeModal);
+  });
+
+  importOneBtn?.addEventListener('click', () => {
+    activeImportSlot = 'one';
+    closeModal(mergeModal);
+    openDataModal({
+      title: 'Import 1',
+      message: 'Load backup code for slot 1. Apply Import saves this slot for merge.',
+      importMode: true
+    });
+    transferStatusText.textContent = 'Import 1 popup opened.';
+  });
+
+  importTwoBtn?.addEventListener('click', () => {
+    activeImportSlot = 'two';
+    closeModal(mergeModal);
+    openDataModal({
+      title: 'Import 2',
+      message: 'Load backup code for slot 2. Apply Import saves this slot for merge.',
+      importMode: true
+    });
+    transferStatusText.textContent = 'Import 2 popup opened.';
   });
 
   copyDataBtn?.addEventListener('click', async () => {
@@ -416,14 +512,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   cloudExportBtn?.addEventListener('click', async () => {
     try {
-      await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) {
-        openModal(loginModal);
-        throw new Error('Please log in first.');
-      }
+      const canProceed = await requestCloudLoginPermission();
+      if (!canProceed) throw new Error('Cloud export cancelled until you choose to log in.');
       await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-      transferStatusText.textContent = 'Export successful.';
-      alert('Export successful.');
       transferStatusText.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
     } catch (error) {
       transferStatusText.textContent = `Cloud export failed: ${error.message}`;
@@ -432,11 +523,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   cloudImportBtn?.addEventListener('click', async () => {
     try {
-      await ensureAuthReady();
-      if (!window.bilmAuth.getCurrentUser()) {
-        openModal(loginModal);
-        throw new Error('Please log in first.');
-      }
+      const canProceed = await requestCloudLoginPermission();
+      if (!canProceed) throw new Error('Cloud import cancelled until you choose to log in.');
       const snapshot = await window.bilmAuth.getCloudSnapshot();
       if (!snapshot) throw new Error('No cloud backup found for this account.');
       dataCodeField.value = encodeBackup(snapshot);
@@ -449,6 +537,15 @@ document.addEventListener('DOMContentLoaded', () => {
   applyImportBtn?.addEventListener('click', () => {
     try {
       pendingImportPayload = parseBackup(dataCodeField.value);
+      if (activeImportSlot) {
+        importSlots[activeImportSlot] = pendingImportPayload;
+        transferStatusText.textContent = `Import ${activeImportSlot === 'one' ? '1' : '2'} loaded for merge.`;
+        activeImportSlot = null;
+        closeModal(dataModal);
+        updateMergeUi();
+        openModal(mergeModal);
+        return;
+      }
       if (!confirm('Import this backup now? This will overwrite current local data.')) return;
       applyBackup(pendingImportPayload);
       transferStatusText.textContent = 'Import complete. Reloading...';
@@ -520,12 +617,59 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await ensureAuthReady();
       if (!confirm('Sign out of your account?')) return;
+      if (confirm('Do you want to export your data before logging out?')) {
+        const payload = collectBackupData();
+        openDataModal({
+          title: 'Export Backup Code',
+          message: 'Copy this secure backup code before signing out.',
+          code: encodeBackup(payload),
+          importMode: false
+        });
+        transferStatusText.textContent = 'Export opened. Sign out again after saving your code.';
+        return;
+      }
       await window.bilmAuth.signOut();
+      if (getClearOnLogoutSetting()) {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
       transferStatusText.textContent = 'Signed out successfully.';
-      statusText.textContent = 'Signed out.';
+      statusText.textContent = getClearOnLogoutSetting() ? 'Signed out and cleared local data.' : 'Signed out without clearing local data.';
+      setTimeout(() => location.reload(), 200);
     } catch (error) {
       statusText.textContent = `Sign out failed: ${error.message}`;
     }
+  });
+
+
+  mergeDataBtn?.addEventListener('click', () => {
+    try {
+      if (mergeDataBtn.disabled) return;
+      const merged = mergeBackupPayloads(importSlots.one, importSlots.two);
+      if (!confirm('Merge Import 1 and Import 2 and apply now? This will overwrite current local data.')) return;
+      applyBackup(merged);
+      transferStatusText.textContent = 'Merged data applied. Reloading...';
+      setTimeout(() => location.reload(), 250);
+    } catch (error) {
+      transferStatusText.textContent = `Merge failed: ${error.message}`;
+    }
+  });
+
+  clearOnLogoutToggle?.addEventListener('change', () => {
+    setClearOnLogoutSetting(clearOnLogoutToggle.checked);
+    statusText.textContent = clearOnLogoutToggle.checked
+      ? 'Sign out will clear local data.'
+      : 'Sign out will keep local data.';
+  });
+
+  confirmCloudLoginBtn?.addEventListener('click', () => {
+    closeModal(cloudAuthPromptModal);
+    closeModal(dataModal);
+    openModal(loginModal);
+  });
+
+  cancelCloudLoginBtn?.addEventListener('click', () => {
+    closeModal(cloudAuthPromptModal);
   });
 
   toggleLoginPasswordBtn?.addEventListener('click', () => setPasswordVisibility(loginPassword, toggleLoginPasswordBtn));
@@ -534,6 +678,8 @@ document.addEventListener('DOMContentLoaded', () => {
   (async () => {
     try {
       await ensureAuthReady();
+      if (clearOnLogoutToggle) clearOnLogoutToggle.checked = getClearOnLogoutSetting();
+      updateMergeUi();
       updateAccountUi(window.bilmAuth.getCurrentUser());
       window.bilmAuth.onAuthStateChanged((user) => {
         updateAccountUi(user);

@@ -52,6 +52,25 @@
         <p id="transferStatusText" class="muted">No transfer action yet.</p>
       </section>
 
+      <section class="panel">
+        <h2>Merge Data</h2>
+        <p class="muted">Combine two backup codes into one merged import.</p>
+        <div class="actions">
+          <button id="openMergeModalBtn" class="btn btn-accent" type="button">Merge Data</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Sign Out Preferences</h2>
+        <label class="switch-row" for="clearOnLogoutToggle">
+          <span class="muted">Clear local site data after signing out</span>
+          <span class="switch">
+            <input id="clearOnLogoutToggle" type="checkbox" checked />
+            <span class="switch-slider" aria-hidden="true"></span>
+          </span>
+        </label>
+      </section>
+
       <section class="panel" id="profilePanel">
         <h2>Profile Display</h2>
         <div class="stack">
@@ -130,6 +149,35 @@
         <button id="cloudImportBtn" class="btn btn-outline" type="button" hidden>☁️ Import</button>
         <button id="applyImportBtn" class="btn btn-outline" type="button" hidden>Apply Import</button>
         <button id="closeDataModalBtn" class="btn btn-outline" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="data-modal" id="mergeModal" role="dialog" aria-modal="true" aria-labelledby="mergeModalTitle">
+    <div class="data-modal__panel">
+      <h3 id="mergeModalTitle">Merge Data</h3>
+      <p>Import two backup sources, then merge them into your local data.</p>
+      <div class="merge-status-grid">
+        <button id="importOneBtn" class="btn btn-outline" type="button">Import 1</button>
+        <span id="importOneStatus" class="slot-status" aria-live="polite">○ Not loaded</span>
+        <button id="importTwoBtn" class="btn btn-outline" type="button">Import 2</button>
+        <span id="importTwoStatus" class="slot-status" aria-live="polite">○ Not loaded</span>
+      </div>
+      <div class="actions modal-actions">
+        <button id="mergeDataBtn" class="btn btn-accent" type="button" disabled>Merge Data</button>
+        <button id="closeMergeModalBtn" class="btn btn-outline" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="data-modal" id="cloudAuthPromptModal" role="dialog" aria-modal="true" aria-labelledby="cloudAuthPromptTitle">
+    <div class="data-modal__panel">
+      <h3 id="cloudAuthPromptTitle">Cloud action needs sign in</h3>
+      <p>You're not logged in. Do you want to log in now before using cloud import/export?</p>
+      <div class="actions modal-actions">
+        <button id="confirmCloudLoginBtn" class="btn" type="button">Log In</button>
+        <button id="cancelCloudLoginBtn" class="btn btn-outline" type="button">Cancel</button>
       </div>
     </div>
   </div>
