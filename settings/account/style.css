@@ -255,3 +255,8 @@ input {
   cursor: not-allowed;
   box-shadow: none;
 }
+
+
+#mergeModal { z-index: 1040; }
+#dataModal { z-index: 1060; }
+#cloudAuthPromptModal { z-index: 1080; }
