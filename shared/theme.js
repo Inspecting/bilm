@@ -44,7 +44,6 @@ function withBase(path) {
   const INCOGNITO_PREFIXES = ['bilm-tv-progress-'];
   const DEFAULT_SETTINGS = {
     accent: '#a855f7',
-    buttonAccent: '#a855f7',
     background: 'deep',
     customBackground: '#0b0b14',
     motion: true,
@@ -88,15 +87,15 @@ function withBase(path) {
     }
   };
 
-  const applyButtonAccent = (root, buttonAccent, fallbackAccent) => {
-    const safeButtonAccent = buttonAccent || fallbackAccent || DEFAULT_SETTINGS.buttonAccent;
+  const applyButtonAccent = (root, accent) => {
+    const safeButtonAccent = accent || DEFAULT_SETTINGS.accent;
     root.style.setProperty('--button-accent', safeButtonAccent);
   };
 
   const applyTheme = (settings) => {
     const root = document.documentElement;
     applyAccent(root, settings.accent);
-    applyButtonAccent(root, settings.buttonAccent, settings.accent);
+    applyButtonAccent(root, settings.accent);
     root.dataset.background = settings.background || DEFAULT_SETTINGS.background;
     root.dataset.motion = settings.motion === false ? 'off' : 'on';
 
