@@ -541,8 +541,20 @@ if (moreLikeBox) {
   }, { passive: true });
 }
 
+
+function normalizeSeasonEpisodeState() {
+  currentSeason = Number.parseInt(currentSeason, 10) || 1;
+  if (currentSeason < 1) currentSeason = 1;
+  if (currentSeason > totalSeasons) currentSeason = totalSeasons;
+  const maxEpisodes = episodesPerSeason[currentSeason] || 1;
+  currentEpisode = Number.parseInt(currentEpisode, 10) || 1;
+  if (currentEpisode < 1) currentEpisode = 1;
+  if (currentEpisode > maxEpisodes) currentEpisode = maxEpisodes;
+}
+
 function saveProgress() {
   if (!tmdbId) return;
+  normalizeSeasonEpisodeState();
   seasonEpisodeMemory[currentSeason] = currentEpisode;
   storage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
     season: currentSeason,
@@ -570,6 +582,7 @@ function loadProgress() {
 
 function buildTvUrl(server) {
   if (!tmdbId && !imdbId) return '';
+  normalizeSeasonEpisodeState();
   const season = currentSeason;
   const episode = currentEpisode;
   switch (server) {
@@ -610,6 +623,7 @@ function refreshIframe(url) {
 }
 
 function updateIframe() {
+  normalizeSeasonEpisodeState();
   saveProgress();
 
   const idToUse = imdbId || tmdbId;
@@ -688,6 +702,7 @@ function setEpisodeControlsDisabled(disabled) {
 }
 
 function updateControls() {
+  normalizeSeasonEpisodeState();
   // Update selects values
   seasonSelect.value = currentSeason;
   episodeSelect.value = currentEpisode;
@@ -752,7 +767,7 @@ nextSeasonBtn.addEventListener('click', () => {
 
 seasonSelect.addEventListener('change', () => {
   if (seasonCooldownActive) return;
-  updateSeasonSelection(parseInt(seasonSelect.value));
+  updateSeasonSelection(parseInt(seasonSelect.value, 10) || 1);
   updateIframe();
   seasonCooldownActive = true;
 
@@ -816,7 +831,7 @@ nextEpisodeBtn.addEventListener('click', () => {
 
 episodeSelect.addEventListener('change', () => {
   if (episodeCooldownActive) return;
-  currentEpisode = parseInt(episodeSelect.value);
+  currentEpisode = parseInt(episodeSelect.value, 10) || 1;
   rememberEpisode();
   updateIframe();
   episodeCooldownActive = true;
