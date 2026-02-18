@@ -131,138 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  const BACKUP_FORMAT_PREFIX = 'BLM1';
-  const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-
-  function hashSeed(input) {
-    let hash = 2166136261;
-    for (let i = 0; i < input.length; i += 1) {
-      hash ^= input.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return hash >>> 0;
-  }
-
-  function buildKeystream(length, nonceHex) {
-    let state = hashSeed(`${nonceHex}|bilm-backup`);
-    const stream = new Uint8Array(length);
-    for (let i = 0; i < length; i += 1) {
-      state ^= state << 13;
-      state ^= state >>> 17;
-      state ^= state << 5;
-      stream[i] = state & 0xff;
-    }
-    return stream;
-  }
-
-  function checksumBytes(bytes) {
-    let checksum = 2166136261;
-    bytes.forEach((byte) => {
-      checksum ^= byte;
-      checksum = Math.imul(checksum, 16777619);
-    });
-    return checksum >>> 0;
-  }
-
-  function bytesToBase62(bytes) {
-    if (!bytes.length) return BASE62_ALPHABET[0];
-    let value = 0n;
-    bytes.forEach((byte) => {
-      value = (value << 8n) | BigInt(byte);
-    });
-    const base = 62n;
-    let output = '';
-    while (value > 0n) {
-      const remainder = Number(value % base);
-      output = BASE62_ALPHABET[remainder] + output;
-      value /= base;
-    }
-    return output || BASE62_ALPHABET[0];
-  }
-
-  function base62ToBytes(input) {
-    const text = String(input || '').trim();
-    if (!text) return new Uint8Array();
-    const base = 62n;
-    let value = 0n;
-    for (const char of text) {
-      const index = BASE62_ALPHABET.indexOf(char);
-      if (index < 0) throw new Error('Backup code has invalid characters.');
-      value = value * base + BigInt(index);
-    }
-    const bytes = [];
-    while (value > 0n) {
-      bytes.unshift(Number(value & 255n));
-      value >>= 8n;
-    }
-    return new Uint8Array(bytes);
-  }
-
-  function encodeBackup(payload) {
-    const encoder = new TextEncoder();
-    const plainBytes = encoder.encode(JSON.stringify(payload));
-    const nonce = crypto.getRandomValues(new Uint8Array(12));
-    const nonceHex = Array.from(nonce).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-    const keystream = buildKeystream(plainBytes.length, nonceHex);
-    const encrypted = plainBytes.map((byte, index) => byte ^ keystream[index]);
-    const check = checksumBytes(plainBytes);
-    const packed = new Uint8Array(nonce.length + encrypted.length + 4);
-    packed.set(nonce, 0);
-    packed.set(encrypted, nonce.length);
-    packed[packed.length - 4] = (check >>> 24) & 0xff;
-    packed[packed.length - 3] = (check >>> 16) & 0xff;
-    packed[packed.length - 2] = (check >>> 8) & 0xff;
-    packed[packed.length - 1] = check & 0xff;
-    return `${BACKUP_FORMAT_PREFIX}${bytesToBase62(packed)}`;
-  }
-
-  function decodeBackup(code) {
-    const normalized = String(code || '')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .trim();
-    if (!normalized) {
-      throw new Error('Backup code is empty.');
-    }
-
-    const codeFromUri = normalized.startsWith('bilm://')
-      ? (() => {
-        const queryIndex = normalized.indexOf('?');
-        if (queryIndex < 0) return normalized;
-        const query = normalized.slice(queryIndex + 1);
-        const params = new URLSearchParams(query);
-        return params.get('code') || normalized;
-      })()
-      : normalized;
-
-    const decoded = (() => {
-      try {
-        return decodeURIComponent(codeFromUri);
-      } catch {
-        return codeFromUri;
-      }
-    })();
-
-    const compact = decoded.replace(/\s+/g, '');
-    if (!compact.startsWith(BACKUP_FORMAT_PREFIX)) {
-      return JSON.parse(decoded);
-    }
-    const packed = base62ToBytes(compact.slice(BACKUP_FORMAT_PREFIX.length));
-    if (packed.length < 17) {
-      throw new Error('Backup code is too short.');
-    }
-    const nonce = packed.slice(0, 12);
-    const checksumOffset = packed.length - 4;
-    const encrypted = packed.slice(12, checksumOffset);
-    const expectedChecksum = ((packed[checksumOffset] << 24) | (packed[checksumOffset + 1] << 16) | (packed[checksumOffset + 2] << 8) | packed[checksumOffset + 3]) >>> 0;
-    const nonceHex = Array.from(nonce).map((byte) => byte.toString(16).padStart(2, '0')).join('');
-    const keystream = buildKeystream(encrypted.length, nonceHex);
-    const decrypted = encrypted.map((byte, index) => byte ^ keystream[index]);
-    const actualChecksum = checksumBytes(decrypted);
-    if (actualChecksum !== expectedChecksum) {
-      throw new Error('Backup code failed verification.');
-    }
-    const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(decrypted));
+  function formatBackup(payload) {
+    return JSON.stringify(payload, null, 2);
   }
 
 
@@ -289,30 +159,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const directPayload = tryParseJsonCandidate(sanitized);
     if (directPayload) return directPayload;
 
-    const compact = sanitized.replace(/\s+/g, '');
-    if (compact.startsWith(BACKUP_FORMAT_PREFIX)) {
-      return decodeBackup(compact);
-    }
-
     const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
     if (jsonMatch?.[0]) {
       const extracted = tryParseJsonCandidate(jsonMatch[0]);
       if (extracted) return extracted;
     }
 
-    const prefixedMatch = sanitized.match(/BLM1[0-9A-Za-z]+/);
-    if (prefixedMatch?.[0]) {
-      return decodeBackup(prefixedMatch[0]);
-    }
-
-    const lines = sanitized.split('\n').map((line) => line.trim()).filter(Boolean);
-    for (const line of lines) {
-      if (line.startsWith(BACKUP_FORMAT_PREFIX)) {
-        return decodeBackup(line.replace(/\s+/g, ''));
-      }
-    }
-
-    return decodeBackup(sanitized);
+    throw new Error('Backup data must be valid JSON.');
   }
 
   function parseBackup(raw) {
@@ -600,11 +453,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   exportDataBtn?.addEventListener('click', () => {
     const payload = collectBackupData();
-    const code = encodeBackup(payload);
+    const backupJson = formatBackup(payload);
     openDataModal({
-      title: 'Export Backup Code',
-      message: 'Copy this secure backup code or download it as a coded file. Keep it private; it contains your site data.',
-      code,
+      title: 'Export Backup Data',
+      message: 'Copy this JSON backup data or download it as a file. It contains your site data as plain text.',
+      code: backupJson,
       importMode: false
     });
     transferStatusText.textContent = 'Export popup opened.';
@@ -614,8 +467,8 @@ document.addEventListener('DOMContentLoaded', () => {
     activeImportSlot = null;
     reopenMergeAfterImportClose = false;
     openDataModal({
-      title: 'Import Backup Code',
-      message: 'Paste a backup code or upload a save file. Import auto-salvages spacing, hidden characters, and extra wrapper text.',
+      title: 'Import Backup Data',
+      message: 'Paste backup JSON or upload a JSON save file. Import auto-salvages spacing and extra wrapper text.',
       importMode: true
     });
     transferStatusText.textContent = 'Import popup opened.';
@@ -632,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal(mergeModal);
     openDataModal({
       title: 'Import 1',
-      message: 'Load backup code for slot 1. Apply Import saves this slot for merge.',
+      message: 'Load backup JSON for slot 1. Apply Import saves this slot for merge.',
       importMode: true
     });
     transferStatusText.textContent = 'Import 1 popup opened.';
@@ -644,7 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal(mergeModal);
     openDataModal({
       title: 'Import 2',
-      message: 'Load backup code for slot 2. Apply Import saves this slot for merge.',
+      message: 'Load backup JSON for slot 2. Apply Import saves this slot for merge.',
       importMode: true
     });
     transferStatusText.textContent = 'Import 2 popup opened.';
@@ -653,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
   copyDataBtn?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(dataCodeField.value);
-      transferStatusText.textContent = 'Backup code copied.';
+      transferStatusText.textContent = 'Backup JSON copied.';
     } catch (error) {
       transferStatusText.textContent = 'Clipboard blocked. Copy manually from the text box.';
     }
@@ -664,7 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.bilm`; 
+    link.download = `bilm-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -688,7 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const clipboardText = await navigator.clipboard.readText();
       dataCodeField.value = clipboardText;
-      transferStatusText.textContent = 'Backup code pasted from clipboard.';
+      transferStatusText.textContent = 'Backup JSON pasted from clipboard.';
     } catch (error) {
       transferStatusText.textContent = 'Clipboard read blocked. Paste manually into the text box.';
     }
@@ -712,8 +565,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!canProceed) throw new Error('Cloud import cancelled until you choose to log in.');
       const snapshot = await window.bilmAuth.getCloudSnapshot();
       if (!snapshot) throw new Error('No cloud backup found for this account.');
-      dataCodeField.value = encodeBackup(snapshot);
-      transferStatusText.textContent = 'Cloud backup loaded (best method for cross-device transfer). Review it, then select Apply Import when ready.';
+      dataCodeField.value = formatBackup(snapshot);
+      transferStatusText.textContent = 'Cloud backup loaded. Review the JSON data, then select Apply Import when ready.';
     } catch (error) {
       transferStatusText.textContent = `Cloud import failed: ${error.message}`;
     }
@@ -737,8 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
       transferStatusText.textContent = 'Import complete. Reloading...';
       setTimeout(() => location.reload(), 250);
     } catch (error) {
-      const hint = /JSON|invalid|empty|verification|characters/i.test(String(error?.message || ''))
-        ? ' Import now auto-cleans spacing and hidden characters, so this backup may be damaged. Try exporting again from source, using Cloud Import, or loading a .bilm/.json backup file.'
+      const hint = /JSON|invalid|empty|characters/i.test(String(error?.message || ''))
+        ? ' Import now auto-cleans spacing and hidden characters, so this backup may be damaged. Try exporting again from source, using Cloud Import, or loading a .json backup file.'
         : '';
       transferStatusText.textContent = `Import failed: ${error.message}.${hint}`;
     }
@@ -809,9 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (confirm('Do you want to export your data before logging out?')) {
         const payload = collectBackupData();
         openDataModal({
-          title: 'Export Backup Code',
-          message: 'Copy this secure backup code before signing out.',
-          code: encodeBackup(payload),
+          title: 'Export Backup Data',
+          message: 'Copy this backup JSON data before signing out.',
+          code: formatBackup(payload),
           importMode: false
         });
         transferStatusText.textContent = 'Export opened. Sign out again after saving your code.';
