@@ -14,6 +14,39 @@ let allGenres = [];
 const loadedCounts = {};
 const loadedMovieIds = {};
 
+const modeState = { current: 'regular' };
+
+function setContentMode(mode) {
+  const normalizedMode = mode === 'anime' ? 'anime' : 'regular';
+  modeState.current = normalizedMode;
+
+  const regularButton = document.getElementById('regularModeButton');
+  const animeButton = document.getElementById('animeModeButton');
+  const quickFilters = document.getElementById('quickFilters');
+  const movieSections = document.getElementById('movieSections');
+  const animePlaceholder = document.getElementById('animePlaceholder');
+
+  const isAnime = normalizedMode === 'anime';
+  if (regularButton) {
+    regularButton.classList.toggle('is-active', !isAnime);
+    regularButton.setAttribute('aria-selected', String(!isAnime));
+  }
+  if (animeButton) {
+    animeButton.classList.toggle('is-active', isAnime);
+    animeButton.setAttribute('aria-selected', String(isAnime));
+  }
+  if (quickFilters) quickFilters.classList.toggle('is-hidden', isAnime);
+  if (movieSections) movieSections.classList.toggle('is-hidden', isAnime);
+  if (animePlaceholder) animePlaceholder.classList.toggle('is-hidden', !isAnime);
+}
+
+function bindModeToggleButtons() {
+  const regularButton = document.getElementById('regularModeButton');
+  const animeButton = document.getElementById('animeModeButton');
+  if (regularButton) regularButton.addEventListener('click', () => setContentMode('regular'));
+  if (animeButton) animeButton.addEventListener('click', () => setContentMode('anime'));
+}
+
 function slugifySectionTitle(title) {
   return (title || 'section')
     .toLowerCase()
@@ -183,6 +216,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('Missing container with id "movieSections" in HTML');
     return;
   }
+
+  bindModeToggleButtons();
+  setContentMode('regular');
 
   await fetchGenres();
   const sections = getSections();
