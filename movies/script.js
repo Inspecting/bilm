@@ -10,7 +10,7 @@ const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
 const BASE_URL = detectBasePath();
 const moviesPerLoad = 15;
 const PRIORITY_SECTION_COUNT = 4;
-const animeMoviesPerLoad = 12;
+const animeMoviesPerLoad = 15;
 const ANIME_MOVIE_GENRES = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Romance', 'Sci-Fi'];
 
 let allGenres = [];
