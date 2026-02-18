@@ -138,23 +138,54 @@
     return auth.currentUser;
   }
 
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function enhanceAuthError(error) {
+    const code = String(error?.code || '').toLowerCase();
+    if (code === 'auth/network-request-failed') {
+      error.message = 'Network request failed. Check your connection, disable VPN/content blockers, and try again.';
+    }
+    return error;
+  }
+
+  async function withAuthRetry(task) {
+    let lastError;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await task();
+      } catch (error) {
+        lastError = enhanceAuthError(error);
+        const code = String(error?.code || '').toLowerCase();
+        const transient = code === 'auth/network-request-failed' || code === 'auth/internal-error';
+        if (!transient || attempt === 1) {
+          throw lastError;
+        }
+        await sleep(350 * (attempt + 1));
+      }
+    }
+    throw enhanceAuthError(lastError || new Error('Auth request failed.'));
+  }
+
   const api = {
     init,
     async signUp(email, password) {
       await init();
-      return modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password);
+      return withAuthRetry(() => modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password));
     },
     async signUpWithUsername({ email, password }) {
       await init();
-      return modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password);
+      return withAuthRetry(() => modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password));
     },
     async signIn(email, password) {
       await init();
-      return modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password);
+      return withAuthRetry(() => modules.signInWithEmailAndPassword(auth, String(email || '').trim(), password));
     },
     async signInWithIdentifier(identifier, password) {
       await init();
-      return modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password);
+      return withAuthRetry(() => modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password));
     },
     async setUsername(username) {
       await init();
