@@ -180,6 +180,7 @@ main {
 
 .content-mode-toggle {
   display: flex;
+  justify-content: center;
   gap: 10px;
   margin-bottom: 16px;
 }
