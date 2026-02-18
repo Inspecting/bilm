@@ -217,10 +217,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function decodeBackup(code) {
-    if (!String(code || '').startsWith(BACKUP_FORMAT_PREFIX)) {
-      return JSON.parse(code);
+    const normalized = String(code || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
+    if (!normalized) {
+      throw new Error('Backup code is empty.');
     }
-    const packed = base62ToBytes(String(code).slice(BACKUP_FORMAT_PREFIX.length));
+
+    const codeFromUri = normalized.startsWith('bilm://')
+      ? (() => {
+        const queryIndex = normalized.indexOf('?');
+        if (queryIndex < 0) return normalized;
+        const query = normalized.slice(queryIndex + 1);
+        const params = new URLSearchParams(query);
+        return params.get('code') || normalized;
+      })()
+      : normalized;
+
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(codeFromUri);
+      } catch {
+        return codeFromUri;
+      }
+    })();
+
+    const compact = decoded.replace(/\s+/g, '');
+    if (!compact.startsWith(BACKUP_FORMAT_PREFIX)) {
+      return JSON.parse(decoded);
+    }
+    const packed = base62ToBytes(compact.slice(BACKUP_FORMAT_PREFIX.length));
     if (packed.length < 17) {
       throw new Error('Backup code is too short.');
     }
@@ -652,7 +678,10 @@ document.addEventListener('DOMContentLoaded', () => {
       transferStatusText.textContent = 'Import complete. Reloading...';
       setTimeout(() => location.reload(), 250);
     } catch (error) {
-      transferStatusText.textContent = `Import failed: ${error.message}`;
+      const hint = /JSON|invalid|empty|verification|characters/i.test(String(error?.message || ''))
+        ? ' Check for extra spaces/new lines, or copy the code again from the source device.'
+        : '';
+      transferStatusText.textContent = `Import failed: ${error.message}.${hint}`;
     }
   });
 
