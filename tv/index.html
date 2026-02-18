@@ -30,8 +30,22 @@
 <div id="navbarContainer"></div>
 
 <main>
+  <div class="content-mode-toggle" role="tablist" aria-label="Content mode">
+    <button id="regularModeButton" class="mode-toggle-button is-active" type="button" data-mode="regular" role="tab" aria-selected="true">Regular</button>
+    <button id="animeModeButton" class="mode-toggle-button" type="button" data-mode="anime" role="tab" aria-selected="false">Anime</button>
+  </div>
   <div id="quickFilters" class="quick-filters" aria-label="Quick category filters"></div>
   <div id="tvSections"></div>
+  <section id="animePlaceholder" class="anime-placeholder is-hidden" aria-live="polite">
+    <h2>Anime TV Shows</h2>
+    <p>Nothing here yet. Anime APIs and content sources will be added soon.</p>
+    <div class="placeholder-grid" aria-hidden="true">
+      <div class="placeholder-card">Placeholder 1</div>
+      <div class="placeholder-card">Placeholder 2</div>
+      <div class="placeholder-card">Placeholder 3</div>
+      <div class="placeholder-card">Placeholder 4</div>
+    </div>
+  </section>
 </main>
 
 <script src="../shared/navbar.js" defer></script>
