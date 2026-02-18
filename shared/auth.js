@@ -177,11 +177,24 @@
     }
   }
 
+
+  function withTimeout(taskPromise, timeoutMs, timeoutMessage) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+    return Promise.race([taskPromise, timeout]).finally(() => clearTimeout(timer));
+  }
+
   async function withAuthRetry(task) {
     let lastError;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        return await task();
+        return await withTimeout(
+          task(),
+          45000,
+          'Account request timed out. Check your connection, disable blockers/VPN, and try again.'
+        );
       } catch (error) {
         lastError = enhanceAuthError(error);
         const code = String(error?.code || '').toLowerCase();

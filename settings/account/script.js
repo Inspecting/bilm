@@ -323,6 +323,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return payload;
   }
 
+  function getPayloadUpdatedAt(payload) {
+    const timestamp = Date.parse(String(payload?.exportedAt || ''));
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
   function mergeBackupPayloads(payloadA, payloadB, payloadLocal) {
     if (!payloadA || !payloadB) throw new Error('Both import slots are required to merge data.');
 
@@ -383,9 +388,13 @@ document.addEventListener('DOMContentLoaded', () => {
           merged[key] = mergeList(key);
           return;
         }
-        const firstValue = sources.find((source) => Object.prototype.hasOwnProperty.call(source?.[bucket] || {}, key))?.[bucket]?.[key];
-        if (typeof firstValue !== 'undefined') {
-          merged[key] = firstValue;
+
+        const preferredSource = [...sources]
+          .sort((left, right) => getPayloadUpdatedAt(right) - getPayloadUpdatedAt(left))
+          .find((source) => Object.prototype.hasOwnProperty.call(source?.[bucket] || {}, key));
+        const preferredValue = preferredSource?.[bucket]?.[key];
+        if (typeof preferredValue !== 'undefined') {
+          merged[key] = preferredValue;
         }
       });
       return merged;
@@ -729,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => location.reload(), 250);
     } catch (error) {
       const hint = /JSON|invalid|empty|verification|characters/i.test(String(error?.message || ''))
-        ? ' Import now auto-cleans spacing and hidden characters, so this code may be damaged. Try exporting again from source or using Cloud Import.'
+        ? ' Import now auto-cleans spacing and hidden characters, so this backup may be damaged. Try exporting again from source, using Cloud Import, or loading a .bilm/.json backup file.'
         : '';
       transferStatusText.textContent = `Import failed: ${error.message}.${hint}`;
     }
