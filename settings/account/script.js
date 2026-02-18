@@ -265,8 +265,58 @@ document.addEventListener('DOMContentLoaded', () => {
     return JSON.parse(decoder.decode(decrypted));
   }
 
+
+  function sanitizeImportText(raw) {
+    return String(raw || '')
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\r\n?/g, '\n')
+      .trim();
+  }
+
+  function tryParseJsonCandidate(candidate) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+
+  function salvageBackupInput(raw) {
+    const sanitized = sanitizeImportText(raw);
+    if (!sanitized) throw new Error('Backup code is empty.');
+
+    const directPayload = tryParseJsonCandidate(sanitized);
+    if (directPayload) return directPayload;
+
+    const compact = sanitized.replace(/\s+/g, '');
+    if (compact.startsWith(BACKUP_FORMAT_PREFIX)) {
+      return decodeBackup(compact);
+    }
+
+    const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
+    if (jsonMatch?.[0]) {
+      const extracted = tryParseJsonCandidate(jsonMatch[0]);
+      if (extracted) return extracted;
+    }
+
+    const prefixedMatch = sanitized.match(/BLM1[0-9A-Za-z]+/);
+    if (prefixedMatch?.[0]) {
+      return decodeBackup(prefixedMatch[0]);
+    }
+
+    const lines = sanitized.split('\n').map((line) => line.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (line.startsWith(BACKUP_FORMAT_PREFIX)) {
+        return decodeBackup(line.replace(/\s+/g, ''));
+      }
+    }
+
+    return decodeBackup(sanitized);
+  }
+
   function parseBackup(raw) {
-    const payload = decodeBackup(raw);
+    const payload = salvageBackupInput(raw);
     if (!payload || payload.schema !== 'bilm-backup-v1') {
       throw new Error('Invalid backup schema.');
     }
@@ -556,7 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
     reopenMergeAfterImportClose = false;
     openDataModal({
       title: 'Import Backup Code',
-      message: 'Paste a backup code or upload a save file, then apply import to replace your current local data.',
+      message: 'Paste a backup code or upload a save file. Import auto-salvages spacing, hidden characters, and extra wrapper text.',
       importMode: true
     });
     transferStatusText.textContent = 'Import popup opened.';
@@ -621,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const file = event.target.files?.[0];
     if (!file) return;
     dataCodeField.value = await file.text();
-    transferStatusText.textContent = `Loaded ${file.name}.`;
+    transferStatusText.textContent = `Loaded ${file.name}. We'll auto-salvage spacing and extra text on import.`;
     importFileInput.value = '';
   });
 
@@ -654,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const snapshot = await window.bilmAuth.getCloudSnapshot();
       if (!snapshot) throw new Error('No cloud backup found for this account.');
       dataCodeField.value = encodeBackup(snapshot);
-      transferStatusText.textContent = 'Cloud backup loaded into the import box. Review it, then select Apply Import when ready.';
+      transferStatusText.textContent = 'Cloud backup loaded (best method for cross-device transfer). Review it, then select Apply Import when ready.';
     } catch (error) {
       transferStatusText.textContent = `Cloud import failed: ${error.message}`;
     }
@@ -679,7 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => location.reload(), 250);
     } catch (error) {
       const hint = /JSON|invalid|empty|verification|characters/i.test(String(error?.message || ''))
-        ? ' Check for extra spaces/new lines, or copy the code again from the source device.'
+        ? ' Import now auto-cleans spacing and hidden characters, so this code may be damaged. Try exporting again from source or using Cloud Import.'
         : '';
       transferStatusText.textContent = `Import failed: ${error.message}.${hint}`;
     }

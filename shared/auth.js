@@ -103,6 +103,7 @@
         app = m.getApps().length ? m.getApp() : m.initializeApp(FIREBASE_CONFIG);
         auth = m.getAuth(app);
         firestore = m.getFirestore(app);
+        await configurePersistence();
 
         try {
           analytics = m.getAnalytics(app);
@@ -147,8 +148,33 @@
     const code = String(error?.code || '').toLowerCase();
     if (code === 'auth/network-request-failed') {
       error.message = 'Network request failed. Check your connection, disable VPN/content blockers, and try again.';
+    } else if (code === 'auth/operation-not-supported-in-this-environment') {
+      error.message = 'This browser blocked secure account storage. Disable private mode or content blockers and refresh.';
+    } else if (code === 'auth/too-many-requests') {
+      error.message = 'Too many attempts. Wait a minute, then try again.';
+    } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+      error.message = 'Email or password is incorrect.';
     }
     return error;
+  }
+
+  async function configurePersistence() {
+    if (!modules?.setPersistence || !auth) return;
+    const candidates = [
+      modules.indexedDBLocalPersistence,
+      modules.browserLocalPersistence,
+      modules.browserSessionPersistence,
+      modules.inMemoryPersistence
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      try {
+        await modules.setPersistence(auth, candidate);
+        return;
+      } catch (error) {
+        console.warn('Auth persistence unavailable, trying fallback:', error?.code || error?.message || error);
+      }
+    }
   }
 
   async function withAuthRetry(task) {
