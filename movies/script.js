@@ -6,13 +6,18 @@ function detectBasePath() {
 }
 
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
+const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
 const BASE_URL = detectBasePath();
 const moviesPerLoad = 15;
 const PRIORITY_SECTION_COUNT = 4;
+const animeMoviesPerLoad = 12;
+const ANIME_MOVIE_GENRES = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Romance', 'Sci-Fi'];
 
 let allGenres = [];
 const loadedCounts = {};
 const loadedMovieIds = {};
+const animeLoadedCounts = {};
+const animeLoadedIds = {};
 
 const modeState = { current: 'regular' };
 
@@ -24,7 +29,8 @@ function setContentMode(mode) {
   const animeButton = document.getElementById('animeModeButton');
   const quickFilters = document.getElementById('quickFilters');
   const movieSections = document.getElementById('movieSections');
-  const animePlaceholder = document.getElementById('animePlaceholder');
+  const animeQuickFilters = document.getElementById('animeQuickFilters');
+  const animeSections = document.getElementById('animeSections');
 
   const isAnime = normalizedMode === 'anime';
   if (regularButton) {
@@ -37,7 +43,8 @@ function setContentMode(mode) {
   }
   if (quickFilters) quickFilters.classList.toggle('is-hidden', isAnime);
   if (movieSections) movieSections.classList.toggle('is-hidden', isAnime);
-  if (animePlaceholder) animePlaceholder.classList.toggle('is-hidden', !isAnime);
+  if (animeQuickFilters) animeQuickFilters.classList.toggle('is-hidden', !isAnime);
+  if (animeSections) animeSections.classList.toggle('is-hidden', !isAnime);
 }
 
 function bindModeToggleButtons() {
@@ -64,6 +71,20 @@ async function fetchJSON(url) {
   }
 }
 
+async function postJSON(url, body) {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 async function fetchGenres() {
   const url = `https://api.themoviedb.org/3/genre/movie/list?api_key=${TMDB_API_KEY}&language=en-US`;
   const data = await fetchJSON(url);
@@ -79,7 +100,7 @@ function getSections() {
     { title: 'Now Playing', endpoint: '/movie/now_playing' }
   ];
 
-  const genreSections = allGenres.map(genre => ({
+  const genreSections = allGenres.map((genre) => ({
     title: genre.name,
     endpoint: `/discover/movie?with_genres=${genre.id}`
   }));
@@ -87,6 +108,14 @@ function getSections() {
   return [...staticSections, ...genreSections].map((section) => ({
     ...section,
     slug: slugifySectionTitle(section.title)
+  }));
+}
+
+function getAnimeMovieSections() {
+  return ANIME_MOVIE_GENRES.map((genre) => ({
+    title: genre,
+    genre,
+    slug: `anime-${slugifySectionTitle(genre)}`
   }));
 }
 
@@ -98,6 +127,36 @@ async function fetchMovies(endpoint, page = 1) {
   return data?.results || [];
 }
 
+async function fetchAnimeMoviesByGenre(genre, page = 1) {
+  const query = `
+    query ($page: Int!, $perPage: Int!, $genre: String!) {
+      Page(page: $page, perPage: $perPage) {
+        media(type: ANIME, format: MOVIE, genre_in: [$genre], sort: [POPULARITY_DESC, SCORE_DESC]) {
+          id
+          title {
+            romaji
+            english
+          }
+          coverImage {
+            large
+            medium
+          }
+          startDate {
+            year
+          }
+        }
+      }
+    }
+  `;
+
+  const data = await postJSON(ANILIST_GRAPHQL_URL, {
+    query,
+    variables: { page, perPage: animeMoviesPerLoad, genre }
+  });
+
+  return data?.data?.Page?.media || [];
+}
+
 function createMovieCard(movie) {
   return window.BilmMediaCard.createMediaCard({
     item: movie,
@@ -107,10 +166,10 @@ function createMovieCard(movie) {
   });
 }
 
-function createSectionSkeleton(section, container) {
+function createSectionSkeleton(section, container, prefix = '') {
   const sectionEl = document.createElement('section');
   sectionEl.className = 'section';
-  sectionEl.id = `section-${section.slug}`;
+  sectionEl.id = `${prefix}section-${section.slug}`;
 
   const headerEl = document.createElement('div');
   headerEl.className = 'section-header';
@@ -119,37 +178,39 @@ function createSectionSkeleton(section, container) {
   titleEl.className = 'section-title';
   titleEl.textContent = section.title;
 
-  const viewMoreLink = document.createElement('a');
-  viewMoreLink.className = 'view-more-button';
-  viewMoreLink.href = `${BASE_URL}/movies/category.html?section=${encodeURIComponent(section.slug)}&title=${encodeURIComponent(section.title)}`;
-  viewMoreLink.textContent = 'View more';
-  viewMoreLink.setAttribute('aria-label', `View more ${section.title} movies`);
-
   headerEl.appendChild(titleEl);
-  headerEl.appendChild(viewMoreLink);
+
+  if (!prefix) {
+    const viewMoreLink = document.createElement('a');
+    viewMoreLink.className = 'view-more-button';
+    viewMoreLink.href = `${BASE_URL}/movies/category.html?section=${encodeURIComponent(section.slug)}&title=${encodeURIComponent(section.title)}`;
+    viewMoreLink.textContent = 'View more';
+    viewMoreLink.setAttribute('aria-label', `View more ${section.title} movies`);
+    headerEl.appendChild(viewMoreLink);
+  }
 
   const rowEl = document.createElement('div');
   rowEl.className = 'scroll-row';
-  rowEl.id = `row-${section.slug}`;
+  rowEl.id = `${prefix}row-${section.slug}`;
 
   sectionEl.appendChild(headerEl);
   sectionEl.appendChild(rowEl);
   container.appendChild(sectionEl);
 }
 
-function renderQuickFilters(sections) {
-  const filtersContainer = document.getElementById('quickFilters');
+function renderQuickFilters(sections, containerId = 'quickFilters', targetPrefix = '') {
+  const filtersContainer = document.getElementById(containerId);
   if (!filtersContainer) return;
 
   filtersContainer.innerHTML = '';
   sections.forEach((section) => {
     const chip = document.createElement('a');
     chip.className = 'filter-chip';
-    chip.href = `#section-${section.slug}`;
+    chip.href = `#${targetPrefix}section-${section.slug}`;
     chip.textContent = section.title;
     chip.addEventListener('click', (event) => {
       event.preventDefault();
-      const target = document.getElementById(`section-${section.slug}`);
+      const target = document.getElementById(`${targetPrefix}section-${section.slug}`);
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
@@ -168,7 +229,7 @@ async function loadMoviesForSection(section) {
 
   const rowEl = document.getElementById(`row-${section.slug}`);
 
-  const uniqueMovies = movies.filter(m => !loadedMovieIds[section.slug].has(m.id));
+  const uniqueMovies = movies.filter((m) => !loadedMovieIds[section.slug].has(m.id));
 
   for (const movie of uniqueMovies.slice(0, moviesPerLoad)) {
     loadedMovieIds[section.slug].add(movie.id);
@@ -195,8 +256,54 @@ async function loadMoviesForSection(section) {
   return true;
 }
 
-function setupInfiniteScroll(section) {
-  const rowEl = document.getElementById(`row-${section.slug}`);
+async function loadAnimeMoviesForSection(section) {
+  animeLoadedCounts[section.slug] ??= 0;
+  animeLoadedIds[section.slug] ??= new Set();
+
+  const rowEl = document.getElementById(`anime-row-${section.slug}`);
+  if (!rowEl) return false;
+
+  let page = Math.floor(animeLoadedCounts[section.slug] / animeMoviesPerLoad) + 1;
+  let appended = 0;
+  let hasMore = true;
+
+  while (appended < animeMoviesPerLoad && hasMore) {
+    const animeMovies = await fetchAnimeMoviesByGenre(section.genre, page);
+    if (!animeMovies.length) {
+      hasMore = false;
+      break;
+    }
+
+    const uniqueMovies = animeMovies.filter((m) => !animeLoadedIds[section.slug].has(m.id));
+
+    for (const animeMovie of uniqueMovies) {
+      if (appended >= animeMoviesPerLoad) break;
+      animeLoadedIds[section.slug].add(animeMovie.id);
+
+      const movieData = {
+        tmdbId: animeMovie.id,
+        title: animeMovie.title?.english || animeMovie.title?.romaji || 'Untitled',
+        type: 'movie',
+        year: animeMovie.startDate?.year || 'N/A',
+        img: animeMovie.coverImage?.large || animeMovie.coverImage?.medium,
+        link: `https://anilist.co/anime/${animeMovie.id}`,
+        source: 'AniList'
+      };
+
+      const card = createMovieCard(movieData);
+      rowEl.appendChild(card);
+      appended += 1;
+    }
+
+    animeLoadedCounts[section.slug] += animeMoviesPerLoad;
+    page += 1;
+  }
+
+  return appended > 0;
+}
+
+function setupInfiniteScroll(section, loaderFn, rowPrefix = '') {
+  const rowEl = document.getElementById(`${rowPrefix}row-${section.slug}`);
   if (!rowEl) return;
 
   let loading = false;
@@ -204,7 +311,7 @@ function setupInfiniteScroll(section) {
     if (loading) return;
     if (rowEl.scrollLeft + rowEl.clientWidth >= rowEl.scrollWidth - 300) {
       loading = true;
-      await loadMoviesForSection(section);
+      await loaderFn(section);
       loading = false;
     }
   }, { passive: true });
@@ -212,8 +319,9 @@ function setupInfiniteScroll(section) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const container = document.getElementById('movieSections');
-  if (!container) {
-    console.error('Missing container with id "movieSections" in HTML');
+  const animeContainer = document.getElementById('animeSections');
+  if (!container || !animeContainer) {
+    console.error('Missing movie section container(s) in HTML');
     return;
   }
 
@@ -222,16 +330,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await fetchGenres();
   const sections = getSections();
+  const animeSections = getAnimeMovieSections();
 
-  renderQuickFilters(sections);
-  sections.forEach(section => createSectionSkeleton(section, container));
+  renderQuickFilters(sections, 'quickFilters');
+  sections.forEach((section) => createSectionSkeleton(section, container));
+
+  renderQuickFilters(animeSections, 'animeQuickFilters', 'anime-');
+  animeSections.forEach((section) => createSectionSkeleton(section, animeContainer, 'anime-'));
 
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
   const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
-  await Promise.all(prioritySections.map(section => loadMoviesForSection(section)));
+  await Promise.all(prioritySections.map((section) => loadMoviesForSection(section)));
+
+  const priorityAnimeSections = animeSections.slice(0, PRIORITY_SECTION_COUNT);
+  const deferredAnimeSections = animeSections.slice(PRIORITY_SECTION_COUNT);
+  await Promise.all(priorityAnimeSections.map((section) => loadAnimeMoviesForSection(section)));
 
   const loadDeferredSections = async () => {
-    await Promise.all(deferredSections.map(section => loadMoviesForSection(section)));
+    await Promise.all(deferredSections.map((section) => loadMoviesForSection(section)));
+    await Promise.all(deferredAnimeSections.map((section) => loadAnimeMoviesForSection(section)));
   };
 
   if ('requestIdleCallback' in window) {
@@ -240,5 +357,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(loadDeferredSections, 0);
   }
 
-  sections.forEach(section => setupInfiniteScroll(section));
+  sections.forEach((section) => setupInfiniteScroll(section, loadMoviesForSection));
+  animeSections.forEach((section) => setupInfiniteScroll(section, loadAnimeMoviesForSection, 'anime-'));
 });
