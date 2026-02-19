@@ -437,7 +437,21 @@ function tryEmbedMasterFullscreenCommand() {
   if (currentServer !== 'embedmaster') return;
   const embedWindow = iframe?.contentWindow;
   if (!embedWindow) return;
+
+  // EmbedMaster fullscreen responds to sendCommand('fullscreen') from its own player controls:
+  // <button onclick="sendCommand('fullscreen')">Fullscreen</button>
+  try {
+    if (typeof embedWindow.sendCommand === 'function') {
+      embedWindow.sendCommand('fullscreen');
+      return;
+    }
+  } catch (_) {
+    // Cross-origin iframe access is expected to fail on direct function calls.
+  }
+
   embedWindow.postMessage({ command: 'fullscreen' }, '*');
+  embedWindow.postMessage('fullscreen', '*');
+  embedWindow.postMessage("sendCommand('fullscreen')", '*');
 }
 
 fullscreenBtn.onclick = () => {
