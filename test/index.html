@@ -28,6 +28,7 @@
     #playerWrapper { display: flex; flex-direction: column; align-items: center; width: 800px; max-width: 95vw; position: relative; gap: 12px; }
     #playerWithControls { width: 100%; border-radius: 12px; box-shadow: 0 0 20px #a14effcc; overflow: visible; display: flex; flex-direction: column; background: black; position: relative; }
     #playerContainer { width: 100%; aspect-ratio: 16 / 9; position: relative; background: black; border-radius: 12px; overflow: hidden; }
+    #playerContainer.simulated-fullscreen { position: fixed !important; inset: 0; width: 100vw !important; height: 100vh !important; aspect-ratio: auto; z-index: 1200; border-radius: 0; }
     iframe { width: 100%; height: 100%; border: none; display: block; border-radius: 12px; }
     #clickShield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; background: transparent; }
     #playexBar { background: rgba(26, 22, 40, 0.9); padding: 10px 20px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; user-select: none; position: relative; z-index: 10; border-radius: 0 0 12px 12px; }
@@ -48,7 +49,6 @@
     .smallBtn:hover:not(:disabled) { background: rgba(255,255,255,0.03); }
     .smallBtn:disabled { opacity: 0.3; cursor: not-allowed; }
     #closeBtn { display: none; position: fixed; top: 0; right: 0; z-index: 100; background: transparent; color: white; border: none; width: 48px; height: 48px; font-size: 20px; cursor: pointer; font-weight: 700; text-align: center; line-height: 48px; border-radius: 0; }
-    .simulated-fullscreen { position: fixed !important; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 99; border-radius: 0 !important; }
     .hide-navbar { display: none !important; }
     .cooldown-disabled { opacity: 0.4 !important; filter: grayscale(70%); cursor: not-allowed !important; pointer-events: auto !important; user-select: none; transition: opacity 0.3s ease, filter 0.3s ease; }
     .cooldown-disabled:hover { background-color: transparent !important; }
@@ -113,6 +113,11 @@
       <h3>Add Custom Embed Server</h3>
       <div class="embedGrid">
         <input id="serverNameInput" type="text" placeholder="Server name (example: VidPlus)" />
+        <input id="movieIdInput" type="text" placeholder="Movie ID" />
+        <input id="embedTemplateInput" type="text" value="https://vembed.stream/play/" placeholder="Embed base URL (example: https://vembed.stream/play/)" />
+        <button class="smallBtn" id="addServerBtn" type="button">Add Server</button>
+      </div>
+      <p id="embedHelp">Enter an embed base URL and a movie ID. The player will load as: base URL + movie ID.</p>
         <input id="movieIdInput" type="text" placeholder="Movie ID / TMDB ID override" />
         <input id="embedTemplateInput" type="text" value="https://player.vidplus.to/embed/movie/{tmdbId}" placeholder="Embed URL template (use {tmdbId})" />
         <button class="smallBtn" id="addServerBtn" type="button">Add Server</button>
@@ -151,13 +156,6 @@ const embedTemplateInput = document.getElementById('embedTemplateInput');
 const addServerBtn = document.getElementById('addServerBtn');
 
 const servers = [
-  { key: 'vidsrc1', name: 'VidSrc 1', template: 'https://vsrc.su/embed/{tmdbId}/{season}-{episode}' },
-  { key: 'vidsrc2', name: 'VidSrc 2', template: 'https://vidsrcme.ru/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
-  { key: 'vidsrc3', name: 'VidSrc 3', template: 'https://vidsrc.to/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
-  { key: 'vidsrc4', name: 'VidSrc 4', template: 'https://vidsrc.io/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
-  { key: 'vidsrc5', name: 'VidSrc 5', template: 'https://vidsrcs.com/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
-  { key: 'vidsrc6', name: 'VidSrc 6', template: 'https://vidstream.pro/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
-  { key: 'vidsrc7', name: 'VidSrc 7', template: 'https://vidcloud.co/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' }
 ];
 
 let currentServer = servers[0].key;
@@ -236,6 +234,7 @@ async function fetchTMDBData() {
 
 function updateIframe() {
   saveProgress();
+  const idToUse = movieIdInput.value.trim() || tmdbId || imdbId;
   const idToUse = movieIdInput.value.trim() || imdbId || tmdbId;
   if (!idToUse) {
     iframe.src = '';
@@ -245,6 +244,8 @@ function updateIframe() {
   const selected = servers.find(server => server.key === currentServer);
   if (!selected) return;
 
+  const normalizedBase = selected.baseUrl.endsWith('/') ? selected.baseUrl : `${selected.baseUrl}/`;
+  iframe.src = `${normalizedBase}${idToUse}`;
   iframe.src = selected.template
     .replaceAll('{tmdbId}', idToUse)
     .replaceAll('{season}', String(currentSeason))
@@ -282,11 +283,14 @@ function renderServers() {
     });
     item.appendChild(deleteBtn);
 
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
     item.addEventListener('click', () => {
       currentServer = server.key;
       renderServers();
       updateIframe();
       serverDropdown.style.display = 'none';
+      serverBtn.setAttribute('aria-expanded', 'false');
     });
 
     serverDropdown.appendChild(item);
@@ -340,10 +344,23 @@ nextEpisodeBtn.addEventListener('click', () => {
 });
 
 // Server dropdown
-serverBtn.addEventListener('click', () => {
-  serverDropdown.style.display = serverDropdown.style.display === 'flex' ? 'none' : 'flex';
+serverBtn.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const isOpen = serverDropdown.style.display === 'flex';
+  serverDropdown.style.display = isOpen ? 'none' : 'flex';
+  serverBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
 });
 
+document.addEventListener('click', () => {
+  serverDropdown.style.display = 'none';
+  serverBtn.setAttribute('aria-expanded', 'false');
+});
+
+addServerBtn.addEventListener('click', () => {
+  const name = serverNameInput.value.trim();
+  const baseUrl = embedTemplateInput.value.trim();
+  const movieId = movieIdInput.value.trim();
+  if (!name || !baseUrl || !movieId) return;
 addServerBtn.addEventListener('click', () => {
   const name = serverNameInput.value.trim();
   const template = embedTemplateInput.value.trim();
@@ -352,6 +369,7 @@ addServerBtn.addEventListener('click', () => {
   const newServer = {
     key: `custom-${Date.now()}`,
     name,
+    baseUrl
     template
   };
 
@@ -360,29 +378,52 @@ addServerBtn.addEventListener('click', () => {
   renderServers();
   updateIframe();
   serverDropdown.style.display = 'none';
+  serverBtn.setAttribute('aria-expanded', 'false');
   serverNameInput.value = '';
 });
 
 movieIdInput.addEventListener('input', updateIframe);
 
+const isMobile = window.matchMedia('(max-width: 768px)').matches
+  || window.matchMedia('(pointer: coarse)').matches
+  || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
 // Fullscreen simulation
 fullscreenBtn.addEventListener('click', () => {
-  if (!document.body.classList.contains('simulated-fullscreen')) {
-    document.body.classList.add('simulated-fullscreen');
-    navbarContainer.classList.add('hide-navbar');
-    closeBtn.style.display = 'block';
+  if (!isMobile) {
+    if (playerContainer.requestFullscreen) {
+      playerContainer.requestFullscreen();
+    } else if (playerContainer.webkitRequestFullscreen) {
+      playerContainer.webkitRequestFullscreen();
+    } else if (playerContainer.msRequestFullscreen) {
+      playerContainer.msRequestFullscreen();
+    }
   } else {
-    document.body.classList.remove('simulated-fullscreen');
-    navbarContainer.classList.remove('hide-navbar');
-    closeBtn.style.display = 'none';
+    playerContainer.classList.add('simulated-fullscreen');
   }
+  closeBtn.style.display = 'block';
+  navbarContainer.classList.add('hide-navbar');
 });
 
 closeBtn.addEventListener('click', () => {
-  document.body.classList.remove('simulated-fullscreen');
-  navbarContainer.classList.remove('hide-navbar');
+  if (isMobile) {
+    playerContainer.classList.remove('simulated-fullscreen');
+  } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+    document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+  }
   closeBtn.style.display = 'none';
+  navbarContainer.classList.remove('hide-navbar');
 });
+
+function handleFullscreenExit() {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    closeBtn.style.display = 'none';
+    navbarContainer.classList.remove('hide-navbar');
+  }
+}
+
+document.addEventListener('fullscreenchange', handleFullscreenExit);
+document.addEventListener('webkitfullscreenchange', handleFullscreenExit);
 
 // Load TMDB data
 renderServers();
