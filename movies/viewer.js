@@ -40,7 +40,7 @@ const serverDropdown = document.getElementById('serverDropdown');
 const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 
 const initialSettings = window.bilmTheme?.getSettings?.();
-const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+const supportedServers = ['vidsrc', 'godrive', 'multiembed', 'embedmaster'];
 const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
 let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
@@ -134,6 +134,8 @@ function buildMovieUrl(server) {
       return imdbId
         ? `https://multiembed.mov/directstream.php?video_id=${imdbId}`
         : `https://multiembed.mov/directstream.php?video_id=${contentId}&tmdb=1`;
+    case 'embedmaster':
+      return `https://embedmaster.link/movie/${contentId}`;
     default:
       return '';
   }

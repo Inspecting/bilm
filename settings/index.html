@@ -481,6 +481,7 @@
           <option value="vidsrc">VidSrc</option>
           <option value="godrive">GoDrive Player</option>
           <option value="multiembed">MultiEmbed</option>
+          <option value="embedmaster">EmbedMaster</option>
         </select>
       </div>
     </section>
@@ -655,7 +656,7 @@
   const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
   const backToLoginBtn = document.getElementById('backToLoginBtn');
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
-  const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+  const supportedServers = ['vidsrc', 'godrive', 'multiembed', 'embedmaster'];
   let pendingImportPayload = null;
 
   function readStorage(storage) {

@@ -47,7 +47,7 @@ const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 let currentSeason = 1;
 let currentEpisode = 1;
 const initialSettings = window.bilmTheme?.getSettings?.();
-const supportedServers = ['vidsrc', 'godrive', 'multiembed'];
+const supportedServers = ['vidsrc', 'godrive', 'multiembed', 'embedmaster'];
 const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
 let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
 let totalSeasons = 1;
@@ -598,6 +598,8 @@ function buildTvUrl(server) {
       return imdbId
         ? `https://multiembed.mov/directstream.php?video_id=${imdbId}&s=${season}&e=${episode}`
         : `https://multiembed.mov/directstream.php?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`;
+    case 'embedmaster':
+      return tmdbId ? `https://embedmaster.link/tv/${tmdbId}/${season}/${episode}` : '';
     default:
       return '';
   }
