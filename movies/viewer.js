@@ -135,7 +135,7 @@ function buildMovieUrl(server) {
         ? `https://multiembed.mov/directstream.php?video_id=${imdbId}`
         : `https://multiembed.mov/directstream.php?video_id=${contentId}&tmdb=1`;
     case 'embedmaster':
-      return `https://embedmaster.link/movie/${contentId}`;
+      return `https://embedmaster.link/830gqxyfskjlsnbq/movie/${contentId}`;
     default:
       return '';
   }
@@ -665,15 +665,29 @@ function tryEmbedMasterFullscreenCommand() {
   embedWindow.postMessage("sendCommand('fullscreen')", '*');
 }
 
+function requestElementFullscreen(element) {
+  if (!element) return false;
+  if (element.requestFullscreen) {
+    element.requestFullscreen();
+    return true;
+  }
+  if (element.webkitRequestFullscreen) {
+    element.webkitRequestFullscreen();
+    return true;
+  }
+  if (element.msRequestFullscreen) {
+    element.msRequestFullscreen();
+    return true;
+  }
+  return false;
+}
+
 fullscreenBtn.onclick = () => {
   tryEmbedMasterFullscreenCommand();
   if (!isMobile) {
-    if (playerContainer.requestFullscreen) {
-      playerContainer.requestFullscreen();
-    } else if (playerContainer.webkitRequestFullscreen) {
-      playerContainer.webkitRequestFullscreen();
-    } else if (playerContainer.msRequestFullscreen) {
-      playerContainer.msRequestFullscreen();
+    const fullscreenStarted = requestElementFullscreen(iframe) || requestElementFullscreen(playerContainer);
+    if (!fullscreenStarted) {
+      playerContainer.classList.add('simulated-fullscreen');
     }
   } else {
     playerContainer.classList.add('simulated-fullscreen');
