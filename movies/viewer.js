@@ -40,9 +40,9 @@ const serverDropdown = document.getElementById('serverDropdown');
 const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 
 const initialSettings = window.bilmTheme?.getSettings?.();
-const supportedServers = ['vidsrc', 'godrive', 'multiembed', 'embedmaster'];
-const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'vidsrc');
-let currentServer = normalizeServer(initialSettings?.defaultServer || 'vidsrc');
+const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
+const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'embedmaster');
+let currentServer = normalizeServer(initialSettings?.defaultServer || 'embedmaster');
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 
