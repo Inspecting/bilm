@@ -118,6 +118,11 @@
         <button class="smallBtn" id="addServerBtn" type="button">Add Server</button>
       </div>
       <p id="embedHelp">Enter an embed base URL and a movie ID. The player will load as: base URL + movie ID.</p>
+        <input id="movieIdInput" type="text" placeholder="Movie ID / TMDB ID override" />
+        <input id="embedTemplateInput" type="text" value="https://player.vidplus.to/embed/movie/{tmdbId}" placeholder="Embed URL template (use {tmdbId})" />
+        <button class="smallBtn" id="addServerBtn" type="button">Add Server</button>
+      </div>
+      <p id="embedHelp">Use <strong>{tmdbId}</strong> where the movie ID should go. The Movie ID field above will replace it before loading.</p>
     </div>
   </div>
 
@@ -151,7 +156,6 @@ const embedTemplateInput = document.getElementById('embedTemplateInput');
 const addServerBtn = document.getElementById('addServerBtn');
 
 const servers = [
-  { key: 'vembed-default', name: 'Vembed', baseUrl: 'https://vembed.stream/play/' }
 ];
 
 let currentServer = servers[0].key;
@@ -231,6 +235,7 @@ async function fetchTMDBData() {
 function updateIframe() {
   saveProgress();
   const idToUse = movieIdInput.value.trim() || tmdbId || imdbId;
+  const idToUse = movieIdInput.value.trim() || imdbId || tmdbId;
   if (!idToUse) {
     iframe.src = '';
     return;
@@ -241,6 +246,10 @@ function updateIframe() {
 
   const normalizedBase = selected.baseUrl.endsWith('/') ? selected.baseUrl : `${selected.baseUrl}/`;
   iframe.src = `${normalizedBase}${idToUse}`;
+  iframe.src = selected.template
+    .replaceAll('{tmdbId}', idToUse)
+    .replaceAll('{season}', String(currentSeason))
+    .replaceAll('{episode}', String(currentEpisode));
 }
 
 function renderServers() {
@@ -276,6 +285,7 @@ function renderServers() {
 
     item.addEventListener('click', (event) => {
       event.stopPropagation();
+    item.addEventListener('click', () => {
       currentServer = server.key;
       renderServers();
       updateIframe();
@@ -351,11 +361,16 @@ addServerBtn.addEventListener('click', () => {
   const baseUrl = embedTemplateInput.value.trim();
   const movieId = movieIdInput.value.trim();
   if (!name || !baseUrl || !movieId) return;
+addServerBtn.addEventListener('click', () => {
+  const name = serverNameInput.value.trim();
+  const template = embedTemplateInput.value.trim();
+  if (!name || !template.includes('{tmdbId}')) return;
 
   const newServer = {
     key: `custom-${Date.now()}`,
     name,
     baseUrl
+    template
   };
 
   servers.push(newServer);
@@ -373,6 +388,7 @@ const isMobile = window.matchMedia('(max-width: 768px)').matches
   || window.matchMedia('(pointer: coarse)').matches
   || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+// Fullscreen simulation
 fullscreenBtn.addEventListener('click', () => {
   if (!isMobile) {
     if (playerContainer.requestFullscreen) {
