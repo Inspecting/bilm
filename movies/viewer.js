@@ -135,7 +135,7 @@ function buildMovieUrl(server) {
         ? `https://multiembed.mov/directstream.php?video_id=${imdbId}`
         : `https://multiembed.mov/directstream.php?video_id=${contentId}&tmdb=1`;
     case 'embedmaster':
-      return `https://embedmaster.link/movie/${contentId}`;
+      return `https://embedmaster.link/830gqxyfskjlsnbq/movie/${contentId}`;
     default:
       return '';
   }

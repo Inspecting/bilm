@@ -621,7 +621,7 @@ function buildTvUrl(server) {
         ? `https://multiembed.mov/directstream.php?video_id=${imdbId}&s=${season}&e=${episode}`
         : `https://multiembed.mov/directstream.php?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`;
     case 'embedmaster':
-      return tmdbId ? `https://embedmaster.link/tv/${tmdbId}/${season}/${episode}` : '';
+      return tmdbId ? `https://embedmaster.link/830gqxyfskjlsnbq/tv/${tmdbId}/${season}/${episode}` : '';
     default:
       return '';
   }
