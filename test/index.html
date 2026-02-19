@@ -33,8 +33,11 @@
     #playexBar { background: rgba(26, 22, 40, 0.9); padding: 10px 20px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; user-select: none; position: relative; z-index: 10; border-radius: 0 0 12px 12px; }
     #fullscreenBtn, #serverBtn { background: transparent; border: none; cursor: pointer; color: #f0f0f0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 6px; transition: background-color 0.3s ease; flex-shrink: 0; }
     #fullscreenBtn:hover, #serverBtn:hover { background-color: #a855f7; }
-    #serverDropdown { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: rgba(26, 22, 40, 0.97); border-radius: 12px; box-shadow: 0 0 16px #a14effcc; padding: 8px 0; width: 160px; display: none; flex-direction: column; z-index: 9999; user-select: auto; white-space: nowrap; }
-    .serverDropdownItem { padding: 10px 20px; color: #f0f0f0; cursor: pointer; font-weight: 600; font-size: 15px; transition: background-color 0.2s ease; user-select: none; }
+    #serverDropdown { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: rgba(26, 22, 40, 0.97); border-radius: 12px; box-shadow: 0 0 16px #a14effcc; padding: 8px 0; width: 250px; display: none; flex-direction: column; z-index: 9999; user-select: auto; white-space: nowrap; max-height: 250px; overflow-y: auto; }
+    .serverDropdownItem { padding: 10px 14px; color: #f0f0f0; cursor: pointer; font-weight: 600; font-size: 15px; transition: background-color 0.2s ease; user-select: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .serverDropdownName { overflow: hidden; text-overflow: ellipsis; }
+    .serverDeleteBtn { border: none; background: transparent; color: #f0f0f0; font-size: 18px; line-height: 1; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
+    .serverDeleteBtn:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
     .serverDropdownItem:hover { background-color: #a855f7; }
     .serverDropdownItem.active { background-color: #a14eff; cursor: default; }
     #controlsCompact { margin-top: 12px; width: 100%; display: flex; justify-content: center; gap: 12px; align-items: center; background: rgba(26, 22, 40, 0.9); padding: 12px 30px; border-radius: 16px; box-shadow: 0 0 15px #a14eff88; min-height: 54px; flex-wrap: nowrap; }
@@ -49,6 +52,18 @@
     .hide-navbar { display: none !important; }
     .cooldown-disabled { opacity: 0.4 !important; filter: grayscale(70%); cursor: not-allowed !important; pointer-events: auto !important; user-select: none; transition: opacity 0.3s ease, filter 0.3s ease; }
     .cooldown-disabled:hover { background-color: transparent !important; }
+    #customEmbedPanel { width: 100%; background: rgba(26, 22, 40, 0.9); padding: 14px; border-radius: 16px; box-shadow: 0 0 15px #a14eff88; display: grid; gap: 10px; }
+    #customEmbedPanel h3 { font-size: 15px; margin: 0; }
+    .embedGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .embedGrid input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+    .embedGrid input:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 2px rgba(168,85,247,0.2); }
+    #embedTemplateInput { grid-column: 1 / -1; }
+    #addServerBtn { justify-self: end; }
+    #embedHelp { font-size: 12px; color: rgba(240, 240, 240, 0.72); }
+    @media (max-width: 760px) {
+      .embedGrid { grid-template-columns: 1fr; }
+      #addServerBtn { justify-self: stretch; }
+    }
   </style>
 </head>
 <body>
@@ -71,15 +86,7 @@
             <line x1="6" y1="8" x2="6" y2="8"></line>
             <line x1="6" y1="17" x2="6" y2="17"></line>
           </svg>
-          <div id="serverDropdown" role="menu" aria-label="Server selection">
-            <div class="serverDropdownItem active" data-server="vidsrc1">VidSrc 1</div>
-            <div class="serverDropdownItem" data-server="vidsrc2">VidSrc 2</div>
-            <div class="serverDropdownItem" data-server="vidsrc3">VidSrc 3</div>
-            <div class="serverDropdownItem" data-server="vidsrc4">VidSrc 4</div>
-            <div class="serverDropdownItem" data-server="vidsrc5">VidSrc 5</div>
-            <div class="serverDropdownItem" data-server="vidsrc6">VidSrc 6</div>
-            <div class="serverDropdownItem" data-server="vidsrc7">VidSrc 7</div>
-          </div>
+          <div id="serverDropdown" role="menu" aria-label="Server selection"></div>
         </button>
         <button id="fullscreenBtn" title="Fullscreen">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
@@ -100,6 +107,17 @@
         <select id="episodeSelect"></select>
         <button class="smallBtn" id="nextEpisode">›</button>
       </div>
+    </div>
+
+    <div id="customEmbedPanel">
+      <h3>Add Custom Embed Server</h3>
+      <div class="embedGrid">
+        <input id="serverNameInput" type="text" placeholder="Server name (example: VidPlus)" />
+        <input id="movieIdInput" type="text" placeholder="Movie ID / TMDB ID override" />
+        <input id="embedTemplateInput" type="text" value="https://player.vidplus.to/embed/movie/{tmdbId}" placeholder="Embed URL template (use {tmdbId})" />
+        <button class="smallBtn" id="addServerBtn" type="button">Add Server</button>
+      </div>
+      <p id="embedHelp">Use <strong>{tmdbId}</strong> where the movie ID should go. The Movie ID field above will replace it before loading.</p>
     </div>
   </div>
 
@@ -127,9 +145,22 @@ const nextEpisodeBtn = document.getElementById('nextEpisode');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
-const serverItems = document.querySelectorAll('.serverDropdownItem');
+const serverNameInput = document.getElementById('serverNameInput');
+const movieIdInput = document.getElementById('movieIdInput');
+const embedTemplateInput = document.getElementById('embedTemplateInput');
+const addServerBtn = document.getElementById('addServerBtn');
 
-let currentServer = 'vidsrc1';
+const servers = [
+  { key: 'vidsrc1', name: 'VidSrc 1', template: 'https://vsrc.su/embed/{tmdbId}/{season}-{episode}' },
+  { key: 'vidsrc2', name: 'VidSrc 2', template: 'https://vidsrcme.ru/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
+  { key: 'vidsrc3', name: 'VidSrc 3', template: 'https://vidsrc.to/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
+  { key: 'vidsrc4', name: 'VidSrc 4', template: 'https://vidsrc.io/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
+  { key: 'vidsrc5', name: 'VidSrc 5', template: 'https://vidsrcs.com/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
+  { key: 'vidsrc6', name: 'VidSrc 6', template: 'https://vidstream.pro/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' },
+  { key: 'vidsrc7', name: 'VidSrc 7', template: 'https://vidcloud.co/embed/tv?tmdb={tmdbId}&season={season}&episode={episode}' }
+];
+
+let currentServer = servers[0].key;
 let imdbId = null;
 let currentSeason = 1;
 let currentEpisode = 1;
@@ -205,27 +236,61 @@ async function fetchTMDBData() {
 
 function updateIframe() {
   saveProgress();
-  const idToUse = imdbId || tmdbId;
+  const idToUse = movieIdInput.value.trim() || imdbId || tmdbId;
   if (!idToUse) {
     iframe.src = '';
     return;
   }
 
-  if (currentServer === 'vidsrc1') {
-    iframe.src = `https://vsrc.su/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
-  } else if (currentServer === 'vidsrc2') {
-    iframe.src = `https://vidsrcme.ru/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc3') {
-    iframe.src = `https://vidsrc.to/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc4') {
-    iframe.src = `https://vidsrc.io/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc5') {
-    iframe.src = `https://vidsrcs.com/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc6') {
-    iframe.src = `https://vidstream.pro/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc7') {
-    iframe.src = `https://vidcloud.co/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  }
+  const selected = servers.find(server => server.key === currentServer);
+  if (!selected) return;
+
+  iframe.src = selected.template
+    .replaceAll('{tmdbId}', idToUse)
+    .replaceAll('{season}', String(currentSeason))
+    .replaceAll('{episode}', String(currentEpisode));
+}
+
+function renderServers() {
+  serverDropdown.innerHTML = '';
+
+  servers.forEach((server, index) => {
+    const item = document.createElement('div');
+    item.className = `serverDropdownItem ${server.key === currentServer ? 'active' : ''}`;
+    item.dataset.server = server.key;
+
+    const name = document.createElement('span');
+    name.className = 'serverDropdownName';
+    name.textContent = server.name;
+    item.appendChild(name);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'serverDeleteBtn';
+    deleteBtn.type = 'button';
+    deleteBtn.setAttribute('aria-label', `Delete ${server.name}`);
+    deleteBtn.textContent = '×';
+    deleteBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (servers.length <= 1) return;
+
+      servers.splice(index, 1);
+      if (currentServer === server.key) {
+        currentServer = servers[0].key;
+        updateIframe();
+      }
+      renderServers();
+    });
+    item.appendChild(deleteBtn);
+
+    item.addEventListener('click', () => {
+      currentServer = server.key;
+      renderServers();
+      updateIframe();
+      serverDropdown.style.display = 'none';
+    });
+
+    serverDropdown.appendChild(item);
+  });
 }
 
 function updateControls() {
@@ -279,15 +344,26 @@ serverBtn.addEventListener('click', () => {
   serverDropdown.style.display = serverDropdown.style.display === 'flex' ? 'none' : 'flex';
 });
 
-serverItems.forEach(item => {
-  item.addEventListener('click', () => {
-    serverItems.forEach(i => i.classList.remove('active'));
-    item.classList.add('active');
-    currentServer = item.dataset.server;
-    updateIframe();
-    serverDropdown.style.display = 'none';
-  });
+addServerBtn.addEventListener('click', () => {
+  const name = serverNameInput.value.trim();
+  const template = embedTemplateInput.value.trim();
+  if (!name || !template.includes('{tmdbId}')) return;
+
+  const newServer = {
+    key: `custom-${Date.now()}`,
+    name,
+    template
+  };
+
+  servers.push(newServer);
+  currentServer = newServer.key;
+  renderServers();
+  updateIframe();
+  serverDropdown.style.display = 'none';
+  serverNameInput.value = '';
 });
+
+movieIdInput.addEventListener('input', updateIframe);
 
 // Fullscreen simulation
 fullscreenBtn.addEventListener('click', () => {
@@ -309,6 +385,7 @@ closeBtn.addEventListener('click', () => {
 });
 
 // Load TMDB data
+renderServers();
 fetchTMDBData();
 </script>
 
