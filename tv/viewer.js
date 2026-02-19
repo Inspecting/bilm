@@ -433,7 +433,15 @@ function savePlaybackNote() {
   savePlaybackNotes(notes);
 }
 
+function tryEmbedMasterFullscreenCommand() {
+  if (currentServer !== 'embedmaster') return;
+  const embedWindow = iframe?.contentWindow;
+  if (!embedWindow) return;
+  embedWindow.postMessage({ command: 'fullscreen' }, '*');
+}
+
 fullscreenBtn.onclick = () => {
+  tryEmbedMasterFullscreenCommand();
   if (!isMobile) {
     if (playerContainer.requestFullscreen) {
       playerContainer.requestFullscreen();
