@@ -28,13 +28,17 @@
     #playerWrapper { display: flex; flex-direction: column; align-items: center; width: 800px; max-width: 95vw; position: relative; gap: 12px; }
     #playerWithControls { width: 100%; border-radius: 12px; box-shadow: 0 0 20px #a14effcc; overflow: visible; display: flex; flex-direction: column; background: black; position: relative; }
     #playerContainer { width: 100%; aspect-ratio: 16 / 9; position: relative; background: black; border-radius: 12px; overflow: hidden; }
+    #playerContainer.simulated-fullscreen { position: fixed !important; inset: 0; width: 100vw !important; height: 100vh !important; aspect-ratio: auto; z-index: 1200; border-radius: 0; }
     iframe { width: 100%; height: 100%; border: none; display: block; border-radius: 12px; }
     #clickShield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; background: transparent; }
     #playexBar { background: rgba(26, 22, 40, 0.9); padding: 10px 20px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; user-select: none; position: relative; z-index: 10; border-radius: 0 0 12px 12px; }
     #fullscreenBtn, #serverBtn { background: transparent; border: none; cursor: pointer; color: #f0f0f0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 6px; transition: background-color 0.3s ease; flex-shrink: 0; }
     #fullscreenBtn:hover, #serverBtn:hover { background-color: #a855f7; }
-    #serverDropdown { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: rgba(26, 22, 40, 0.97); border-radius: 12px; box-shadow: 0 0 16px #a14effcc; padding: 8px 0; width: 160px; display: none; flex-direction: column; z-index: 9999; user-select: auto; white-space: nowrap; }
-    .serverDropdownItem { padding: 10px 20px; color: #f0f0f0; cursor: pointer; font-weight: 600; font-size: 15px; transition: background-color 0.2s ease; user-select: none; }
+    #serverDropdown { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: rgba(26, 22, 40, 0.97); border-radius: 12px; box-shadow: 0 0 16px #a14effcc; padding: 8px 0; width: 250px; display: none; flex-direction: column; z-index: 9999; user-select: auto; white-space: nowrap; max-height: 250px; overflow-y: auto; }
+    .serverDropdownItem { padding: 10px 14px; color: #f0f0f0; cursor: pointer; font-weight: 600; font-size: 15px; transition: background-color 0.2s ease; user-select: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .serverDropdownName { overflow: hidden; text-overflow: ellipsis; }
+    .serverDeleteBtn { border: none; background: transparent; color: #f0f0f0; font-size: 18px; line-height: 1; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
+    .serverDeleteBtn:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
     .serverDropdownItem:hover { background-color: #a855f7; }
     .serverDropdownItem.active { background-color: #a14eff; cursor: default; }
     #controlsCompact { margin-top: 12px; width: 100%; display: flex; justify-content: center; gap: 12px; align-items: center; background: rgba(26, 22, 40, 0.9); padding: 12px 30px; border-radius: 16px; box-shadow: 0 0 15px #a14eff88; min-height: 54px; flex-wrap: nowrap; }
@@ -45,10 +49,21 @@
     .smallBtn:hover:not(:disabled) { background: rgba(255,255,255,0.03); }
     .smallBtn:disabled { opacity: 0.3; cursor: not-allowed; }
     #closeBtn { display: none; position: fixed; top: 0; right: 0; z-index: 100; background: transparent; color: white; border: none; width: 48px; height: 48px; font-size: 20px; cursor: pointer; font-weight: 700; text-align: center; line-height: 48px; border-radius: 0; }
-    .simulated-fullscreen { position: fixed !important; top: 0; left: 0; width: 100vw !important; height: 100vh !important; z-index: 99; border-radius: 0 !important; }
     .hide-navbar { display: none !important; }
     .cooldown-disabled { opacity: 0.4 !important; filter: grayscale(70%); cursor: not-allowed !important; pointer-events: auto !important; user-select: none; transition: opacity 0.3s ease, filter 0.3s ease; }
     .cooldown-disabled:hover { background-color: transparent !important; }
+    #customEmbedPanel { width: 100%; background: rgba(26, 22, 40, 0.9); padding: 14px; border-radius: 16px; box-shadow: 0 0 15px #a14eff88; display: grid; gap: 10px; }
+    #customEmbedPanel h3 { font-size: 15px; margin: 0; }
+    .embedGrid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .embedGrid input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+    .embedGrid input:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 2px rgba(168,85,247,0.2); }
+    #embedTemplateInput { grid-column: 1 / -1; }
+    #addServerBtn { justify-self: end; }
+    #embedHelp { font-size: 12px; color: rgba(240, 240, 240, 0.72); }
+    @media (max-width: 760px) {
+      .embedGrid { grid-template-columns: 1fr; }
+      #addServerBtn { justify-self: stretch; }
+    }
   </style>
 </head>
 <body>
@@ -71,15 +86,7 @@
             <line x1="6" y1="8" x2="6" y2="8"></line>
             <line x1="6" y1="17" x2="6" y2="17"></line>
           </svg>
-          <div id="serverDropdown" role="menu" aria-label="Server selection">
-            <div class="serverDropdownItem active" data-server="vidsrc1">VidSrc 1</div>
-            <div class="serverDropdownItem" data-server="vidsrc2">VidSrc 2</div>
-            <div class="serverDropdownItem" data-server="vidsrc3">VidSrc 3</div>
-            <div class="serverDropdownItem" data-server="vidsrc4">VidSrc 4</div>
-            <div class="serverDropdownItem" data-server="vidsrc5">VidSrc 5</div>
-            <div class="serverDropdownItem" data-server="vidsrc6">VidSrc 6</div>
-            <div class="serverDropdownItem" data-server="vidsrc7">VidSrc 7</div>
-          </div>
+          <div id="serverDropdown" role="menu" aria-label="Server selection"></div>
         </button>
         <button id="fullscreenBtn" title="Fullscreen">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
@@ -100,6 +107,17 @@
         <select id="episodeSelect"></select>
         <button class="smallBtn" id="nextEpisode">›</button>
       </div>
+    </div>
+
+    <div id="customEmbedPanel">
+      <h3>Add Custom Embed Server</h3>
+      <div class="embedGrid">
+        <input id="serverNameInput" type="text" placeholder="Server name (example: VidPlus)" />
+        <input id="movieIdInput" type="text" placeholder="Movie ID" />
+        <input id="embedTemplateInput" type="text" value="https://vembed.stream/play/" placeholder="Embed base URL (example: https://vembed.stream/play/)" />
+        <button class="smallBtn" id="addServerBtn" type="button">Add Server</button>
+      </div>
+      <p id="embedHelp">Enter an embed base URL and a movie ID. The player will load as: base URL + movie ID.</p>
     </div>
   </div>
 
@@ -127,9 +145,16 @@ const nextEpisodeBtn = document.getElementById('nextEpisode');
 
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
-const serverItems = document.querySelectorAll('.serverDropdownItem');
+const serverNameInput = document.getElementById('serverNameInput');
+const movieIdInput = document.getElementById('movieIdInput');
+const embedTemplateInput = document.getElementById('embedTemplateInput');
+const addServerBtn = document.getElementById('addServerBtn');
 
-let currentServer = 'vidsrc1';
+const servers = [
+  { key: 'vembed-default', name: 'Vembed', baseUrl: 'https://vembed.stream/play/' }
+];
+
+let currentServer = servers[0].key;
 let imdbId = null;
 let currentSeason = 1;
 let currentEpisode = 1;
@@ -205,27 +230,61 @@ async function fetchTMDBData() {
 
 function updateIframe() {
   saveProgress();
-  const idToUse = imdbId || tmdbId;
+  const idToUse = movieIdInput.value.trim() || tmdbId || imdbId;
   if (!idToUse) {
     iframe.src = '';
     return;
   }
 
-  if (currentServer === 'vidsrc1') {
-    iframe.src = `https://vsrc.su/embed/${idToUse}/${currentSeason}-${currentEpisode}`;
-  } else if (currentServer === 'vidsrc2') {
-    iframe.src = `https://vidsrcme.ru/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc3') {
-    iframe.src = `https://vidsrc.to/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc4') {
-    iframe.src = `https://vidsrc.io/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc5') {
-    iframe.src = `https://vidsrcs.com/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc6') {
-    iframe.src = `https://vidstream.pro/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  } else if (currentServer === 'vidsrc7') {
-    iframe.src = `https://vidcloud.co/embed/tv?tmdb=${idToUse}&season=${currentSeason}&episode=${currentEpisode}`;
-  }
+  const selected = servers.find(server => server.key === currentServer);
+  if (!selected) return;
+
+  const normalizedBase = selected.baseUrl.endsWith('/') ? selected.baseUrl : `${selected.baseUrl}/`;
+  iframe.src = `${normalizedBase}${idToUse}`;
+}
+
+function renderServers() {
+  serverDropdown.innerHTML = '';
+
+  servers.forEach((server, index) => {
+    const item = document.createElement('div');
+    item.className = `serverDropdownItem ${server.key === currentServer ? 'active' : ''}`;
+    item.dataset.server = server.key;
+
+    const name = document.createElement('span');
+    name.className = 'serverDropdownName';
+    name.textContent = server.name;
+    item.appendChild(name);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'serverDeleteBtn';
+    deleteBtn.type = 'button';
+    deleteBtn.setAttribute('aria-label', `Delete ${server.name}`);
+    deleteBtn.textContent = '×';
+    deleteBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (servers.length <= 1) return;
+
+      servers.splice(index, 1);
+      if (currentServer === server.key) {
+        currentServer = servers[0].key;
+        updateIframe();
+      }
+      renderServers();
+    });
+    item.appendChild(deleteBtn);
+
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
+      currentServer = server.key;
+      renderServers();
+      updateIframe();
+      serverDropdown.style.display = 'none';
+      serverBtn.setAttribute('aria-expanded', 'false');
+    });
+
+    serverDropdown.appendChild(item);
+  });
 }
 
 function updateControls() {
@@ -275,40 +334,83 @@ nextEpisodeBtn.addEventListener('click', () => {
 });
 
 // Server dropdown
-serverBtn.addEventListener('click', () => {
-  serverDropdown.style.display = serverDropdown.style.display === 'flex' ? 'none' : 'flex';
+serverBtn.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const isOpen = serverDropdown.style.display === 'flex';
+  serverDropdown.style.display = isOpen ? 'none' : 'flex';
+  serverBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
 });
 
-serverItems.forEach(item => {
-  item.addEventListener('click', () => {
-    serverItems.forEach(i => i.classList.remove('active'));
-    item.classList.add('active');
-    currentServer = item.dataset.server;
-    updateIframe();
-    serverDropdown.style.display = 'none';
-  });
+document.addEventListener('click', () => {
+  serverDropdown.style.display = 'none';
+  serverBtn.setAttribute('aria-expanded', 'false');
 });
 
-// Fullscreen simulation
+addServerBtn.addEventListener('click', () => {
+  const name = serverNameInput.value.trim();
+  const baseUrl = embedTemplateInput.value.trim();
+  const movieId = movieIdInput.value.trim();
+  if (!name || !baseUrl || !movieId) return;
+
+  const newServer = {
+    key: `custom-${Date.now()}`,
+    name,
+    baseUrl
+  };
+
+  servers.push(newServer);
+  currentServer = newServer.key;
+  renderServers();
+  updateIframe();
+  serverDropdown.style.display = 'none';
+  serverBtn.setAttribute('aria-expanded', 'false');
+  serverNameInput.value = '';
+});
+
+movieIdInput.addEventListener('input', updateIframe);
+
+const isMobile = window.matchMedia('(max-width: 768px)').matches
+  || window.matchMedia('(pointer: coarse)').matches
+  || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
 fullscreenBtn.addEventListener('click', () => {
-  if (!document.body.classList.contains('simulated-fullscreen')) {
-    document.body.classList.add('simulated-fullscreen');
-    navbarContainer.classList.add('hide-navbar');
-    closeBtn.style.display = 'block';
+  if (!isMobile) {
+    if (playerContainer.requestFullscreen) {
+      playerContainer.requestFullscreen();
+    } else if (playerContainer.webkitRequestFullscreen) {
+      playerContainer.webkitRequestFullscreen();
+    } else if (playerContainer.msRequestFullscreen) {
+      playerContainer.msRequestFullscreen();
+    }
   } else {
-    document.body.classList.remove('simulated-fullscreen');
-    navbarContainer.classList.remove('hide-navbar');
-    closeBtn.style.display = 'none';
+    playerContainer.classList.add('simulated-fullscreen');
   }
+  closeBtn.style.display = 'block';
+  navbarContainer.classList.add('hide-navbar');
 });
 
 closeBtn.addEventListener('click', () => {
-  document.body.classList.remove('simulated-fullscreen');
-  navbarContainer.classList.remove('hide-navbar');
+  if (isMobile) {
+    playerContainer.classList.remove('simulated-fullscreen');
+  } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+    document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+  }
   closeBtn.style.display = 'none';
+  navbarContainer.classList.remove('hide-navbar');
 });
 
+function handleFullscreenExit() {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    closeBtn.style.display = 'none';
+    navbarContainer.classList.remove('hide-navbar');
+  }
+}
+
+document.addEventListener('fullscreenchange', handleFullscreenExit);
+document.addEventListener('webkitfullscreenchange', handleFullscreenExit);
+
 // Load TMDB data
+renderServers();
 fetchTMDBData();
 </script>
 
