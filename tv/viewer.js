@@ -454,20 +454,36 @@ function tryEmbedMasterFullscreenCommand() {
   embedWindow.postMessage("sendCommand('fullscreen')", '*');
 }
 
+function requestElementFullscreen(element) {
+  if (!element) return false;
+  if (element.requestFullscreen) {
+    element.requestFullscreen();
+    return true;
+  }
+  if (element.webkitRequestFullscreen) {
+    element.webkitRequestFullscreen();
+    return true;
+  }
+  if (element.msRequestFullscreen) {
+    element.msRequestFullscreen();
+    return true;
+  }
+  return false;
+}
+
 fullscreenBtn.onclick = () => {
   tryEmbedMasterFullscreenCommand();
   if (!isMobile) {
-    if (playerContainer.requestFullscreen) {
-      playerContainer.requestFullscreen();
-    } else if (playerContainer.webkitRequestFullscreen) {
-      playerContainer.webkitRequestFullscreen();
-    } else if (playerContainer.msRequestFullscreen) {
-      playerContainer.msRequestFullscreen();
+    const fullscreenStarted = requestElementFullscreen(iframe) || requestElementFullscreen(playerContainer);
+    if (!fullscreenStarted) {
+      playerContainer.classList.add('simulated-fullscreen');
     }
   } else {
     playerContainer.classList.add('simulated-fullscreen');
   }
-  if (closeBtn) closeBtn.style.display = 'block';
+  if (closeBtn) {
+    closeBtn.style.display = 'block';
+  }
   navbarContainer.classList.add('hide-navbar');
 };
 
