@@ -266,10 +266,11 @@ nav button.active {
   gap: 4px;
 }
 
-.mobile-bottom-nav button img {
+.mobile-bottom-nav button svg {
   width: 24px;
   height: 24px;
-  filter: brightness(0) invert(1);
+  display: block;
+  color: currentColor;
 }
 
 .mobile-bottom-nav button.active {
@@ -277,8 +278,8 @@ nav button.active {
   filter: drop-shadow(0 0 4px var(--accent-glow));
 }
 
-.mobile-bottom-nav button.active img {
-  filter: brightness(1) saturate(3) drop-shadow(0 0 3px var(--accent-glow));
+.mobile-bottom-nav button.active svg {
+  filter: drop-shadow(0 0 3px var(--accent-glow));
 }
 
 /* Mobile Search Overlay */
