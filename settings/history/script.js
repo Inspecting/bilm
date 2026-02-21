@@ -126,6 +126,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return item.key || `${state.activeType}-${basis}-${getTimestamp(item)}`;
   }
 
+  function resolveMovieDetailsLink(item) {
+    const detailsBase = withBase('/movies/movie.html');
+    const fallbackId = item?.id || item?.tmdbId;
+    const rawLink = String(item?.link || '');
+
+    if (!rawLink) {
+      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
+    }
+
+    try {
+      const resolved = new URL(rawLink, window.location.origin);
+      const movieId = resolved.searchParams.get('id') || fallbackId;
+      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
+        || /\/movies\/?$/i.test(resolved.pathname);
+      if (pointsToOldMovieRoute && movieId) {
+        return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+      }
+    } catch {
+      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
+    }
+
+    return rawLink;
+  }
+
   function getRangeCutoff() {
     const now = Date.now();
     if (state.dateRange === 'today') return now - 24 * 60 * 60 * 1000;
@@ -291,6 +315,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       } else {
         row.addEventListener('click', () => {
+          const destination = item.type === 'movie'
+            ? resolveMovieDetailsLink(item)
+            : item.link
+              || (item.type === 'tv' && item.id ? `${withBase('/tv/viewer.html')}?id=${encodeURIComponent(item.id)}` : '');
           const destination = item.link
             || (item.type === 'tv' && item.id ? `${withBase('/tv/viewer.html')}?id=${encodeURIComponent(item.id)}` : '')
             || (item.type === 'movie' && item.id ? `${withBase('/movies/movie.html')}?id=${encodeURIComponent(item.id)}` : '');

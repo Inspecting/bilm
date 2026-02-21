@@ -106,6 +106,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return parsed.getFullYear();
   }
 
+  function normalizeMovieLink(item) {
+    const rawLink = String(item?.link || '');
+    const fallbackId = item?.tmdbId || item?.id;
+    const detailsBase = withBase('/movies/movie.html');
+
+    if (item?.type !== 'movie') return rawLink;
+    if (!rawLink && fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
+    if (!rawLink) return '';
+
+    try {
+      const resolved = new URL(rawLink, window.location.origin);
+      const movieId = resolved.searchParams.get('id') || fallbackId;
+      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
+        || /\/movies\/?$/i.test(resolved.pathname);
+      if (pointsToOldMovieRoute && movieId) {
+        return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+      }
+    } catch {
+      if (fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
+    }
+
+    return rawLink;
+  }
+
   const sectionState = {
     continue: {
       editing: false,
@@ -209,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
           type: item.type,
           img: item.poster,
           source: item.source || 'TMDB',
-          link: item.link
+          link: normalizeMovieLink(item)
         },
         className: 'movie-card',
         badgeClassName: 'source-badge-overlay',
@@ -255,8 +279,9 @@ document.addEventListener('DOMContentLoaded', () => {
           renderSections();
           return;
         }
-        if (item.link) {
-          window.location.href = item.link;
+        const destination = normalizeMovieLink(item);
+        if (destination) {
+          window.location.href = destination;
         }
       };
 
