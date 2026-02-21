@@ -14,20 +14,41 @@
   <main class="container">
     <header class="header">
       <h1 class="title">Watch Movie</h1>
-      <p class="subtitle">Server picker, custom embeds, and direct back link to details.</p>
+      <p class="subtitle">Watch page now follows the regular viewer layout.</p>
     </header>
 
-    <section class="card">
-      <div class="lookup" style="grid-template-columns: 120px 1fr 180px auto auto;">
+    <section class="media-header">
+      <div>
+        <h2 id="mediaTitle">Loading title...</h2>
+        <div id="mediaMeta" class="media-meta-line">Year • Rating • Runtime</div>
+        <div id="mediaDescription" class="media-description">Description: Loading movie description...</div>
+      </div>
+      <a id="detailsLink" href="../"><button class="ghost" type="button">Go to Movie Page</button></a>
+    </section>
+
+    <section class="player-shell">
+      <iframe class="player" id="player" allowfullscreen allow="fullscreen; encrypted-media" src=""></iframe>
+      <div class="playex-bar">
+        <select id="server"></select>
+        <button id="loadBtn" type="button">Load Player</button>
+      </div>
+    </section>
+
+    <section class="more-like-section">
+      <h3 class="section-title">More Like This</h3>
+      <div class="more-grid" id="moreLike"></div>
+    </section>
+
+    <section class="card test-tools">
+      <h3 style="margin-top:0;">Test Controls (bottom)</h3>
+      <div class="lookup" style="grid-template-columns: 120px 1fr auto;">
         <select id="idType">
           <option value="auto">Auto</option>
           <option value="tmdb">TMDB</option>
           <option value="imdb">IMDb</option>
         </select>
         <input id="idInput" placeholder="TMDB or IMDb ID" />
-        <select id="server"></select>
-        <button id="loadBtn">Load Player</button>
-        <a id="detailsLink"><button class="ghost" type="button">Back to Movie Page</button></a>
+        <button id="jumpBtn" type="button">Load Movie</button>
       </div>
 
       <div class="row" style="margin-top:12px;">
@@ -36,12 +57,7 @@
         <button id="addCustomBtn" class="ghost" type="button">Add Custom Embed</button>
       </div>
       <div id="customServerList" class="custom-server-list"></div>
-
       <p id="status" class="subtitle"></p>
-    </section>
-
-    <section class="player-wrap">
-      <iframe class="player" id="player" allowfullscreen allow="fullscreen; encrypted-media" src=""></iframe>
     </section>
   </main>
 
