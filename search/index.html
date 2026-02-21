@@ -368,7 +368,7 @@
       const unresolved = nextEntries.filter(item => !item.tmdbId).slice(0, limit);
       await Promise.all(unresolved.map(async (item) => {
         item.tmdbId = await resolveMovieTmdbId(item);
-        item.link = item.tmdbId ? `${BASE_URL}/movies/viewer.html?id=${item.tmdbId}` : '';
+        item.link = item.tmdbId ? `${BASE_URL}/movies/movie.html?id=${item.tmdbId}` : '';
       }));
       return nextEntries;
     }
@@ -430,7 +430,7 @@
               year: item.release_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
               tmdbId: item.id,
-              link: `${BASE_URL}/movies/viewer.html?id=${item.id}`,
+              link: `${BASE_URL}/movies/movie.html?id=${item.id}`,
               source: 'TMDB',
               popularity: item.popularity || 0,
               type: 'movie'
