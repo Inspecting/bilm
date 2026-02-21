@@ -3,14 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bilm Test Movie Routing</title>
+  <title>Bilm 💜 - Test Movie Routing</title>
+  <link rel="stylesheet" href="../shared/theme.css" />
   <link rel="stylesheet" href="./style.css" />
+  <script src="../shared/access.js"></script>
+  <script src="../shared/theme.js"></script>
 </head>
 <body>
+  <div id="navbarContainer"></div>
   <main class="container">
     <header class="header">
       <h1 class="title">Test Movie Routing</h1>
-      <p class="subtitle">New separated flow: movie details page and watch page inside <code>/test/movie/watch/viewer.html</code>.</p>
+      <p class="subtitle">Mirrors main site flow: details page and separate watch page.</p>
     </header>
 
     <section class="card">
@@ -20,7 +24,7 @@
           <option value="tmdb">TMDB</option>
           <option value="imdb">IMDb</option>
         </select>
-        <input id="idInput" placeholder="Enter TMDB ID (e.g. 603) or IMDb ID (e.g. tt0133093)" />
+        <input id="idInput" placeholder="TMDB ID (603) or IMDb ID (tt0133093)" />
         <button id="openMovie">Open Movie Page</button>
         <button id="openWatch" class="ghost">Open Watch Page</button>
       </div>
@@ -28,30 +32,28 @@
     </section>
   </main>
 
+  <script src="../shared/navbar.js" defer></script>
   <script src="./app.js"></script>
   <script>
     const idInput = document.getElementById('idInput');
+    const idType = document.getElementById('idType');
     const status = document.getElementById('status');
 
-    function getId() { return idInput.value.trim(); }
+    function getId() {
+      return idInput.value.trim();
+    }
 
-    document.getElementById('openMovie').addEventListener('click', () => {
+    function navTo(path) {
       const id = getId();
       if (!id) {
         status.textContent = 'Please enter a movie id first.';
         return;
       }
-      window.location.href = `./movie/?id=${encodeURIComponent(id)}`;
-    });
+      window.location.href = `${path}?id=${encodeURIComponent(id)}&type=${encodeURIComponent(idType.value)}`;
+    }
 
-    document.getElementById('openWatch').addEventListener('click', () => {
-      const id = getId();
-      if (!id) {
-        status.textContent = 'Please enter a movie id first.';
-        return;
-      }
-      window.location.href = `./movie/watch/viewer.html?id=${encodeURIComponent(id)}`;
-    });
+    document.getElementById('openMovie').addEventListener('click', () => navTo('./movie/'));
+    document.getElementById('openWatch').addEventListener('click', () => navTo('./movie/watch/viewer.html'));
   </script>
 </body>
 </html>
