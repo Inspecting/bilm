@@ -318,10 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const destination = item.type === 'movie'
             ? resolveMovieDetailsLink(item)
             : item.link
-              || (item.type === 'tv' && item.id ? `${withBase('/tv/viewer.html')}?id=${encodeURIComponent(item.id)}` : '');
-          const destination = item.link
-            || (item.type === 'tv' && item.id ? `${withBase('/tv/viewer.html')}?id=${encodeURIComponent(item.id)}` : '')
-            || (item.type === 'movie' && item.id ? `${withBase('/movies/movie.html')}?id=${encodeURIComponent(item.id)}` : '');
+              || (item.type === 'tv' && item.id ? `${withBase('/tv/movie.html')}?id=${encodeURIComponent(item.id)}` : '');
           if (!destination) return;
           window.location.href = destination;
         });

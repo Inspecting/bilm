@@ -184,7 +184,7 @@ function createMoreLikeCard(show) {
       ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
-    link: `${withBase('/tv/viewer.html')}?id=${show.id}`
+    link: `${withBase('/tv/movie.html')}?id=${show.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -938,7 +938,7 @@ async function fetchTMDBData() {
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${withBase('/tv/viewer.html')}?id=${tmdbId}`
+      link: `${withBase('/tv/movie.html')}?id=${tmdbId}`
     };
 
     const favorites = loadList(FAVORITES_KEY);
