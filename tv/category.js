@@ -76,7 +76,7 @@ async function loadMore(itemsToLoad = TMDB_PAGE_SIZE) {
           type: 'tv',
           year: show.first_air_date?.slice(0, 4) || 'N/A',
           img: show.poster_path ? `https://image.tmdb.org/t/p/w500${show.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
-          link: `${BASE_URL}/tv/viewer.html?id=${show.id}`,
+          link: `${BASE_URL}/tv/movie.html?id=${show.id}`,
           source: 'TMDB'
         },
         className: 'movie-card',
