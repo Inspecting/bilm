@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Watch Movie - Test</title>
+  <link rel="stylesheet" href="../../style.css" />
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1 class="title">Watch Movie</h1>
+      <p class="subtitle">Watch page only (no “more like this” here by design).</p>
+    </header>
+
+    <section class="card">
+      <div class="lookup" style="grid-template-columns: 1fr 1fr auto auto;">
+        <input id="idInput" placeholder="TMDB or IMDb ID" />
+        <select id="server">
+          <option value="viking">Viking</option>
+          <option value="embedmaster">EmbedMaster</option>
+        </select>
+        <button id="loadBtn">Load Player</button>
+        <a id="detailsLink"><button class="ghost" type="button">Back to Movie Page</button></a>
+      </div>
+      <p id="status" class="subtitle"></p>
+    </section>
+
+    <section class="player-wrap">
+      <iframe class="player" id="player" allowfullscreen allow="fullscreen; encrypted-media" src=""></iframe>
+    </section>
+  </main>
+
+  <script src="../../app.js"></script>
+  <script>
+    const { resolveMovieId } = window.TestMovieApp;
+    const params = new URLSearchParams(window.location.search);
+    const idInput = document.getElementById('idInput');
+    const status = document.getElementById('status');
+    const player = document.getElementById('player');
+
+    function buildUrl(server, tmdbId) {
+      if (server === 'embedmaster') return `https://embedmaster.link/movie/${tmdbId}`;
+      return `https://vembed.stream/play/${tmdbId}`;
+    }
+
+    async function loadPlayer(rawId) {
+      try {
+        status.textContent = 'Resolving ID...';
+        const { tmdbId } = await resolveMovieId(rawId);
+        const server = document.getElementById('server').value;
+        player.src = buildUrl(server, tmdbId);
+        document.getElementById('detailsLink').href = `../?id=${encodeURIComponent(rawId)}`;
+        history.replaceState({}, '', `?id=${encodeURIComponent(rawId)}&tmdb=${tmdbId}`);
+        status.textContent = `Playing with ${server}.`;
+      } catch (err) {
+        status.textContent = err.message || 'Failed to load player.';
+      }
+    }
+
+    document.getElementById('loadBtn').addEventListener('click', () => loadPlayer(idInput.value));
+    const initialId = params.get('id');
+    if (initialId) {
+      idInput.value = initialId;
+      loadPlayer(initialId);
+    }
+  </script>
+</body>
+</html>
