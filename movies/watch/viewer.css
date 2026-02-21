@@ -67,7 +67,8 @@ main {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 12px;
-  
+  max-height: 420px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -286,7 +287,9 @@ iframe {
 }
 
 #fullscreenBtn,
-#serverBtn {
+#serverBtn,
+#favoriteBtn,
+#watchLaterBtn {
   background: transparent;
   border: none;
   cursor: pointer;
@@ -307,10 +310,27 @@ iframe {
 }
 
 #fullscreenBtn:hover,
-#serverBtn:hover {
+#serverBtn:hover,
+#favoriteBtn:hover,
+#watchLaterBtn:hover {
   background-color: var(--accent);
 }
 
+#favoriteBtn {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#watchLaterBtn {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#favoriteBtn.is-active {
+  color: #facc15;
+}
+
+#watchLaterBtn.is-active {
+  color: #38bdf8;
+}
 
 #serverDropdown {
   position: absolute;
@@ -350,29 +370,6 @@ iframe {
 .serverDropdownItem.active {
   background-color: var(--accent);
   cursor: default;
-}
-
-.description-section {
-  width: 100%;
-  margin-top: 10px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-2);
-  box-shadow: var(--shadow-md);
-}
-
-.description-section h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-#mediaDescription {
-  margin-top: 8px;
-  color: var(--text-muted);
-  line-height: 1.45;
-  overflow-wrap: anywhere;
 }
 
 #closeBtn {
@@ -415,25 +412,4 @@ iframe {
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 12px;
-}
-
-
-@media (max-width: 768px) {
-  main {
-    padding: 14px 12px 92px;
-  }
-
-  #playerWrapper {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  #playexBar {
-    padding: 10px 12px;
-    gap: 10px;
-  }
-
-  .more-like-grid {
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  }
 }
