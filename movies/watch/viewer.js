@@ -26,8 +26,7 @@ const navbarContainer = document.getElementById('navbarContainer');
 const closeBtn = document.getElementById('closeBtn');
 const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
-const favoriteBtn = document.getElementById('favoriteBtn');
-const watchLaterBtn = document.getElementById('watchLaterBtn');
+const mediaDescription = document.getElementById('mediaDescription');
 const playbackNoteHoursInput = document.getElementById('playbackNoteHours');
 const playbackNoteMinutesInput = document.getElementById('playbackNoteMinutes');
 
@@ -57,8 +56,6 @@ let imdbId = null;
 let iframeRefreshToken = 0;
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
-const FAVORITES_KEY = 'bilm-favorites';
-const WATCH_LATER_KEY = 'bilm-watch-later';
 const PLAYBACK_NOTE_KEY = 'bilm-playback-note';
 const storage = window.bilmTheme?.storage || {
   getJSON: (key, fallback = []) => {
@@ -190,22 +187,6 @@ function saveList(key, items) {
   storage.setJSON(key, items);
 }
 
-function updateFavoriteButton(isFavorite) {
-  if (!favoriteBtn) return;
-  favoriteBtn.classList.toggle('is-active', isFavorite);
-  favoriteBtn.setAttribute('aria-pressed', isFavorite ? 'true' : 'false');
-  favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
-  favoriteBtn.setAttribute('aria-label', favoriteBtn.title);
-}
-
-function updateWatchLaterButton(isWatchLater) {
-  if (!watchLaterBtn) return;
-  watchLaterBtn.classList.toggle('is-active', isWatchLater);
-  watchLaterBtn.setAttribute('aria-pressed', isWatchLater ? 'true' : 'false');
-  watchLaterBtn.title = isWatchLater ? 'Remove from watch later' : 'Add to watch later';
-  watchLaterBtn.setAttribute('aria-label', watchLaterBtn.title);
-}
-
 function setMoreLikeStatus(message) {
   if (moreLikeStatus) {
     moreLikeStatus.textContent = message;
@@ -313,62 +294,6 @@ async function loadMoreLikeMovies() {
   similarLoading = false;
 }
 
-function toggleFavorite() {
-  if (!mediaDetails) return;
-  const items = loadList(FAVORITES_KEY);
-  const key = `movie-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key);
-  if (existingIndex >= 0) {
-    items.splice(existingIndex, 1);
-    saveList(FAVORITES_KEY, items);
-    updateFavoriteButton(false);
-    return;
-  }
-
-  items.unshift({
-    key,
-    id: mediaDetails.id,
-    type: 'movie',
-    title: mediaDetails.title,
-    date: mediaDetails.releaseDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    source: 'TMDB'
-  });
-  saveList(FAVORITES_KEY, items);
-  updateFavoriteButton(true);
-}
-
-function toggleWatchLater() {
-  if (!mediaDetails) return;
-  const items = loadList(WATCH_LATER_KEY);
-  const key = `movie-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key);
-  if (existingIndex >= 0) {
-    items.splice(existingIndex, 1);
-    saveList(WATCH_LATER_KEY, items);
-    updateWatchLaterButton(false);
-    return;
-  }
-
-  items.unshift({
-    key,
-    id: mediaDetails.id,
-    type: 'movie',
-    title: mediaDetails.title,
-    date: mediaDetails.releaseDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    source: 'TMDB'
-  });
-  saveList(WATCH_LATER_KEY, items);
-  updateWatchLaterButton(true);
-}
-
 function upsertHistoryItem(key, payload) {
   const items = loadList(key);
   const existingIndex = items.findIndex(item => item.key === payload.key);
@@ -472,6 +397,7 @@ async function loadMovieDetails() {
   if (!contentId) {
     mediaTitle.textContent = 'Unknown title';
     mediaMeta.textContent = 'Release date unavailable';
+    if (mediaDescription) mediaDescription.textContent = 'Description unavailable.';
     return;
   }
 
@@ -494,6 +420,9 @@ async function loadMovieDetails() {
 
     mediaTitle.textContent = title;
     mediaMeta.textContent = displayDate;
+    if (mediaDescription) {
+      mediaDescription.textContent = details.overview || 'No description available for this movie yet.';
+    }
     document.title = `Bilm 💜 - ${title}`;
 
     mediaDetails = {
@@ -507,10 +436,6 @@ async function loadMovieDetails() {
       link: `${withBase('/movies/watch/viewer.html')}?id=${contentId}`
     };
 
-    const favorites = loadList(FAVORITES_KEY);
-    updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
-    const watchLater = loadList(WATCH_LATER_KEY);
-    updateWatchLaterButton(watchLater.some(item => item.key === `movie-${contentId}`));
     loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();
@@ -525,6 +450,7 @@ async function loadMovieDetails() {
     console.error('Error fetching movie details:', error);
     mediaTitle.textContent = 'Unknown title';
     mediaMeta.textContent = 'Release date unavailable';
+    if (mediaDescription) mediaDescription.textContent = 'Description unavailable.';
   }
 }
 
@@ -581,20 +507,6 @@ window.addEventListener('bilm:theme-changed', (event) => {
   }
 });
 
-if (favoriteBtn) {
-  favoriteBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleFavorite();
-  });
-}
-
-if (watchLaterBtn) {
-  watchLaterBtn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleWatchLater();
-  });
-}
-
 if (playbackNoteHoursInput && playbackNoteMinutesInput) {
   [playbackNoteHoursInput, playbackNoteMinutesInput].forEach((input, index) => {
     input.addEventListener('input', () => {
@@ -629,6 +541,13 @@ if (playbackNoteHoursInput && playbackNoteMinutesInput) {
   });
 }
 
+function shouldLoadMoreLikeFromViewport() {
+  if (!moreLikeBox || !similarActive || similarLoading || similarEnded) return false;
+  const rect = moreLikeBox.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  return rect.bottom - viewportHeight < 220;
+}
+
 if (moreLikeBox) {
   if (!contentId) {
     setMoreLikeStatus('Recommendations unavailable.');
@@ -636,9 +555,9 @@ if (moreLikeBox) {
     similarActive = true;
     setMoreLikeStatus('Loading recommendations…');
   }
-  moreLikeBox.addEventListener('scroll', () => {
-    if (!similarActive || similarLoading || similarEnded) return;
-    if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 200) {
+
+  window.addEventListener('scroll', () => {
+    if (shouldLoadMoreLikeFromViewport()) {
       loadMoreLikeMovies();
     }
   }, { passive: true });
