@@ -35,6 +35,15 @@ body {
 .title-head { margin: 0; }
 .section-title { margin: 22px 0 10px; font-size: 20px; }
 .trailer iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:14px; }
+.more-like-box {
+  max-height: 460px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--surface-3);
+}
+
 .more-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(145px,1fr)); gap:12px; }
 
 .primary-link,

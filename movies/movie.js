@@ -8,6 +8,14 @@ const WATCH_LATER_KEY = 'bilm-watch-later';
 const status = document.getElementById('status');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const watchLaterBtn = document.getElementById('watchLaterBtn');
+const moreLikeBox = document.getElementById('moreLikeBox');
+const moreLikeEl = document.getElementById('moreLike');
+const moreLikeStatus = document.getElementById('moreLikeStatus');
+
+let similarPage = 1;
+let similarLoading = false;
+let similarEnded = false;
+const seenMoreLike = new Set();
 
 function fetchJSON(url) {
   return fetch(url).then((res) => {
@@ -61,7 +69,7 @@ function createMovieCard(movie) {
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
-    link: `./index.html?id=${movie.id}`
+    link: `./?id=${movie.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -75,6 +83,52 @@ function createMovieCard(movie) {
   });
 }
 
+function setMoreLikeStatus(message) {
+  if (moreLikeStatus) {
+    moreLikeStatus.textContent = message;
+  }
+}
+
+async function fetchMoreLikeCandidates(page = 1) {
+  const [similar, recommended] = await Promise.all([
+    fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/similar?api_key=${TMDB_API_KEY}&page=${page}`),
+    fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/recommendations?api_key=${TMDB_API_KEY}&page=${page}`)
+  ]);
+
+  const merged = [...(similar?.results || []), ...(recommended?.results || [])];
+  const pageSeen = new Set();
+  return merged.filter((movie) => {
+    if (!movie?.id || movie.id === Number(tmdbId) || pageSeen.has(movie.id)) return false;
+    pageSeen.add(movie.id);
+    return true;
+  });
+}
+
+async function loadMoreLikeMovies() {
+  if (!moreLikeEl || similarLoading || similarEnded) return;
+  similarLoading = true;
+  setMoreLikeStatus('Loading more titles...');
+
+  const movies = await fetchMoreLikeCandidates(similarPage);
+  const unique = movies.filter((movie) => movie.id && !seenMoreLike.has(movie.id));
+
+  if (!unique.length) {
+    similarEnded = true;
+    setMoreLikeStatus('No more recommendations right now.');
+    similarLoading = false;
+    return;
+  }
+
+  unique.forEach((movie) => {
+    seenMoreLike.add(movie.id);
+    moreLikeEl.appendChild(createMovieCard(movie));
+  });
+
+  similarPage += 1;
+  setMoreLikeStatus('');
+  similarLoading = false;
+}
+
 async function loadMovieDetails() {
   if (!tmdbId) {
     status.textContent = 'Missing movie id.';
@@ -82,12 +136,10 @@ async function loadMovieDetails() {
   }
 
   try {
-    const [details, videos, credits, similar, recommended] = await Promise.all([
+    const [details, videos, credits] = await Promise.all([
       fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`),
       fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/videos?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/similar?api_key=${TMDB_API_KEY}&page=1`),
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/recommendations?api_key=${TMDB_API_KEY}&page=1`)
+      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`)
     ]);
 
     document.getElementById('movieBody').style.display = '';
@@ -119,26 +171,15 @@ async function loadMovieDetails() {
 
     document.getElementById('castLine').textContent = (credits.cast || []).slice(0, 10).map((person) => person.name).join(' • ') || 'No cast information.';
 
-    document.getElementById('watchLink').href = `../viewer.html?id=${details.id}`;
+    document.getElementById('watchLink').href = `./watch/viewer.html?id=${details.id}`;
     document.getElementById('tmdbLink').href = `https://www.themoviedb.org/movie/${details.id}`;
 
-    const merged = [...(similar.results || []), ...(recommended.results || [])];
-    const seenIds = new Set();
-    const moreLike = merged.filter((movie) => {
-      if (!movie?.id || movie.id === Number(tmdbId) || seenIds.has(movie.id)) return false;
-      seenIds.add(movie.id);
-      return true;
-    }).slice(0, 18);
-
-    const moreLikeEl = document.getElementById('moreLike');
-    moreLikeEl.innerHTML = '';
-    if (!moreLike.length) {
-      moreLikeEl.innerHTML = '<p class="subtitle">No similar titles available.</p>';
-    } else {
-      moreLike.forEach((movie) => {
-        const card = createMovieCard(movie);
-        moreLikeEl.appendChild(card);
-      });
+    if (moreLikeEl) {
+      moreLikeEl.innerHTML = '';
+      seenMoreLike.clear();
+      similarPage = 1;
+      similarEnded = false;
+      await loadMoreLikeMovies();
     }
 
     const movieItem = {
@@ -148,7 +189,7 @@ async function loadMovieDetails() {
       year: details.release_date?.slice(0, 4) || 'N/A',
       img: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
       source: 'TMDB',
-      link: `./index.html?id=${details.id}`
+      link: `./?id=${details.id}`
     };
 
     const syncStates = () => {
@@ -176,3 +217,12 @@ async function loadMovieDetails() {
 }
 
 loadMovieDetails();
+
+if (moreLikeBox) {
+  moreLikeBox.addEventListener('scroll', () => {
+    if (similarLoading || similarEnded) return;
+    if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 180) {
+      loadMoreLikeMovies();
+    }
+  });
+}
