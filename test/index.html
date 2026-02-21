@@ -1,377 +1,57 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bilm 💜 - Test Viewer</title>
-
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#0a0a0a" />
-
-  <link rel="manifest" href="../manifest.json" />
-  <link rel="apple-touch-icon" href="../icon.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../shared/theme.css" />
-  <link rel="stylesheet" href="../tv/viewer.css" />
-
-  <script src="../shared/access.js"></script>
-  <script src="../shared/theme.js"></script>
-
-  <style>
-    #customEmbedPanel {
-      width: 100%;
-      background: rgba(26, 22, 40, 0.9);
-      padding: 14px;
-      border-radius: 16px;
-      box-shadow: 0 0 15px #a14eff88;
-      display: grid;
-      gap: 10px;
-    }
-
-    #customEmbedPanel h3 {
-      margin: 0;
-      font-size: 15px;
-    }
-
-    .embedGrid {
-      display: grid;
-      grid-template-columns: minmax(150px, 1fr) 2fr auto;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .embedGrid input {
-      width: 100%;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      background: rgba(255, 255, 255, 0.05);
-      color: #fff;
-      padding: 10px 12px;
-      font: inherit;
-    }
-
-    .embedGrid input:focus {
-      outline: 2px solid #a855f7;
-      border-color: transparent;
-    }
-
-    #embedHelp {
-      margin: 0;
-      opacity: 0.85;
-      font-size: 13px;
-    }
-
-    @media (max-width: 900px) {
-      .embedGrid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bilm Test Movie Routing</title>
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div id="navbarContainer"></div>
+  <main class="container">
+    <header class="header">
+      <h1 class="title">Test Movie Routing</h1>
+      <p class="subtitle">New separated flow: movie details page and watch page inside <code>/test/movie/watch/viewer.html</code>.</p>
+    </header>
 
-  <main>
-    <div id="playerWrapper">
-      <div id="playerWithControls">
-        <div id="mediaHeader" aria-live="polite">
-          <div id="mediaTitle">Test Viewer</div>
-          <div id="mediaMeta">Movie / TV server testing</div>
-        </div>
-
-        <div id="playerContainer">
-          <iframe id="videoPlayer" src="" allowfullscreen allow="fullscreen; encrypted-media" playsinline scrolling="no"></iframe>
-          <div id="clickShield"></div>
-        </div>
-
-        <div id="playexBar">
-          <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
-              <rect x="2" y="13" width="20" height="7" rx="2" ry="2"></rect>
-              <line x1="6" y1="8" x2="6" y2="8"></line>
-              <line x1="6" y1="17" x2="6" y2="17"></line>
-            </svg>
-            <div id="serverDropdown" role="menu" aria-label="Server selection"></div>
-          </button>
-
-          <button id="fullscreenBtn" title="Fullscreen" aria-label="Fullscreen">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
-              <path d="M4 4h6M4 4v6M20 20h-6M20 20v-6M4 20l6-6M20 4l-6 6" />
-            </svg>
-          </button>
-        </div>
+    <section class="card">
+      <div class="lookup">
+        <select id="idType" aria-label="ID type">
+          <option value="auto">Auto detect</option>
+          <option value="tmdb">TMDB</option>
+          <option value="imdb">IMDb</option>
+        </select>
+        <input id="idInput" placeholder="Enter TMDB ID (e.g. 603) or IMDb ID (e.g. tt0133093)" />
+        <button id="openMovie">Open Movie Page</button>
+        <button id="openWatch" class="ghost">Open Watch Page</button>
       </div>
-
-      <div id="controlsCompact">
-        <div class="group">
-          <select id="typeSelect" aria-label="Media type">
-            <option value="movie">Movie</option>
-            <option value="show">Show</option>
-          </select>
-        </div>
-
-        <div class="group">
-          <input id="idInput" type="text" placeholder="TMDB ID" aria-label="TMDB ID" />
-        </div>
-
-        <div class="group seasonGroup">
-          <button class="smallBtn" id="prevSeason" aria-label="Previous Season">‹</button>
-          <select id="seasonSelect" aria-label="Select Season"></select>
-          <button class="smallBtn" id="nextSeason" aria-label="Next Season">›</button>
-        </div>
-
-        <div class="group episodeGroup">
-          <button class="smallBtn" id="prevEpisode" aria-label="Previous Episode">‹</button>
-          <select id="episodeSelect" aria-label="Select Episode"></select>
-          <button class="smallBtn" id="nextEpisode" aria-label="Next Episode">›</button>
-        </div>
-      </div>
-
-      <section id="customEmbedPanel" aria-label="Add custom server">
-        <h3>Add Custom Server</h3>
-        <div class="embedGrid">
-          <input id="serverNameInput" type="text" placeholder="Server name" />
-          <input id="embedBaseInput" type="text" value="https://example.com/play/" placeholder="https://example.com/play/" />
-          <button class="smallBtn" id="addServerBtn" type="button">Add Server</button>
-        </div>
-        <p id="embedHelp">Custom servers append the ID to the end of the base URL. Example: <strong>https://example.com/play/12345</strong></p>
-      </section>
-    </div>
-
-    <button id="closeBtn" aria-label="Close Player">✕</button>
+      <p id="status" class="subtitle"></p>
+    </section>
   </main>
 
-  <script src="../shared/navbar.js" defer></script>
+  <script src="./app.js"></script>
   <script>
-    const params = new URLSearchParams(window.location.search);
-
-    const iframe = document.getElementById('videoPlayer');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    const closeBtn = document.getElementById('closeBtn');
-    const playerContainer = document.getElementById('playerContainer');
-    const navbarContainer = document.getElementById('navbarContainer');
-    const serverBtn = document.getElementById('serverBtn');
-    const serverDropdown = document.getElementById('serverDropdown');
-
-    const typeSelect = document.getElementById('typeSelect');
     const idInput = document.getElementById('idInput');
-    const seasonSelect = document.getElementById('seasonSelect');
-    const episodeSelect = document.getElementById('episodeSelect');
-    const prevSeasonBtn = document.getElementById('prevSeason');
-    const nextSeasonBtn = document.getElementById('nextSeason');
-    const prevEpisodeBtn = document.getElementById('prevEpisode');
-    const nextEpisodeBtn = document.getElementById('nextEpisode');
+    const status = document.getElementById('status');
 
-    const serverNameInput = document.getElementById('serverNameInput');
-    const embedBaseInput = document.getElementById('embedBaseInput');
-    const addServerBtn = document.getElementById('addServerBtn');
+    function getId() { return idInput.value.trim(); }
 
-    const supportedServerKeys = ['viking', 'embedmaster'];
-    const settings = window.bilmTheme?.getSettings?.() || {};
-
-    const servers = [
-      {
-        key: 'viking',
-        name: 'Viking',
-        movieUrl: (id) => `https://vembed.stream/play/${id}`,
-        showUrl: (id, season, episode) => `https://vembed.click/play/${id}_s${season}_e${episode}`
-      },
-      {
-        key: 'embedmaster',
-        name: 'EmbedMaster',
-        movieUrl: (id) => `https://embedmaster.link/movie/${id}`,
-        showUrl: (id, season, episode) => `https://embedmaster.link/tv/${id}/${season}/${episode}`
-      }
-    ];
-
-    let currentServer = supportedServerKeys.includes(settings.defaultServer)
-      ? settings.defaultServer
-      : 'viking';
-
-    let currentSeason = Number(params.get('season')) || 1;
-    let currentEpisode = Number(params.get('episode')) || 1;
-
-    typeSelect.value = (params.get('type') || 'movie').toLowerCase() === 'show' ? 'show' : 'movie';
-    idInput.value = params.get('id') || '';
-
-    function populateNumericSelect(selectEl, max, value, label) {
-      selectEl.innerHTML = '';
-      for (let i = 1; i <= max; i++) {
-        const opt = document.createElement('option');
-        opt.value = String(i);
-        opt.textContent = `${label} ${i}`;
-        if (i === value) opt.selected = true;
-        selectEl.appendChild(opt);
-      }
-    }
-
-    function renderServers() {
-      serverDropdown.innerHTML = '';
-
-      servers.forEach((server) => {
-        const item = document.createElement('div');
-        item.className = `serverDropdownItem ${server.key === currentServer ? 'active' : ''}`;
-        item.setAttribute('role', 'menuitem');
-        item.setAttribute('tabindex', '0');
-        item.textContent = server.name;
-
-        item.addEventListener('click', () => {
-          currentServer = server.key;
-          renderServers();
-          updateIframe();
-          serverDropdown.style.display = 'none';
-          serverBtn.setAttribute('aria-expanded', 'false');
-        });
-
-        item.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            item.click();
-          }
-        });
-
-        serverDropdown.appendChild(item);
-      });
-    }
-
-    function toggleShowControls() {
-      const isShow = typeSelect.value === 'show';
-      document.querySelector('.seasonGroup').style.display = isShow ? 'flex' : 'none';
-      document.querySelector('.episodeGroup').style.display = isShow ? 'flex' : 'none';
-    }
-
-    function updateIframe() {
-      const id = idInput.value.trim();
-      const selectedServer = servers.find((server) => server.key === currentServer);
-      const isShow = typeSelect.value === 'show';
-
-      if (!id || !selectedServer) {
-        iframe.src = '';
+    document.getElementById('openMovie').addEventListener('click', () => {
+      const id = getId();
+      if (!id) {
+        status.textContent = 'Please enter a movie id first.';
         return;
       }
-
-      iframe.src = isShow
-        ? selectedServer.showUrl(id, currentSeason, currentEpisode)
-        : selectedServer.movieUrl(id);
-    }
-
-    seasonSelect.addEventListener('change', (event) => {
-      currentSeason = Number(event.target.value) || 1;
-      updateIframe();
+      window.location.href = `./movie/?id=${encodeURIComponent(id)}`;
     });
 
-    episodeSelect.addEventListener('change', (event) => {
-      currentEpisode = Number(event.target.value) || 1;
-      updateIframe();
-    });
-
-    prevSeasonBtn.addEventListener('click', () => {
-      if (currentSeason > 1) currentSeason -= 1;
-      populateNumericSelect(seasonSelect, 50, currentSeason, 'Season');
-      updateIframe();
-    });
-
-    nextSeasonBtn.addEventListener('click', () => {
-      if (currentSeason < 50) currentSeason += 1;
-      populateNumericSelect(seasonSelect, 50, currentSeason, 'Season');
-      updateIframe();
-    });
-
-    prevEpisodeBtn.addEventListener('click', () => {
-      if (currentEpisode > 1) currentEpisode -= 1;
-      populateNumericSelect(episodeSelect, 100, currentEpisode, 'Episode');
-      updateIframe();
-    });
-
-    nextEpisodeBtn.addEventListener('click', () => {
-      if (currentEpisode < 100) currentEpisode += 1;
-      populateNumericSelect(episodeSelect, 100, currentEpisode, 'Episode');
-      updateIframe();
-    });
-
-    typeSelect.addEventListener('change', () => {
-      toggleShowControls();
-      updateIframe();
-    });
-
-    idInput.addEventListener('input', updateIframe);
-
-    serverBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const isOpen = serverDropdown.style.display === 'flex';
-      serverDropdown.style.display = isOpen ? 'none' : 'flex';
-      serverBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-    });
-
-    document.addEventListener('click', () => {
-      serverDropdown.style.display = 'none';
-      serverBtn.setAttribute('aria-expanded', 'false');
-    });
-
-    addServerBtn.addEventListener('click', () => {
-      const name = serverNameInput.value.trim();
-      const baseUrlInput = embedBaseInput.value.trim();
-      if (!name || !baseUrlInput) return;
-
-      const baseUrl = baseUrlInput.endsWith('/') ? baseUrlInput : `${baseUrlInput}/`;
-      const customKey = `custom-${Date.now()}`;
-
-      servers.push({
-        key: customKey,
-        name,
-        movieUrl: (id) => `${baseUrl}${id}`,
-        showUrl: (id) => `${baseUrl}${id}`
-      });
-
-      currentServer = customKey;
-      renderServers();
-      updateIframe();
-      serverNameInput.value = '';
-    });
-
-    const isMobile = window.matchMedia('(max-width: 768px)').matches
-      || window.matchMedia('(pointer: coarse)').matches
-      || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    fullscreenBtn.addEventListener('click', () => {
-      if (!isMobile) {
-        if (playerContainer.requestFullscreen) playerContainer.requestFullscreen();
-        else if (playerContainer.webkitRequestFullscreen) playerContainer.webkitRequestFullscreen();
-      } else {
-        playerContainer.classList.add('simulated-fullscreen');
+    document.getElementById('openWatch').addEventListener('click', () => {
+      const id = getId();
+      if (!id) {
+        status.textContent = 'Please enter a movie id first.';
+        return;
       }
-      closeBtn.style.display = 'block';
-      navbarContainer.classList.add('hide-navbar');
+      window.location.href = `./movie/watch/viewer.html?id=${encodeURIComponent(id)}`;
     });
-
-    closeBtn.addEventListener('click', () => {
-      if (isMobile) {
-        playerContainer.classList.remove('simulated-fullscreen');
-      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
-        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
-      }
-      closeBtn.style.display = 'none';
-      navbarContainer.classList.remove('hide-navbar');
-    });
-
-    function handleFullscreenExit() {
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        closeBtn.style.display = 'none';
-        navbarContainer.classList.remove('hide-navbar');
-      }
-    }
-
-    document.addEventListener('fullscreenchange', handleFullscreenExit);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenExit);
-
-    populateNumericSelect(seasonSelect, 50, currentSeason, 'Season');
-    populateNumericSelect(episodeSelect, 100, currentEpisode, 'Episode');
-    toggleShowControls();
-    renderServers();
-    updateIframe();
   </script>
 </body>
 </html>
