@@ -48,10 +48,18 @@
       <h3 class="section-title">Top Cast</h3>
       <section class="card"><div id="castLine" class="subtitle"></div></section>
 
-      <h3 class="section-title">More Like This</h3>
-      <section class="more-like-box" id="moreLikeBox" aria-label="More like this movies">
-        <div class="more-grid" id="moreLike"></div>
-        <div class="subtitle" id="moreLikeStatus" aria-live="polite"></div>
+      <section class="more-like-section" aria-live="polite">
+        <div class="more-like-header">
+          <h3 class="section-title">
+            <span aria-hidden="true">🎬</span>
+            <span>More Like This</span>
+          </h3>
+          <a class="view-more-button" href="./index.html">See All</a>
+        </div>
+        <div class="more-like-box" id="moreLikeBox" role="region" aria-label="More like this movies">
+          <div class="more-grid" id="moreLike"></div>
+          <div class="subtitle" id="moreLikeStatus" aria-live="polite"></div>
+        </div>
       </section>
     </section>
   </main>

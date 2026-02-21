@@ -35,6 +35,38 @@ body {
 .title-head { margin: 0; }
 .section-title { margin: 22px 0 10px; font-size: 20px; }
 .trailer iframe { width:100%; aspect-ratio:16/9; border:0; border-radius:14px; }
+.more-like-section {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.more-like-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.more-like-header .section-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view-more-button {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+  border: 1px solid var(--accent-soft);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .more-like-box {
   max-height: 560px;
   overflow-y: auto;
