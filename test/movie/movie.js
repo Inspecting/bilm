@@ -4,9 +4,51 @@ const resolveId = window.TestMovieApp.resolveMovieId;
 const esc = window.TestMovieApp.esc;
 const params = new URLSearchParams(window.location.search);
 
+const FAVORITES_KEY = 'bilm-test-favorites';
+const WATCH_LATER_KEY = 'bilm-test-watch-later';
+
 const idInput = document.getElementById('idInput');
 const idType = document.getElementById('idType');
 const status = document.getElementById('status');
+const favoriteBtn = document.getElementById('favoriteBtn');
+const watchLaterBtn = document.getElementById('watchLaterBtn');
+
+function readList(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeList(key, items) {
+  localStorage.setItem(key, JSON.stringify(items));
+}
+
+function toggleInList(key, item) {
+  const current = readList(key);
+  const index = current.findIndex((entry) => entry.tmdbId === item.tmdbId);
+  if (index >= 0) {
+    current.splice(index, 1);
+    writeList(key, current);
+    return false;
+  }
+  current.unshift(item);
+  writeList(key, current.slice(0, 60));
+  return true;
+}
+
+function updateActionButtons(movieItem) {
+  const favoriteList = readList(FAVORITES_KEY);
+  const watchLaterList = readList(WATCH_LATER_KEY);
+
+  const isFavorite = favoriteList.some((entry) => entry.tmdbId === movieItem.tmdbId);
+  const isWatchLater = watchLaterList.some((entry) => entry.tmdbId === movieItem.tmdbId);
+
+  favoriteBtn.textContent = isFavorite ? 'Remove Favorite' : 'Add to Favorites';
+  watchLaterBtn.textContent = isWatchLater ? 'Remove Watch Later' : 'Add to Watch Later';
+}
 
 async function loadMovie(rawId) {
   try {
@@ -56,7 +98,7 @@ async function loadMovie(rawId) {
     (similar.results || []).slice(0, 12).forEach((movie) => {
       const card = document.createElement('a');
       card.className = 'movie-card';
-      card.href = `./?id=${encodeURIComponent(movie.id)}&type=tmdb`;
+      card.href = `./watch/viewer.html?id=${encodeURIComponent(movie.id)}&type=tmdb&tmdb=${encodeURIComponent(movie.id)}`;
       card.innerHTML = `
         <img src="${movie.poster_path ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` : 'https://via.placeholder.com/342x513?text=No+Image'}" alt="${esc(movie.title)} poster" />
         <div class="meta"><strong>${esc(movie.title)}</strong><div class="subtitle">${esc((movie.release_date || '').slice(0, 4) || 'N/A')}</div></div>
@@ -68,6 +110,28 @@ async function loadMovie(rawId) {
     document.getElementById('watchLink').href = watchUrl;
     document.getElementById('watchBtn').onclick = () => { window.location.href = watchUrl; };
     document.getElementById('tmdbLink').href = `https://www.themoviedb.org/movie/${tmdbId}`;
+
+    const movieItem = {
+      tmdbId,
+      imdbId,
+      title: details.title,
+      year: (details.release_date || '').slice(0, 4) || 'N/A',
+      poster: details.poster_path || ''
+    };
+
+    favoriteBtn.onclick = () => {
+      const added = toggleInList(FAVORITES_KEY, movieItem);
+      status.textContent = added ? `${details.title} added to favorites.` : `${details.title} removed from favorites.`;
+      updateActionButtons(movieItem);
+    };
+
+    watchLaterBtn.onclick = () => {
+      const added = toggleInList(WATCH_LATER_KEY, movieItem);
+      status.textContent = added ? `${details.title} added to watch later.` : `${details.title} removed from watch later.`;
+      updateActionButtons(movieItem);
+    };
+
+    updateActionButtons(movieItem);
 
     status.textContent = `Loaded ${details.title}.`;
     history.replaceState({}, '', `?id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(idType.value)}`);
