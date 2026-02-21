@@ -222,6 +222,7 @@ function createMoreLikeCard(movie) {
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
+    rating: movie.vote_average,
     link: `${withBase('/movies/movie.html')}?id=${movie.id}`
   };
 
@@ -335,7 +336,8 @@ function toggleFavorite() {
     poster: mediaDetails.poster,
     link: mediaDetails.link,
     updatedAt: Date.now(),
-    source: 'TMDB'
+    source: 'TMDB',
+    rating: mediaDetails.rating
   });
   saveList(FAVORITES_KEY, items);
   updateFavoriteButton(true);
@@ -363,7 +365,8 @@ function toggleWatchLater() {
     poster: mediaDetails.poster,
     link: mediaDetails.link,
     updatedAt: Date.now(),
-    source: 'TMDB'
+    source: 'TMDB',
+    rating: mediaDetails.rating
   });
   saveList(WATCH_LATER_KEY, items);
   updateWatchLaterButton(true);
@@ -392,7 +395,8 @@ function updateContinueWatching() {
     poster: mediaDetails.poster,
     link: mediaDetails.link,
     updatedAt: Date.now(),
-    source: 'TMDB'
+    source: 'TMDB',
+    rating: mediaDetails.rating
   };
 
   upsertHistoryItem(CONTINUE_KEY, payload);
@@ -504,7 +508,8 @@ async function loadMovieDetails() {
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${withBase('/movies/movie.html')}?id=${contentId}`
+      link: `${withBase('/movies/movie.html')}?id=${contentId}`,
+      rating: details.vote_average
     };
 
     const favorites = loadList(FAVORITES_KEY);

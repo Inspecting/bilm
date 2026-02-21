@@ -77,7 +77,8 @@ async function loadMore(itemsToLoad = TMDB_PAGE_SIZE) {
           year: movie.release_date?.slice(0, 4) || 'N/A',
           img: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
           link: `${BASE_URL}/movies/movie.html?id=${movie.id}`,
-          source: 'TMDB'
+          source: 'TMDB',
+          rating: movie.vote_average
         },
         className: 'movie-card',
         badgeClassName: 'source-badge-overlay',

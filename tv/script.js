@@ -245,7 +245,8 @@ async function loadShowsForSection(section) {
       year: show.first_air_date?.slice(0, 4) || 'N/A',
       img: poster,
       link: `./movie.html?id=${show.id}`,
-      source: 'TMDB'
+      source: 'TMDB',
+      rating: show.vote_average
     };
 
     const card = createShowCard(showData);
