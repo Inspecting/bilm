@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bilm 💜 - Movie Details</title>
+  <link rel="stylesheet" href="../../shared/theme.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="../../shared/access.js"></script>
+  <script src="../../shared/theme.js"></script>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <main class="container">
+    <header class="header">
+      <h1 class="title" id="movieTitle">Movie Details</h1>
+      <p class="subtitle" id="status">Loading movie details…</p>
+    </header>
+
+    <section id="movieBody" style="display:none;">
+      <div class="grid hero">
+        <img id="poster" class="poster" alt="Movie poster" />
+        <div class="card">
+          <h2 id="titleHead" class="title-head"></h2>
+          <p id="overview" class="subtitle"></p>
+          <div id="pills" class="pills"></div>
+          <div class="actions">
+            <a id="watchLink" class="primary-link">Watch Page</a>
+            <button id="watchLaterBtn" class="icon-button" type="button" title="Add to watch later" aria-label="Add to watch later" aria-pressed="false">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 7v5l3 3"></path>
+              </svg>
+            </button>
+            <button id="favoriteBtn" class="icon-button" type="button" title="Add to favorites" aria-label="Add to favorites" aria-pressed="false">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M12 2.5l2.9 6.05 6.7.97-4.85 4.73 1.15 6.7L12 17.77 6.1 20.95l1.15-6.7L2.4 9.52l6.7-.97L12 2.5z"/>
+              </svg>
+            </button>
+            <a id="tmdbLink" class="ghost-link" target="_blank" rel="noopener">Open on TMDB</a>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="section-title">Trailer</h3>
+      <section class="card trailer" id="trailerBox"></section>
+
+      <h3 class="section-title">Top Cast</h3>
+      <section class="card"><div id="castLine" class="subtitle"></div></section>
+
+      <h3 class="section-title">More Like This</h3>
+      <section class="more-grid" id="moreLike"></section>
+    </section>
+  </main>
+
+  <script src="../../shared/navbar.js" defer></script>
+  <script src="../../shared/media-card.js"></script>
+  <script src="./movie.js"></script>
+</body>
+</html>
