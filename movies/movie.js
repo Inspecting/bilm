@@ -69,7 +69,7 @@ function createMovieCard(movie) {
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
-    link: `./?id=${movie.id}`
+    link: `./movie.html?id=${movie.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -189,7 +189,7 @@ async function loadMovieDetails() {
       year: details.release_date?.slice(0, 4) || 'N/A',
       img: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
       source: 'TMDB',
-      link: `./?id=${details.id}`
+      link: `./movie.html?id=${details.id}`
     };
 
     const syncStates = () => {

@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.addEventListener('click', () => {
           const destination = item.link
             || (item.type === 'tv' && item.id ? `${withBase('/tv/viewer.html')}?id=${encodeURIComponent(item.id)}` : '')
-            || (item.type === 'movie' && item.id ? `${withBase('/movies/viewer.html')}?id=${encodeURIComponent(item.id)}` : '');
+            || (item.type === 'movie' && item.id ? `${withBase('/movies/movie.html')}?id=${encodeURIComponent(item.id)}` : '');
           if (!destination) return;
           window.location.href = destination;
         });
