@@ -3,26 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Watch Movie - Test</title>
+  <title>Bilm 💜 - Test Watch Movie</title>
+  <link rel="stylesheet" href="../../../shared/theme.css" />
   <link rel="stylesheet" href="../../style.css" />
+  <script src="../../../shared/access.js"></script>
+  <script src="../../../shared/theme.js"></script>
 </head>
 <body>
+  <div id="navbarContainer"></div>
   <main class="container">
     <header class="header">
       <h1 class="title">Watch Movie</h1>
-      <p class="subtitle">Watch page only (no “more like this” here by design).</p>
+      <p class="subtitle">Server picker, custom embeds, and direct back link to details.</p>
     </header>
 
     <section class="card">
-      <div class="lookup" style="grid-template-columns: 1fr 1fr auto auto;">
-        <input id="idInput" placeholder="TMDB or IMDb ID" />
-        <select id="server">
-          <option value="viking">Viking</option>
-          <option value="embedmaster">EmbedMaster</option>
+      <div class="lookup" style="grid-template-columns: 120px 1fr 180px auto auto;">
+        <select id="idType">
+          <option value="auto">Auto</option>
+          <option value="tmdb">TMDB</option>
+          <option value="imdb">IMDb</option>
         </select>
+        <input id="idInput" placeholder="TMDB or IMDb ID" />
+        <select id="server"></select>
         <button id="loadBtn">Load Player</button>
         <a id="detailsLink"><button class="ghost" type="button">Back to Movie Page</button></a>
       </div>
+
+      <div class="row" style="margin-top:12px;">
+        <input id="customName" placeholder="Custom server name" />
+        <input id="customTemplate" placeholder="https://example.com/play/{id}" />
+        <button id="addCustomBtn" class="ghost" type="button">Add Custom Embed</button>
+      </div>
+      <div id="customServerList" class="custom-server-list"></div>
+
       <p id="status" class="subtitle"></p>
     </section>
 
@@ -31,39 +45,8 @@
     </section>
   </main>
 
+  <script src="../../../shared/navbar.js" defer></script>
   <script src="../../app.js"></script>
-  <script>
-    const { resolveMovieId } = window.TestMovieApp;
-    const params = new URLSearchParams(window.location.search);
-    const idInput = document.getElementById('idInput');
-    const status = document.getElementById('status');
-    const player = document.getElementById('player');
-
-    function buildUrl(server, tmdbId) {
-      if (server === 'embedmaster') return `https://embedmaster.link/movie/${tmdbId}`;
-      return `https://vembed.stream/play/${tmdbId}`;
-    }
-
-    async function loadPlayer(rawId) {
-      try {
-        status.textContent = 'Resolving ID...';
-        const { tmdbId } = await resolveMovieId(rawId);
-        const server = document.getElementById('server').value;
-        player.src = buildUrl(server, tmdbId);
-        document.getElementById('detailsLink').href = `../?id=${encodeURIComponent(rawId)}`;
-        history.replaceState({}, '', `?id=${encodeURIComponent(rawId)}&tmdb=${tmdbId}`);
-        status.textContent = `Playing with ${server}.`;
-      } catch (err) {
-        status.textContent = err.message || 'Failed to load player.';
-      }
-    }
-
-    document.getElementById('loadBtn').addEventListener('click', () => loadPlayer(idInput.value));
-    const initialId = params.get('id');
-    if (initialId) {
-      idInput.value = initialId;
-      loadPlayer(initialId);
-    }
-  </script>
+  <script src="./watch.js"></script>
 </body>
 </html>

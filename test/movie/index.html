@@ -3,19 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Movie Details - Test</title>
+  <title>Bilm 💜 - Test Movie Details</title>
+  <link rel="stylesheet" href="../../shared/theme.css" />
   <link rel="stylesheet" href="../style.css" />
+  <script src="../../shared/access.js"></script>
+  <script src="../../shared/theme.js"></script>
 </head>
 <body>
+  <div id="navbarContainer"></div>
   <main class="container">
     <header class="header">
       <h1 class="title" id="movieTitle">Movie Details</h1>
-      <p class="subtitle">Details page only: overview, trailer, cast, and more like this.</p>
+      <p class="subtitle">Regular movie page with details, trailer, cast, and related titles.</p>
     </header>
 
     <section class="card">
-      <div class="lookup">
-        <input id="idInput" placeholder="TMDB ID or IMDb ID (tt...)" />
+      <div class="lookup" style="grid-template-columns: 140px 1fr auto auto;">
+        <select id="idType">
+          <option value="auto">Auto detect</option>
+          <option value="tmdb">TMDB</option>
+          <option value="imdb">IMDb</option>
+        </select>
+        <input id="idInput" placeholder="TMDB or IMDb ID" />
         <button id="loadBtn">Load</button>
         <button id="watchBtn">Watch Movie</button>
       </div>
@@ -47,82 +56,8 @@
     </section>
   </main>
 
+  <script src="../../shared/navbar.js" defer></script>
   <script src="../app.js"></script>
-  <script>
-    const { tmdb, resolveMovieId, esc } = window.TestMovieApp;
-    const params = new URLSearchParams(window.location.search);
-    const idInput = document.getElementById('idInput');
-    const status = document.getElementById('status');
-
-    async function loadMovie(rawId) {
-      try {
-        status.textContent = 'Loading movie...';
-        const { tmdbId } = await resolveMovieId(rawId);
-        const [details, videos, credits, similar] = await Promise.all([
-          tmdb(`/movie/${tmdbId}`),
-          tmdb(`/movie/${tmdbId}/videos`),
-          tmdb(`/movie/${tmdbId}/credits`),
-          tmdb(`/movie/${tmdbId}/similar`, { page: 1 })
-        ]);
-
-        document.getElementById('movieBody').style.display = '';
-        document.getElementById('movieTitle').textContent = `${details.title} (${(details.release_date || '').slice(0,4)})`;
-        document.getElementById('titleHead').textContent = details.title;
-        document.getElementById('overview').textContent = details.overview || 'No description available.';
-        document.getElementById('poster').src = details.poster_path
-          ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
-          : 'https://via.placeholder.com/500x750?text=No+Poster';
-
-        const pills = document.getElementById('pills');
-        pills.innerHTML = '';
-        [details.release_date?.slice(0,4), `${Math.round((details.vote_average || 0) * 10) / 10}/10`, `${details.runtime || '?'} min`, ...(details.genres || []).map(g => g.name)]
-          .filter(Boolean)
-          .forEach((v) => {
-            const span = document.createElement('span');
-            span.className = 'pill';
-            span.textContent = v;
-            pills.appendChild(span);
-          });
-
-        const trailer = (videos.results || []).find((v) => v.site === 'YouTube' && v.type === 'Trailer') || videos.results?.[0];
-        document.getElementById('trailerBox').innerHTML = trailer
-          ? `<iframe src="https://www.youtube.com/embed/${esc(trailer.key)}" allowfullscreen title="Trailer"></iframe>`
-          : '<p class="subtitle">No trailer available.</p>';
-
-        const cast = (credits.cast || []).slice(0, 12).map((c) => c.name).join(' • ');
-        document.getElementById('castLine').textContent = cast || 'No cast information available.';
-
-        const moreLike = document.getElementById('moreLike');
-        moreLike.innerHTML = '';
-        (similar.results || []).slice(0, 12).forEach((movie) => {
-          const card = document.createElement('a');
-          card.className = 'movie-card';
-          card.href = `./?id=${encodeURIComponent(movie.id)}`;
-          card.innerHTML = `
-            <img src="${movie.poster_path ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` : 'https://via.placeholder.com/342x513?text=No+Image'}" alt="${esc(movie.title)} poster" />
-            <div class="meta"><strong>${esc(movie.title)}</strong><div class="subtitle">${esc((movie.release_date || '').slice(0,4) || 'N/A')}</div></div>
-          `;
-          moreLike.appendChild(card);
-        });
-
-        const watchUrl = `./watch/viewer.html?id=${encodeURIComponent(rawId)}&tmdb=${tmdbId}`;
-        document.getElementById('watchLink').href = watchUrl;
-        document.getElementById('watchBtn').onclick = () => window.location.href = watchUrl;
-        document.getElementById('tmdbLink').href = `https://www.themoviedb.org/movie/${tmdbId}`;
-
-        status.textContent = `Loaded ${details.title}.`;
-        history.replaceState({}, '', `?id=${encodeURIComponent(rawId)}`);
-      } catch (err) {
-        status.textContent = err.message || 'Could not load movie details.';
-      }
-    }
-
-    document.getElementById('loadBtn').addEventListener('click', () => loadMovie(idInput.value));
-    const initialId = params.get('id');
-    if (initialId) {
-      idInput.value = initialId;
-      loadMovie(initialId);
-    }
-  </script>
+  <script src="./movie.js"></script>
 </body>
 </html>
