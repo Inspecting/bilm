@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bilm 💜 - Movie Details</title>
-  <link rel="stylesheet" href="../../shared/theme.css" />
-  <link rel="stylesheet" href="./style.css" />
-  <script src="../../shared/access.js"></script>
-  <script src="../../shared/theme.js"></script>
+  <link rel="stylesheet" href="../shared/theme.css" />
+  <link rel="stylesheet" href="./movie.css" />
+  <script src="../shared/access.js"></script>
+  <script src="../shared/theme.js"></script>
 </head>
 <body>
   <div id="navbarContainer"></div>
@@ -49,12 +49,15 @@
       <section class="card"><div id="castLine" class="subtitle"></div></section>
 
       <h3 class="section-title">More Like This</h3>
-      <section class="more-grid" id="moreLike"></section>
+      <section class="more-like-box" id="moreLikeBox" aria-label="More like this movies">
+        <div class="more-grid" id="moreLike"></div>
+        <div class="subtitle" id="moreLikeStatus" aria-live="polite"></div>
+      </section>
     </section>
   </main>
 
-  <script src="../../shared/navbar.js" defer></script>
-  <script src="../../shared/media-card.js"></script>
+  <script src="../shared/navbar.js" defer></script>
+  <script src="../shared/media-card.js"></script>
   <script src="./movie.js"></script>
 </body>
 </html>

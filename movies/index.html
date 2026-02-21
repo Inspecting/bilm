@@ -22,10 +22,14 @@
   <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
     
-  <!-- Fonts & Styles -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./style.css" />
-    </head>
+  <script>
+    const routeParams = new URLSearchParams(window.location.search);
+    const movieId = routeParams.get('id');
+    if (movieId) {
+      window.location.replace(`./movie.html?id=${encodeURIComponent(movieId)}`);
+    }
+  </script>
+</head>
 <body>
 
 <!-- Navbar placeholder -->
