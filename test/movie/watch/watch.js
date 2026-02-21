@@ -50,7 +50,7 @@ function renderMoreLike(movies = []) {
   movies.slice(0, 12).forEach((movie) => {
     const card = document.createElement('a');
     card.className = 'movie-card';
-    card.href = `./viewer.html?id=${encodeURIComponent(movie.id)}&type=tmdb&tmdb=${encodeURIComponent(movie.id)}&server=${encodeURIComponent(serverSelect.value)}`;
+    card.href = `../movie.html?id=${encodeURIComponent(movie.id)}&type=tmdb&tmdb=${encodeURIComponent(movie.id)}`;
     card.innerHTML = `
       <img src="${movie.poster_path ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` : 'https://via.placeholder.com/342x513?text=No+Image'}" alt="${app.esc(movie.title)} poster" />
       <div class="meta"><strong>${app.esc(movie.title)}</strong><div class="subtitle">${app.esc((movie.release_date || '').slice(0, 4) || 'N/A')}</div></div>
@@ -78,7 +78,7 @@ async function loadPlayer(rawId) {
     document.getElementById('mediaMeta').textContent = `${(details.release_date || '').slice(0, 4) || 'N/A'} • ${Math.round((details.vote_average || 0) * 10) / 10}/10 • ${details.runtime || '?'} min`;
     document.getElementById('mediaDescription').textContent = `Description: ${details.overview || 'No description available.'}`;
 
-    detailsLink.href = `../?id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(idType.value)}`;
+    detailsLink.href = `../movie.html?id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(idType.value)}`;
     renderMoreLike(similar.results || []);
 
     history.replaceState({}, '', `?id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(idType.value)}&tmdb=${ids.tmdbId}${ids.imdbId ? `&imdb=${encodeURIComponent(ids.imdbId)}` : ''}&server=${encodeURIComponent(server)}`);

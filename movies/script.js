@@ -244,7 +244,7 @@ async function loadMoviesForSection(section) {
       type: 'movie',
       year: movie.release_date?.slice(0, 4) || 'N/A',
       img: poster,
-      link: `./?id=${movie.id}`,
+      link: `${BASE_URL}/movies/movie.html?id=${movie.id}`,
       source: 'TMDB'
     };
 

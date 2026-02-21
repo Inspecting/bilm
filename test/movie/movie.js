@@ -98,7 +98,7 @@ async function loadMovie(rawId) {
     (similar.results || []).slice(0, 12).forEach((movie) => {
       const card = document.createElement('a');
       card.className = 'movie-card';
-      card.href = `./watch/viewer.html?id=${encodeURIComponent(movie.id)}&type=tmdb&tmdb=${encodeURIComponent(movie.id)}`;
+      card.href = `./movie.html?id=${encodeURIComponent(movie.id)}&type=tmdb&tmdb=${encodeURIComponent(movie.id)}`;
       card.innerHTML = `
         <img src="${movie.poster_path ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` : 'https://via.placeholder.com/342x513?text=No+Image'}" alt="${esc(movie.title)} poster" />
         <div class="meta"><strong>${esc(movie.title)}</strong><div class="subtitle">${esc((movie.release_date || '').slice(0, 4) || 'N/A')}</div></div>
