@@ -184,6 +184,7 @@ function createMoreLikeCard(show) {
       ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
+    rating: show.vote_average,
     link: `${withBase('/tv/movie.html')}?id=${show.id}`
   };
 
@@ -299,7 +300,8 @@ function toggleFavorite() {
     updatedAt: Date.now(),
     season: currentSeason,
     episode: currentEpisode,
-    source: 'TMDB'
+    source: 'TMDB',
+    rating: mediaDetails.rating
   });
   saveList(FAVORITES_KEY, items);
   updateFavoriteButton(true);
@@ -329,7 +331,8 @@ function toggleWatchLater() {
     updatedAt: Date.now(),
     season: currentSeason,
     episode: currentEpisode,
-    source: 'TMDB'
+    source: 'TMDB',
+    rating: mediaDetails.rating
   });
   saveList(WATCH_LATER_KEY, items);
   updateWatchLaterButton(true);
@@ -360,7 +363,8 @@ function updateContinueWatching() {
     updatedAt: Date.now(),
     season: currentSeason,
     episode: currentEpisode,
-    source: 'TMDB'
+    source: 'TMDB',
+    rating: mediaDetails.rating
   };
 
   upsertHistoryItem(CONTINUE_KEY, payload);

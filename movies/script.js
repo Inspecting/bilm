@@ -245,7 +245,8 @@ async function loadMoviesForSection(section) {
       year: movie.release_date?.slice(0, 4) || 'N/A',
       img: poster,
       link: `${BASE_URL}/movies/movie.html?id=${movie.id}`,
-      source: 'TMDB'
+      source: 'TMDB',
+      rating: movie.vote_average
     };
 
     const card = createMovieCard(movieData);

@@ -112,11 +112,19 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.movie-card .source-badge-overlay {
+.movie-card .card-badge-stack {
   position: absolute;
   top: 8px;
   left: 8px;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  pointer-events: none;
+}
+
+.movie-card .source-badge-overlay {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -126,6 +134,21 @@ body {
   padding: 2px 6px;
   border-radius: 999px;
   pointer-events: none;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.movie-card .rating-badge-overlay {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-3) 88%, #111827 12%);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 999px;
+  width: fit-content;
 }
 
 .movie-card .card-meta {
@@ -145,7 +168,7 @@ body {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .movie-card .card-subtitle {
