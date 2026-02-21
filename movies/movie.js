@@ -218,17 +218,11 @@ async function loadMovieDetails() {
 
 loadMovieDetails();
 
-function shouldLoadMoreLikeFromViewport() {
-  if (!moreLikeBox || similarLoading || similarEnded) return false;
-  const rect = moreLikeBox.getBoundingClientRect();
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  return rect.bottom - viewportHeight < 220;
-}
-
 if (moreLikeBox) {
-  window.addEventListener('scroll', () => {
-    if (shouldLoadMoreLikeFromViewport()) {
+  moreLikeBox.addEventListener('scroll', () => {
+    if (similarLoading || similarEnded) return;
+    if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 180) {
       loadMoreLikeMovies();
     }
-  }, { passive: true });
+  });
 }
