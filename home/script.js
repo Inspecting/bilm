@@ -189,8 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const fallbackId = item?.tmdbId || item?.id;
     const mediaType = item?.type === 'tv' ? 'tv' : 'movie';
     const detailsBase = mediaType === 'tv'
-      ? withBase('/tv/movie.html')
-      : withBase('/movies/movie.html');
+      ? withBase('/tv/show.html')
+      : withBase('/movies/show.html');
 
     if (!rawLink && fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
     if (!rawLink) return '';

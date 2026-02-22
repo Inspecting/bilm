@@ -26,7 +26,7 @@
     const routeParams = new URLSearchParams(window.location.search);
     const movieId = routeParams.get('id');
     if (movieId) {
-      window.location.replace(`./movie.html?id=${encodeURIComponent(movieId)}`);
+      window.location.replace(`./show.html?id=${encodeURIComponent(movieId)}`);
     }
   </script>
 </head>

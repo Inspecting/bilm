@@ -223,7 +223,7 @@ function createMoreLikeCard(movie) {
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
     rating: movie.vote_average,
-    link: `${withBase('/movies/movie.html')}?id=${movie.id}`
+    link: `${withBase('/movies/show.html')}?id=${movie.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -508,7 +508,7 @@ async function loadMovieDetails() {
       poster,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${withBase('/movies/movie.html')}?id=${contentId}`,
+      link: `${withBase('/movies/show.html')}?id=${contentId}`,
       rating: details.vote_average
     };
 
