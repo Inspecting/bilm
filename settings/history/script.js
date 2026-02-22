@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const destination = item.type === 'movie'
             ? resolveMovieDetailsLink(item)
             : item.link
-              || (item.type === 'tv' && item.id ? `${withBase('/tv/movie.html')}?id=${encodeURIComponent(item.id)}` : '');
+              || (item.type === 'tv' && item.id ? `${withBase('/tv/show.html')}?id=${encodeURIComponent(item.id)}` : '');
           if (!destination) return;
           window.location.href = destination;
         });

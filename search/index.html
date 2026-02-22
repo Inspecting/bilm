@@ -393,7 +393,7 @@
       const unresolved = nextEntries.filter(item => !item.tmdbId).slice(0, limit);
       await Promise.all(unresolved.map(async (item) => {
         item.tmdbId = await resolveTvTmdbId(item);
-        item.link = item.tmdbId ? `${BASE_URL}/tv/movie.html?id=${item.tmdbId}` : '';
+        item.link = item.tmdbId ? `${BASE_URL}/tv/show.html?id=${item.tmdbId}` : '';
       }));
       return nextEntries;
     }
@@ -480,7 +480,7 @@
               year: item.first_air_date?.slice(0, 4) || 'N/A',
               img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
               tmdbId: item.id,
-              link: `${BASE_URL}/tv/movie.html?id=${item.id}`,
+              link: `${BASE_URL}/tv/show.html?id=${item.id}`,
               source: 'TMDB',
               rating: item.vote_average,
               popularity: item.popularity || 0,

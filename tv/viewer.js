@@ -185,7 +185,7 @@ function createMoreLikeCard(show) {
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
     rating: show.vote_average,
-    link: `${withBase('/tv/movie.html')}?id=${show.id}`
+    link: `${withBase('/tv/show.html')}?id=${show.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -946,7 +946,7 @@ async function fetchTMDBData() {
       rating: details.vote_average,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${withBase('/tv/movie.html')}?id=${tmdbId}`
+      link: `${withBase('/tv/show.html')}?id=${tmdbId}`
     };
 
     const favorites = loadList(FAVORITES_KEY);
