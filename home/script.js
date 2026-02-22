@@ -191,7 +191,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailsBase = mediaType === 'tv'
       ? withBase('/tv/show.html')
       : withBase('/movies/show.html');
-      : withBase('/movies/movie.html');
 
     if (!rawLink && fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
     if (!rawLink) return '';
