@@ -138,6 +138,7 @@
     <div class="actions">
       <button id="skipLoading" class="action-btn" type="button">Skip loading</button>
       <button id="toggleLoading" class="action-btn" type="button">Loading: On</button>
+      <button id="toggleLoading" class="action-btn" type="button">Disable loading: Off</button>
     </div>
   </div>
 
@@ -171,6 +172,14 @@
 
     function updateToggleLabel() {
       toggleButton.textContent = `Loading: ${isLoadingEnabled() ? 'On' : 'Off'}`;
+    const loadingPrefKey = 'bilmDisableLoading';
+
+    function isLoadingDisabled() {
+      return localStorage.getItem(loadingPrefKey) === 'true';
+    }
+
+    function updateToggleLabel() {
+      toggleButton.textContent = `Disable loading: ${isLoadingDisabled() ? 'On' : 'Off'}`;
     }
 
     function getBasePath() {
@@ -273,6 +282,10 @@
       setLoadingEnabled(nextState);
       updateToggleLabel();
       if (!nextState) redirectToHome();
+      const nextState = !isLoadingDisabled();
+      localStorage.setItem(loadingPrefKey, String(nextState));
+      updateToggleLabel();
+      if (nextState) redirectToHome();
     });
 
     skipButton.addEventListener('click', redirectToHome);
@@ -280,6 +293,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       updateToggleLabel();
       if (!isLoadingEnabled()) {
+      if (isLoadingDisabled()) {
         redirectToHome();
         return;
       }
