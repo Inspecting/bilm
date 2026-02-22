@@ -70,7 +70,7 @@ function createShowCard(show) {
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
     rating: show.vote_average,
-    link: `./movie.html?id=${show.id}`
+    link: `./show.html?id=${show.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -194,7 +194,7 @@ async function loadShowDetails() {
       poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
       source: 'TMDB',
       rating: details.vote_average,
-      link: `./movie.html?id=${details.id}`,
+      link: `./show.html?id=${details.id}`,
       updatedAt: Date.now()
     };
 
