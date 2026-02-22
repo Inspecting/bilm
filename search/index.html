@@ -20,7 +20,6 @@
 
   <!-- Navbar CSS -->
   <link rel="stylesheet" href="../shared/theme.css" />
-  <link rel="stylesheet" href="../shared/media-card.css" />
 
   <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
@@ -99,6 +98,56 @@
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 16px;
     }
+    .card {
+      width: 100%;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background-color: var(--surface-2);
+      box-shadow: var(--shadow-md);
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+      border: 1px solid transparent;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .card:hover {
+      transform: translateY(-4px) scale(1.04);
+      box-shadow: 0 0 18px var(--accent-glow);
+      border-color: var(--accent-soft);
+    }
+    .card img {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+      border-radius: 12px 12px 0 0;
+    }
+    .card-meta {
+      padding: 8px 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 58px;
+      justify-content: center;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--text-primary);
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-subtle);
+      line-height: 1.2;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
     .sort-bar {
       display: flex;
       justify-content: center;
@@ -119,6 +168,41 @@
       background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
       border-color: var(--accent);
       box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .card-badge-stack {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: calc(100% - 16px);
+      pointer-events: none;
+    }
+    .source-badge-overlay {
+      align-self: flex-start;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-inverse);
+      background: color-mix(in srgb, var(--accent) 75%, #1f2937 25%);
+      padding: 2px 6px;
+      border-radius: 999px;
+      pointer-events: none;
+      max-width: none;
+      white-space: nowrap;
+    }
+    .rating-badge-overlay {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--surface-3) 88%, #111827 12%);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 999px;
+      width: fit-content;
     }
     .no-results {
       text-align: center;

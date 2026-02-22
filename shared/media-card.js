@@ -53,10 +53,7 @@
     }
 
     const card = document.createElement('div');
-    card.classList.add('bilm-media-card');
-    if (className) {
-      className.split(/\s+/).filter(Boolean).forEach(name => card.classList.add(name));
-    }
+    card.className = className;
 
     const img = document.createElement('img');
     if (imageClassName) img.className = imageClassName;
