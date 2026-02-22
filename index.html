@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bilm 💜</title>
 
-  <!-- PWA + iOS fullscreen support -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#000000" />
 
-  <!-- PWA Manifest and Icon -->
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon.png" />
 
@@ -20,10 +18,7 @@
 
   <script src="shared/access.js"></script>
   <script src="shared/theme.js"></script>
-    
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
-  
-    
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -50,28 +45,28 @@
       transition: opacity 1s ease;
       opacity: 1;
       z-index: 2;
+      padding: 16px;
+      max-width: 460px;
     }
 
     #introOverlay {
       font-weight: 600;
       font-size: clamp(2.5rem, 8vw, 6rem);
-      background: linear-gradient(90deg, var(--accent), #c084fc, var(--accent));
-      background-size: 300% 100%;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      animation: pulse 1.2s infinite ease-in-out, gradientSlide 4s infinite linear;
+      color: #fff;
+      animation: pulse 1.2s infinite ease-in-out;
       display: inline-flex;
       align-items: center;
       gap: 12px;
     }
 
     .heart-icon {
-      width: 1.2em;
-      height: 1.2em;
+      font-size: 0.65em;
+      line-height: 1;
+      color: var(--accent);
+      text-shadow: 0 0 10px var(--accent-glow);
+      animation: pulse 1.5s infinite ease-in-out;
       user-select: none;
       pointer-events: none;
-      filter: drop-shadow(0 0 6px var(--accent-glow));
-      animation: pulse 1.5s infinite ease-in-out;
     }
 
     #subtext {
@@ -83,6 +78,29 @@
       transition: opacity 1s ease;
     }
 
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: min(300px, 90vw);
+    }
+
+    .action-btn {
+      width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background-color .2s ease, border-color .2s ease;
+    }
+
+    .action-btn:hover { background: rgba(255, 255, 255, 0.14); }
+
     .fade-out {
       opacity: 0 !important;
     }
@@ -93,11 +111,6 @@
     }
 
     @keyframes fadeIn { to { opacity: 1; } }
-
-    @keyframes gradientSlide {
-      0% { background-position: 0% 50%; }
-      100% { background-position: 100% 50%; }
-    }
 
     #bgCanvas {
       position: absolute;
@@ -117,21 +130,52 @@
 
   <div id="fadeWrapper">
     <div id="introOverlay">
-      <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" />
-      Bilm
-      <img class="heart-icon" src="https://icons.iconarchive.com/icons/microsoft/fluentui-emoji-3d/128/Purple-Heart-3d-icon.png" alt="Heart" />
+      <span class="heart-icon" aria-hidden="true">♥</span>
+      <span>Bilm</span>
+      <span class="heart-icon" aria-hidden="true">♥</span>
     </div>
     <div id="subtext">Loading your experience...</div>
+    <div class="actions">
+      <button id="skipLoading" class="action-btn" type="button">Skip loading</button>
+      <button id="toggleLoading" class="action-btn" type="button">Disable loading: Off</button>
+    </div>
   </div>
 
   <script>
     const canvas = document.getElementById('bgCanvas');
     const ctx = canvas.getContext('2d');
+    const skipButton = document.getElementById('skipLoading');
+    const toggleButton = document.getElementById('toggleLoading');
+
     let dots = [];
     const dotCount = 80;
     let animationId = null;
     let particlesEnabled = true;
     let motionEnabled = true;
+    const loadingPrefKey = 'bilmDisableLoading';
+
+    function isLoadingDisabled() {
+      return localStorage.getItem(loadingPrefKey) === 'true';
+    }
+
+    function updateToggleLabel() {
+      toggleButton.textContent = `Disable loading: ${isLoadingDisabled() ? 'On' : 'Off'}`;
+    }
+
+    function getBasePath() {
+      const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      if (!parts.length || appRoots.has(parts[0])) return '';
+      return `/${parts[0]}`;
+    }
+
+    function getHomeUrl() {
+      return `${getBasePath()}/home/`;
+    }
+
+    function redirectToHome() {
+      window.location.href = getHomeUrl();
+    }
 
     function resize() {
       canvas.width = window.innerWidth;
@@ -156,7 +200,7 @@
       ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#c084fc';
       ctx.shadowBlur = 8;
 
-      for (let dot of dots) {
+      for (const dot of dots) {
         ctx.beginPath();
         ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(193, 132, 252, 0.9)';
@@ -207,8 +251,29 @@
       }
     }
 
+    function fadeOutAndRedirect() {
+      document.getElementById('fadeWrapper').classList.add('fade-out');
+      document.getElementById('bgCanvas').classList.add('fade-out');
+      setTimeout(redirectToHome, 350);
+    }
+
+    toggleButton.addEventListener('click', () => {
+      const nextState = !isLoadingDisabled();
+      localStorage.setItem(loadingPrefKey, String(nextState));
+      updateToggleLabel();
+      if (nextState) redirectToHome();
+    });
+
+    skipButton.addEventListener('click', redirectToHome);
+
     document.addEventListener('DOMContentLoaded', () => {
+      updateToggleLabel();
+      if (isLoadingDisabled()) {
+        redirectToHome();
+        return;
+      }
       applyParticleSettings(window.bilmTheme?.getSettings?.());
+      setTimeout(fadeOutAndRedirect, 3000);
     });
 
     window.addEventListener('resize', () => {
@@ -221,28 +286,9 @@
     window.addEventListener('bilm:theme-changed', (event) => {
       applyParticleSettings(event.detail);
     });
-
-    function fadeOutAndRedirect() {
-      document.getElementById('fadeWrapper').classList.add('fade-out');
-      document.getElementById('bgCanvas').classList.add('fade-out');
-
-      const detectBasePath = () => {
-        const parts = window.location.pathname.split('/').filter(Boolean);
-        const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
-        if (!parts.length || appRoots.has(parts[0])) return '';
-        return `/${parts[0]}`;
-      };
-
-      setTimeout(() => {
-        window.location.href = `${detectBasePath()}/home/`;
-      }, 1000);
-    }
-
-    setTimeout(fadeOutAndRedirect, 3000);
   </script>
 
   <script>
-    // Register service worker for PWA support
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js')
         .then(() => console.log('Service Worker registered'))
