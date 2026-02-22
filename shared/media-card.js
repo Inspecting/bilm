@@ -23,7 +23,7 @@
 
   function buildRating(item) {
     const raw = item?.rating;
-    const numeric = Number(raw);
+    const numeric = Number.parseFloat(String(raw ?? '').replace(/[^\d.]/g, ''));
     if (Number.isFinite(numeric) && numeric > 0) {
       return `${numeric.toFixed(1)}/10`;
     }

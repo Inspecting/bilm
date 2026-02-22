@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const FAVORITES_KEY = 'bilm-favorites';
   const WATCH_LATER_KEY = 'bilm-watch-later';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const storage = window.bilmTheme?.storage || {
     getJSON: (key, fallback = []) => {
       try {
@@ -124,6 +125,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     return null;
+  }
+
+  async function fetchJSON(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  function needsRatingHydration(item) {
+    return normalizeMediaRating(item) === null && Number(item?.tmdbId || item?.id) > 0;
+  }
+
+  async function hydrateRatingsForKey(key, expectedType) {
+    const items = loadList(key);
+    const targets = items.filter((item) => {
+      if (expectedType && item?.type && item.type !== expectedType) return false;
+      return needsRatingHydration(item);
+    });
+    if (!targets.length) return;
+
+    const updates = await Promise.all(targets.map(async (item) => {
+      const tmdbId = Number(item?.tmdbId || item?.id);
+      const mediaType = item?.type === 'tv' ? 'tv' : expectedType || 'movie';
+      if (!tmdbId) return null;
+      const details = await fetchJSON(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
+      const rating = Number(details?.vote_average);
+      const source = details?.id ? 'TMDB' : item?.source;
+      if (!Number.isFinite(rating) || rating <= 0) return source ? { key: item.key, source } : null;
+      return { key: item.key, rating, vote_average: rating, source };
+    }));
+
+    const mapped = new Map(updates.filter(Boolean).map((entry) => [entry.key, entry]));
+    if (!mapped.size) return;
+
+    const next = items.map((item) => {
+      const update = mapped.get(item.key);
+      if (!update) return item;
+      return {
+        ...item,
+        ...(update.rating ? { rating: update.rating, vote_average: update.rating, tmdbRating: update.rating } : {}),
+        ...(update.source ? { source: update.source } : {})
+      };
+    });
+
+    saveList(key, next);
+  }
+
+  async function hydrateStoredRatings() {
+    await Promise.all([
+      hydrateRatingsForKey(CONTINUE_KEY),
+      hydrateRatingsForKey(FAVORITES_KEY),
+      hydrateRatingsForKey(WATCH_LATER_KEY)
+    ]);
   }
 
   function normalizeMediaLink(item) {
@@ -439,6 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   renderSections();
+  hydrateStoredRatings().then(renderSections);
   updateEditUI('continue');
   updateEditUI('favorites');
   updateEditUI('watchLater');
