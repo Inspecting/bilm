@@ -1,4 +1,4 @@
-const cacheName = 'bilm-cache-v2';
+const cacheName = 'bilm-cache-v3';
 const scopeUrl = new URL(self.registration.scope);
 const filesToCache = ['.', 'index.html', 'manifest.json', 'icon.png'].map((path) => new URL(path, scopeUrl).toString());
 
