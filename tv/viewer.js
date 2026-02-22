@@ -280,7 +280,7 @@ function toggleFavorite() {
   if (!mediaDetails) return;
   const items = loadList(FAVORITES_KEY);
   const key = `tv-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key);
+  const existingIndex = items.findIndex(item => item.key === key || item.tmdbId === mediaDetails.id || item.id === mediaDetails.id);
   if (existingIndex >= 0) {
     items.splice(existingIndex, 1);
     saveList(FAVORITES_KEY, items);
@@ -291,6 +291,7 @@ function toggleFavorite() {
   items.unshift({
     key,
     id: mediaDetails.id,
+    tmdbId: mediaDetails.id,
     type: 'tv',
     title: mediaDetails.title,
     date: mediaDetails.firstAirDate,
@@ -311,7 +312,7 @@ function toggleWatchLater() {
   if (!mediaDetails) return;
   const items = loadList(WATCH_LATER_KEY);
   const key = `tv-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key);
+  const existingIndex = items.findIndex(item => item.key === key || item.tmdbId === mediaDetails.id || item.id === mediaDetails.id);
   if (existingIndex >= 0) {
     items.splice(existingIndex, 1);
     saveList(WATCH_LATER_KEY, items);
@@ -322,6 +323,7 @@ function toggleWatchLater() {
   items.unshift({
     key,
     id: mediaDetails.id,
+    tmdbId: mediaDetails.id,
     type: 'tv',
     title: mediaDetails.title,
     date: mediaDetails.firstAirDate,
@@ -936,19 +938,21 @@ async function fetchTMDBData() {
 
     mediaDetails = {
       id: tmdbId,
+      tmdbId,
       title: showTitle,
       firstAirDate,
       year,
       poster,
+      rating: details.vote_average,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
       link: `${withBase('/tv/movie.html')}?id=${tmdbId}`
     };
 
     const favorites = loadList(FAVORITES_KEY);
-    updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}`));
+    updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}` || item.tmdbId === tmdbId || item.id === tmdbId));
     const watchLater = loadList(WATCH_LATER_KEY);
-    updateWatchLaterButton(watchLater.some(item => item.key === `tv-${tmdbId}`));
+    updateWatchLaterButton(watchLater.some(item => item.key === `tv-${tmdbId}` || item.tmdbId === tmdbId || item.id === tmdbId));
     mediaTitle.textContent = showTitle;
     mediaMeta.textContent = displayDate;
     document.title = `Bilm 💜 - ${showTitle}`;
