@@ -30,8 +30,7 @@
     return 'N/A';
   }
 
-  function createMediaCard(mediaData) {
-    const config = mediaData && mediaData.item ? mediaData : { item: mediaData };
+  function createMediaCard(config) {
     const {
       item,
       className = 'card',
