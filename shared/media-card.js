@@ -21,6 +21,15 @@
     return `${year} • ${type}`;
   }
 
+  function buildRating(item) {
+    const raw = item?.rating;
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return `${numeric.toFixed(1)}/10`;
+    }
+    return 'N/A';
+  }
+
   function createMediaCard(config) {
     const {
       item,
@@ -60,6 +69,15 @@
     sourceBadge.className = badgeClassName;
     sourceBadge.textContent = item.source || 'Unknown';
 
+    const ratingBadge = document.createElement('span');
+    ratingBadge.className = 'rating-badge-overlay';
+    ratingBadge.textContent = buildRating(item);
+
+    const badgeStack = document.createElement('div');
+    badgeStack.className = 'card-badge-stack';
+    badgeStack.appendChild(sourceBadge);
+    badgeStack.appendChild(ratingBadge);
+
     const cardMeta = document.createElement('div');
     cardMeta.className = metaClassName;
 
@@ -75,7 +93,7 @@
     cardMeta.appendChild(subtitle);
 
     card.appendChild(img);
-    card.appendChild(sourceBadge);
+    card.appendChild(badgeStack);
     card.appendChild(cardMeta);
 
     if (item.link || onClick) {

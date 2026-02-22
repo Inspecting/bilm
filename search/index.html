@@ -432,6 +432,7 @@
               tmdbId: item.id,
               link: `${BASE_URL}/movies/movie.html?id=${item.id}`,
               source: 'TMDB',
+              rating: item.vote_average,
               popularity: item.popularity || 0,
               type: 'movie'
             });
@@ -466,6 +467,7 @@
               tmdbId: item.id,
               link: `${BASE_URL}/tv/movie.html?id=${item.id}`,
               source: 'TMDB',
+              rating: item.vote_average,
               popularity: item.popularity || 0,
               type: 'tv'
             });

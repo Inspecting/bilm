@@ -69,6 +69,7 @@ function createMovieCard(movie) {
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
+    rating: movie.vote_average,
     link: `./movie.html?id=${movie.id}`
   };
 
@@ -189,6 +190,7 @@ async function loadMovieDetails() {
       year: details.release_date?.slice(0, 4) || 'N/A',
       img: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
       source: 'TMDB',
+      rating: details.vote_average,
       link: `./movie.html?id=${details.id}`
     };
 

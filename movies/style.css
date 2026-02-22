@@ -91,11 +91,19 @@ main {
 }
 
 
-.source-badge-overlay {
+.card-badge-stack {
   position: absolute;
   top: 8px;
   left: 8px;
   z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  pointer-events: none;
+}
+
+.source-badge-overlay {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -105,10 +113,21 @@ main {
   padding: 2px 6px;
   border-radius: 999px;
   pointer-events: none;
-  max-width: calc(100% - 16px);
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.rating-badge-overlay {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-3) 88%, #111827 12%);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 999px;
+  width: fit-content;
 }
 .card-meta {
   padding: 8px 8px 10px;
