@@ -169,7 +169,18 @@
       border-color: var(--accent);
       box-shadow: 0 0 12px var(--accent-glow);
     }
-    .source-badge {
+    .card-badge-stack {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: calc(100% - 16px);
+      pointer-events: none;
+    }
+    .source-badge-overlay {
       position: absolute;
       top: 8px;
       left: 8px;
@@ -188,6 +199,16 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .rating-badge-overlay {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--surface-3) 88%, #111827 12%);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 999px;
+      width: fit-content;
     }
     .no-results {
       text-align: center;
@@ -554,7 +575,7 @@
         const card = window.BilmMediaCard.createMediaCard({
           item,
           className: 'card',
-          badgeClassName: 'source-badge',
+          badgeClassName: 'source-badge-overlay',
           dataset: { source: item.source }
         });
 

@@ -172,7 +172,7 @@ async function loadShowDetails() {
 
     document.getElementById('castLine').textContent = (credits.cast || []).slice(0, 10).map((person) => person.name).join(' • ') || 'No cast information.';
 
-    document.getElementById('watchLink').href = `./viewer.html?id=${details.id}`;
+    document.getElementById('watchLink').href = `./watch/viewer.html?id=${details.id}`;
     document.getElementById('tmdbLink').href = `https://www.themoviedb.org/tv/${details.id}`;
 
     if (moreLikeEl) {
