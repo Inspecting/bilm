@@ -48,6 +48,7 @@ function withBase(path) {
     customBackground: '#0b0b14',
     motion: true,
     particles: true,
+    loading: true,
     defaultServer: 'vidsrc',
     searchHistory: true,
     continueWatching: true,

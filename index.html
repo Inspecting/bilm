@@ -137,6 +137,7 @@
     <div id="subtext">Loading your experience...</div>
     <div class="actions">
       <button id="skipLoading" class="action-btn" type="button">Skip loading</button>
+      <button id="toggleLoading" class="action-btn" type="button">Loading: On</button>
       <button id="toggleLoading" class="action-btn" type="button">Disable loading: Off</button>
     </div>
   </div>
@@ -152,6 +153,25 @@
     let animationId = null;
     let particlesEnabled = true;
     let motionEnabled = true;
+    function isLoadingEnabled() {
+      const settings = window.bilmTheme?.getSettings?.();
+      if (settings && Object.prototype.hasOwnProperty.call(settings, 'loading')) {
+        return settings.loading !== false;
+      }
+      return localStorage.getItem('bilmDisableLoading') !== 'true';
+    }
+
+    function setLoadingEnabled(enabled) {
+      const current = window.bilmTheme?.getSettings?.() || {};
+      if (window.bilmTheme?.setSettings) {
+        window.bilmTheme.setSettings({ ...current, loading: enabled });
+      } else {
+        localStorage.setItem('bilmDisableLoading', String(!enabled));
+      }
+    }
+
+    function updateToggleLabel() {
+      toggleButton.textContent = `Loading: ${isLoadingEnabled() ? 'On' : 'Off'}`;
     const loadingPrefKey = 'bilmDisableLoading';
 
     function isLoadingDisabled() {
@@ -258,6 +278,10 @@
     }
 
     toggleButton.addEventListener('click', () => {
+      const nextState = !isLoadingEnabled();
+      setLoadingEnabled(nextState);
+      updateToggleLabel();
+      if (!nextState) redirectToHome();
       const nextState = !isLoadingDisabled();
       localStorage.setItem(loadingPrefKey, String(nextState));
       updateToggleLabel();
@@ -268,6 +292,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       updateToggleLabel();
+      if (!isLoadingEnabled()) {
       if (isLoadingDisabled()) {
         redirectToHome();
         return;

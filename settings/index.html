@@ -423,6 +423,17 @@
           <span></span>
         </label>
       </div>
+
+      <div class="control-row">
+        <div>
+          <label>Loading</label>
+          <small>Show the loading page before opening Home.</small>
+        </div>
+        <label class="toggle">
+          <input id="loadingToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
     </section>
 
 
@@ -610,6 +621,7 @@
   const customBackgroundPicker = document.getElementById('customBackgroundPicker');
   const motionToggle = document.getElementById('motionToggle');
   const particleToggle = document.getElementById('particleToggle');
+  const loadingToggle = document.getElementById('loadingToggle');
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
@@ -813,6 +825,7 @@
     }
     motionToggle.checked = settings.motion !== false;
     particleToggle.checked = settings.particles !== false;
+    loadingToggle.checked = settings.loading !== false;
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'embedmaster';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'embedmaster';
@@ -992,6 +1005,10 @@
 
   particleToggle.addEventListener('change', (event) => {
     applySettings({ particles: event.target.checked });
+  });
+
+  loadingToggle.addEventListener('change', (event) => {
+    applySettings({ loading: event.target.checked });
   });
 
   incognitoToggle.addEventListener('change', (event) => {
