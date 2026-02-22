@@ -199,7 +199,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const resolved = new URL(rawLink, window.location.origin);
       const movieId = resolved.searchParams.get('id') || fallbackId;
       const internalRelativeRoute = /\/?movie\.html$/i.test(resolved.pathname)
-        || /\/home\/(?:movie\.html|viewer\.html)$/i.test(resolved.pathname);
+        || /\/home\/(?:movie\.html|viewer\.html|show\.html)$/i.test(resolved.pathname)
+        || /\/show\.html$/i.test(resolved.pathname);
       const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
         || /\/movies\/?$/i.test(resolved.pathname)
         || /\/tv\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
