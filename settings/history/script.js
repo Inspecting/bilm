@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function resolveMovieDetailsLink(item) {
-    const detailsBase = withBase('/movies/movie.html');
+    const detailsBase = withBase('/movies/show.html');
     const fallbackId = item?.id || item?.tmdbId;
     const rawLink = String(item?.link || '');
 
