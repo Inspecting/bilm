@@ -1,0 +1,107 @@
+.bilm-media-card,
+.movie-card,
+.card,
+.more-like-card {
+  flex: 0 0 auto;
+  width: 140px;
+  min-height: 248px;
+  background-color: var(--surface-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  border: 1px solid transparent;
+  position: relative;
+}
+
+.bilm-media-card:hover,
+.movie-card:hover,
+.card:hover,
+.more-like-card:hover {
+  transform: translateY(-4px) scale(1.04);
+  box-shadow: 0 0 18px var(--accent-glow);
+  border-color: var(--accent-soft);
+}
+
+.bilm-media-card > img,
+.movie-card img,
+.card img,
+.more-like-card img {
+  width: 100%;
+  aspect-ratio: 140 / 188;
+  object-fit: cover;
+  border-radius: 12px 12px 0 0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.card-badge-stack {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  pointer-events: none;
+}
+
+.source-badge-overlay {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-inverse);
+  background: color-mix(in srgb, var(--accent) 75%, #1f2937 25%);
+  padding: 2px 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rating-badge-overlay {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-3) 88%, #111827 12%);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.card-meta {
+  padding: 6px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 30px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card-subtitle {
+  font-size: 11px;
+  color: var(--text-subtle);
+  line-height: 1.2;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
