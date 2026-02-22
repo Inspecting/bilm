@@ -60,10 +60,14 @@
     }
 
     .heart-icon {
-      font-size: 0.65em;
+      font-size: 0.9em;
       line-height: 1;
-      color: var(--accent);
-      text-shadow: 0 0 10px var(--accent-glow);
+      display: inline-block;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 65%, #ffffff 35%), color-mix(in srgb, var(--accent) 55%, #ec4899 45%) 55%, color-mix(in srgb, var(--accent) 55%, #6366f1 45%));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
       animation: pulse 1.5s infinite ease-in-out;
       user-select: none;
       pointer-events: none;
@@ -130,15 +134,14 @@
 
   <div id="fadeWrapper">
     <div id="introOverlay">
-      <span class="heart-icon" aria-hidden="true">♥</span>
+      <span class="heart-icon" aria-hidden="true">❤</span>
       <span>Bilm</span>
-      <span class="heart-icon" aria-hidden="true">♥</span>
+      <span class="heart-icon" aria-hidden="true">❤</span>
     </div>
     <div id="subtext">Loading your experience...</div>
     <div class="actions">
       <button id="skipLoading" class="action-btn" type="button">Skip loading</button>
       <button id="toggleLoading" class="action-btn" type="button">Loading: On</button>
-      <button id="toggleLoading" class="action-btn" type="button">Disable loading: Off</button>
     </div>
   </div>
 
@@ -172,14 +175,6 @@
 
     function updateToggleLabel() {
       toggleButton.textContent = `Loading: ${isLoadingEnabled() ? 'On' : 'Off'}`;
-    const loadingPrefKey = 'bilmDisableLoading';
-
-    function isLoadingDisabled() {
-      return localStorage.getItem(loadingPrefKey) === 'true';
-    }
-
-    function updateToggleLabel() {
-      toggleButton.textContent = `Disable loading: ${isLoadingDisabled() ? 'On' : 'Off'}`;
     }
 
     function getBasePath() {
@@ -282,10 +277,6 @@
       setLoadingEnabled(nextState);
       updateToggleLabel();
       if (!nextState) redirectToHome();
-      const nextState = !isLoadingDisabled();
-      localStorage.setItem(loadingPrefKey, String(nextState));
-      updateToggleLabel();
-      if (nextState) redirectToHome();
     });
 
     skipButton.addEventListener('click', redirectToHome);
@@ -293,7 +284,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       updateToggleLabel();
       if (!isLoadingEnabled()) {
-      if (isLoadingDisabled()) {
         redirectToHome();
         return;
       }
