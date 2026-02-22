@@ -130,12 +130,11 @@ main {
   width: fit-content;
 }
 .card-meta {
-  padding: 8px 8px 10px;
+  padding: 6px 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 58px;
-  justify-content: center;
+  gap: 0;
+  min-height: 46px;
 }
 
 .card-title {
@@ -150,7 +149,7 @@ main {
 }
 
 .card-subtitle {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-subtle);
   line-height: 1.2;
   overflow: hidden;

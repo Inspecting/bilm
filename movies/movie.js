@@ -39,7 +39,7 @@ function writeList(key, items) {
 
 function toggleInList(key, item) {
   const current = readList(key);
-  const index = current.findIndex((entry) => entry.tmdbId === item.tmdbId);
+  const index = current.findIndex((entry) => entry.key === item.key || entry.tmdbId === item.tmdbId || entry.id === item.id);
   if (index >= 0) {
     current.splice(index, 1);
     writeList(key, current);
@@ -184,19 +184,23 @@ async function loadMovieDetails() {
     }
 
     const movieItem = {
+      key: `movie-${details.id}`,
+      id: details.id,
       tmdbId: details.id,
       title: details.title,
       type: 'movie',
+      date: details.release_date || '',
       year: details.release_date?.slice(0, 4) || 'N/A',
-      img: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
+      poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
       source: 'TMDB',
       rating: details.vote_average,
-      link: `./movie.html?id=${details.id}`
+      link: `./movie.html?id=${details.id}`,
+      updatedAt: Date.now()
     };
 
     const syncStates = () => {
-      const isFavorite = readList(FAVORITES_KEY).some((entry) => entry.tmdbId === movieItem.tmdbId);
-      const isWatchLater = readList(WATCH_LATER_KEY).some((entry) => entry.tmdbId === movieItem.tmdbId);
+      const isFavorite = readList(FAVORITES_KEY).some((entry) => entry.key === movieItem.key || entry.tmdbId === movieItem.tmdbId || entry.id === movieItem.id);
+      const isWatchLater = readList(WATCH_LATER_KEY).some((entry) => entry.key === movieItem.key || entry.tmdbId === movieItem.tmdbId || entry.id === movieItem.id);
       setIconState(favoriteBtn, isFavorite, { active: 'Remove from favorites', inactive: 'Add to favorites' });
       setIconState(watchLaterBtn, isWatchLater, { active: 'Remove from watch later', inactive: 'Add to watch later' });
     };
