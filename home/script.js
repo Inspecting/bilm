@@ -106,22 +106,57 @@ document.addEventListener('DOMContentLoaded', () => {
     return parsed.getFullYear();
   }
 
-  function normalizeMovieLink(item) {
+  function normalizeMediaRating(item) {
+    const candidates = [
+      item?.rating,
+      item?.vote_average,
+      item?.voteAverage,
+      item?.score,
+      item?.tmdbRating
+    ];
+
+    for (const candidate of candidates) {
+      if (candidate === undefined || candidate === null) continue;
+      const numeric = Number.parseFloat(String(candidate).replace(/[^\d.]/g, ''));
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+
+    return null;
+  }
+
+  function normalizeMediaLink(item) {
     const rawLink = String(item?.link || '');
     const fallbackId = item?.tmdbId || item?.id;
-    const detailsBase = withBase('/movies/movie.html');
+    const mediaType = item?.type === 'tv' ? 'tv' : 'movie';
+    const detailsBase = mediaType === 'tv'
+      ? withBase('/tv/movie.html')
+      : withBase('/movies/movie.html');
 
-    if (item?.type !== 'movie') return rawLink;
     if (!rawLink && fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
     if (!rawLink) return '';
 
     try {
       const resolved = new URL(rawLink, window.location.origin);
       const movieId = resolved.searchParams.get('id') || fallbackId;
+      const internalRelativeRoute = /\/?movie\.html$/i.test(resolved.pathname)
+        || /\/home\/(?:movie\.html|viewer\.html)$/i.test(resolved.pathname);
       const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
-        || /\/movies\/?$/i.test(resolved.pathname);
-      if (pointsToOldMovieRoute && movieId) {
+        || /\/movies\/?$/i.test(resolved.pathname)
+        || /\/tv\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
+        || /\/tv\/?$/i.test(resolved.pathname);
+      if ((pointsToOldMovieRoute || internalRelativeRoute) && movieId) {
         return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+      }
+
+      if (resolved.origin === window.location.origin && movieId) {
+        if (mediaType === 'movie' && /\/(home\/)?tv\//i.test(resolved.pathname)) {
+          return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+        }
+        if (mediaType === 'tv' && /\/(home\/)?movies?\//i.test(resolved.pathname)) {
+          return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+        }
       }
     } catch {
       if (fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
@@ -233,8 +268,8 @@ document.addEventListener('DOMContentLoaded', () => {
           type: item.type,
           img: item.poster,
           source: item.source || 'TMDB',
-          rating: item.rating,
-          link: normalizeMovieLink(item)
+          rating: normalizeMediaRating(item),
+          link: normalizeMediaLink(item)
         },
         className: 'movie-card',
         badgeClassName: 'source-badge-overlay',
@@ -280,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
           renderSections();
           return;
         }
-        const destination = normalizeMovieLink(item);
+        const destination = normalizeMediaLink(item);
         if (destination) {
           window.location.href = destination;
         }
