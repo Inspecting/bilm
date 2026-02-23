@@ -1,5 +1,8 @@
 (function initBilmMediaCard(global) {
   const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
+  const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
+  const certificationCache = new Map();
+  const certificationPending = new Map();
 
   function hasUsableImage(imageUrl) {
     if (!imageUrl) return false;
@@ -18,8 +21,77 @@
     if (explicitSubtitle) return explicitSubtitle;
     const year = item?.year || 'N/A';
     const type = getTypeLabel(item?.type);
-    const certification = String(item?.certification || '').trim();
+    const certification = formatCertification(item?.certification);
     return [year, type, certification].filter(Boolean).join(' • ');
+  }
+
+  function formatCertification(value) {
+    const normalized = String(value || '').trim();
+    return normalized || 'N/A';
+  }
+
+  function getCertificationKey(item) {
+    if (item?.source !== 'TMDB') return '';
+    const mediaType = item?.type === 'movie' || item?.type === 'tv' ? item.type : '';
+    const tmdbId = item?.tmdbId || item?.id;
+    if (!mediaType || !tmdbId) return '';
+    return `${mediaType}:${tmdbId}`;
+  }
+
+  function pickMovieCertification(items) {
+    const list = Array.isArray(items) ? items : [];
+    const us = list.find((entry) => entry?.iso_3166_1 === 'US');
+    const fromUs = us?.release_dates?.find((entry) => String(entry?.certification || '').trim())?.certification;
+    if (String(fromUs || '').trim()) return String(fromUs).trim();
+
+    for (const entry of list) {
+      const value = entry?.release_dates?.find((row) => String(row?.certification || '').trim())?.certification;
+      if (String(value || '').trim()) return String(value).trim();
+    }
+    return '';
+  }
+
+  function pickTvCertification(items) {
+    const list = Array.isArray(items) ? items : [];
+    const us = list.find((entry) => entry?.iso_3166_1 === 'US');
+    const fromUs = String(us?.rating || '').trim();
+    if (fromUs) return fromUs;
+
+    for (const entry of list) {
+      const value = String(entry?.rating || '').trim();
+      if (value) return value;
+    }
+    return '';
+  }
+
+  async function fetchTmdbCertification(item) {
+    const key = getCertificationKey(item);
+    if (!key) return '';
+    if (certificationCache.has(key)) return certificationCache.get(key);
+    if (certificationPending.has(key)) return certificationPending.get(key);
+
+    const request = (async () => {
+      try {
+        const [mediaType, mediaId] = key.split(':');
+        const endpoint = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
+        const response = await fetch(`https://api.themoviedb.org/3/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}?api_key=${TMDB_API_KEY}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const certification = mediaType === 'movie'
+          ? pickMovieCertification(data?.results)
+          : pickTvCertification(data?.results);
+        certificationCache.set(key, certification);
+        return certification;
+      } catch {
+        certificationCache.set(key, '');
+        return '';
+      } finally {
+        certificationPending.delete(key);
+      }
+    })();
+
+    certificationPending.set(key, request);
+    return request;
   }
 
   function buildRating(item) {
@@ -89,6 +161,13 @@
     const subtitle = document.createElement('p');
     subtitle.className = subtitleClassName;
     subtitle.textContent = buildSubtitle(item, subtitleText);
+
+    if (!subtitleText && !String(item?.certification || '').trim() && getCertificationKey(item)) {
+      fetchTmdbCertification(item).then((certification) => {
+        item.certification = certification;
+        subtitle.textContent = buildSubtitle(item);
+      });
+    }
 
     cardMeta.appendChild(title);
     cardMeta.appendChild(subtitle);
