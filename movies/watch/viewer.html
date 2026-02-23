@@ -39,6 +39,8 @@
           allow="fullscreen; encrypted-media"
           playsinline
           scrolling="no"
+          sandbox="allow-scripts allow-same-origin allow-presentation allow-forms allow-pointer-lock"
+          referrerpolicy="no-referrer"
         ></iframe>
         <div id="clickShield"></div>
       </div>
@@ -98,8 +100,8 @@
 
 <script src="../../shared/navbar.js" defer></script>
 <script src="../../shared/media-card.js"></script>
+<script src="../../shared/embed-sandbox.js"></script>
 <script src="./viewer.js"></script>
-<script src="../../shared/adblock/adblock.js"></script>
 
 </body>
 </html>
