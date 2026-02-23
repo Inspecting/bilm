@@ -229,24 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return rawLink;
   }
 
-  function resolveTmdbId(item) {
-    const directId = Number(item?.tmdbId || item?.id);
-    if (Number.isFinite(directId) && directId > 0) return directId;
-
-    const rawLink = String(item?.link || '');
-    if (!rawLink) return null;
-
-    try {
-      const resolved = new URL(rawLink, window.location.origin);
-      const fromQuery = Number(resolved.searchParams.get('id'));
-      if (Number.isFinite(fromQuery) && fromQuery > 0) return fromQuery;
-    } catch {
-      return null;
-    }
-
-    return null;
-  }
-
   const sectionState = {
     continue: {
       editing: false,
@@ -343,14 +325,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     items.forEach(item => {
       const state = sectionState[section];
-      const tmdbId = resolveTmdbId(item);
       const card = window.BilmMediaCard.createMediaCard({
         item: {
           title: item.title,
           year: item.year || toYear(item.date) || 'N/A',
           type: item.type,
-          tmdbId,
-          id: tmdbId,
           img: item.poster,
           source: item.source || 'TMDB',
           rating: normalizeMediaRating(item),
