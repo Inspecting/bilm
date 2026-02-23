@@ -117,6 +117,15 @@ async function fetchJSON(url) {
   }
 }
 
+function pickShowCertification(items) {
+  const list = Array.isArray(items) ? items : [];
+  const us = list.find((entry) => entry?.iso_3166_1 === 'US' && String(entry?.rating || '').trim());
+  if (us) return String(us.rating).trim();
+
+  const fallback = list.find((entry) => String(entry?.rating || '').trim());
+  return fallback ? String(fallback.rating).trim() : '';
+}
+
 function startContinueWatchingTimer() {
   if (!continueWatchingEnabled || continueWatchingTimer || continueWatchingReady) return;
   continueWatchingTimer = setTimeout(() => {
@@ -906,8 +915,12 @@ async function fetchTMDBData() {
 
   try {
     // First get external IDs (like imdb_id)
-    const externalData = await fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`) || {};
-    imdbId = externalData.imdb_id || null;
+    const [externalData, contentRatings] = await Promise.all([
+      fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`),
+      fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/content_ratings?api_key=${TMDB_API_KEY}`)
+    ]);
+    imdbId = externalData?.imdb_id || null;
+    const certification = pickShowCertification(contentRatings?.results);
 
     // Get season info
     const details = await fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
@@ -946,7 +959,8 @@ async function fetchTMDBData() {
       rating: details.vote_average,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${withBase('/tv/show.html')}?id=${tmdbId}`
+      link: `${withBase('/tv/show.html')}?id=${tmdbId}`,
+      certification
     };
 
     const favorites = loadList(FAVORITES_KEY);

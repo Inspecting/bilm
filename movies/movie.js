@@ -59,6 +59,20 @@ function setIconState(button, isActive, labels) {
   button.setAttribute('aria-label', text);
 }
 
+function pickCertification(items, key = 'certification') {
+  const list = Array.isArray(items) ? items : [];
+  const us = list.find((entry) => entry?.iso_3166_1 === 'US');
+  const fromUs = us?.release_dates?.find((entry) => String(entry?.[key] || '').trim())?.[key];
+  if (String(fromUs || '').trim()) return String(fromUs).trim();
+
+  for (const entry of list) {
+    const value = entry?.release_dates?.find((row) => String(row?.[key] || '').trim())?.[key];
+    if (String(value || '').trim()) return String(value).trim();
+  }
+
+  return '';
+}
+
 function createMovieCard(movie) {
   const cardItem = {
     tmdbId: movie.id,
@@ -137,10 +151,11 @@ async function loadMovieDetails() {
   }
 
   try {
-    const [details, videos, credits] = await Promise.all([
+    const [details, videos, credits, releaseDates] = await Promise.all([
       fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`),
       fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/videos?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`)
+      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`),
+      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/release_dates?api_key=${TMDB_API_KEY}`)
     ]);
 
     document.getElementById('movieBody').style.display = '';
@@ -151,11 +166,14 @@ async function loadMovieDetails() {
       ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
       : 'https://via.placeholder.com/500x750?text=No+Poster';
 
+    const certification = pickCertification(releaseDates?.results);
+
     const pills = document.getElementById('pills');
     pills.innerHTML = '';
     [
       details.release_date?.slice(0, 4),
       `${Math.round((details.vote_average || 0) * 10) / 10}/10`,
+      certification,
       `${details.runtime || '?'} min`,
       ...(details.genres || []).map((genre) => genre.name)
     ].filter(Boolean).forEach((value) => {
@@ -194,6 +212,7 @@ async function loadMovieDetails() {
       poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
       source: 'TMDB',
       rating: details.vote_average,
+      certification,
       link: `./show.html?id=${details.id}`,
       updatedAt: Date.now()
     };
