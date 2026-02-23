@@ -13,7 +13,7 @@
 
   function getTypeLabel(type) {
     if (type === 'movie') return 'Movie';
-    if (type === 'tv') return 'TV Show';
+    if (type === 'tv') return 'TV';
     return 'Unknown';
   }
 
