@@ -98,8 +98,9 @@
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 16px;
     }
-    .card {
+    .movie-card {
       width: 100%;
+      height: 248px;
       cursor: pointer;
       border-radius: var(--radius-md);
       overflow: hidden;
@@ -111,23 +112,24 @@
       flex-direction: column;
       position: relative;
     }
-    .card:hover {
+    .movie-card:hover {
       transform: translateY(-4px) scale(1.04);
       box-shadow: 0 0 18px var(--accent-glow);
       border-color: var(--accent-soft);
     }
-    .card img {
-      width: 100%;
-      aspect-ratio: 2 / 3;
+    .movie-card img {
+      width: 140px;
+      height: 188px;
       object-fit: cover;
       border-radius: 12px 12px 0 0;
+      background: rgba(255, 255, 255, 0.05);
     }
     .card-meta {
-      padding: 8px 8px 10px;
+      padding: 6px 8px 8px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      min-height: 58px;
+      gap: 2px;
+      min-height: 30px;
       justify-content: center;
     }
     .card-title {
@@ -141,7 +143,7 @@
       -webkit-line-clamp: 2;
     }
     .card-subtitle {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-subtle);
       line-height: 1.2;
       overflow: hidden;
@@ -568,7 +570,7 @@
       items.forEach(item => {
         const card = window.BilmMediaCard.createMediaCard({
           item,
-          className: 'card',
+          className: 'movie-card',
           badgeClassName: 'source-badge-overlay',
           dataset: { source: item.source }
         });
