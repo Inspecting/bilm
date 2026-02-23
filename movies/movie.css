@@ -159,11 +159,11 @@ body {
 }
 
 .movie-card .card-meta {
-  padding: 8px 8px 10px;
+  padding: 6px 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 58px;
+  gap: 2px;
+  min-height: 30px;
   justify-content: center;
 }
 
@@ -181,9 +181,10 @@ body {
 
 .movie-card .card-subtitle {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-subtle);
   line-height: 1.2;
+  -webkit-line-clamp: 1;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
