@@ -1,15 +1,7 @@
 (function () {
-  const SANDBOX_TOKENS = [
-    'allow-scripts',
-    'allow-same-origin',
-    'allow-presentation',
-    'allow-forms',
-    'allow-pointer-lock'
-  ];
-
-  function applySandboxAttributes(iframe) {
+  function applyEmbedAttributes(iframe) {
     if (!iframe) return;
-    iframe.setAttribute('sandbox', SANDBOX_TOKENS.join(' '));
+    iframe.removeAttribute('sandbox');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
     iframe.setAttribute('allow', 'fullscreen; encrypted-media; autoplay');
     iframe.setAttribute('allowfullscreen', '');
@@ -28,12 +20,13 @@
 
   function setSandboxedIframeSrc(iframe, url) {
     if (!iframe) return;
-    applySandboxAttributes(iframe);
+    applyEmbedAttributes(iframe);
     iframe.src = normalizeEmbedUrl(url) || 'about:blank';
   }
 
   window.BilmEmbedSandbox = {
-    applySandboxAttributes,
+    applySandboxAttributes: applyEmbedAttributes,
+    applyEmbedAttributes,
     setSandboxedIframeSrc
   };
 })();
