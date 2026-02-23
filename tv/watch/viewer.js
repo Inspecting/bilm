@@ -670,10 +670,20 @@ function buildReloadableUrl(url) {
 
 function refreshIframe(url) {
   const token = ++iframeRefreshToken;
-  iframe.src = 'about:blank';
+  if (window.BilmEmbedSandbox?.setSandboxedIframeSrc) {
+    window.BilmEmbedSandbox.setSandboxedIframeSrc(iframe, 'about:blank');
+  } else {
+    iframe.src = 'about:blank';
+  }
+
   window.setTimeout(() => {
     if (token !== iframeRefreshToken) return;
-    iframe.src = buildReloadableUrl(url);
+    const reloadUrl = buildReloadableUrl(url);
+    if (window.BilmEmbedSandbox?.setSandboxedIframeSrc) {
+      window.BilmEmbedSandbox.setSandboxedIframeSrc(iframe, reloadUrl);
+    } else {
+      iframe.src = reloadUrl;
+    }
   }, 60);
 }
 
@@ -684,7 +694,11 @@ function updateIframe() {
   const idToUse = imdbId || tmdbId;
   if (!idToUse) {
     console.warn('No valid ID for embed URL.');
-    iframe.src = '';
+    if (window.BilmEmbedSandbox?.setSandboxedIframeSrc) {
+      window.BilmEmbedSandbox.setSandboxedIframeSrc(iframe, '');
+    } else {
+      iframe.src = '';
+    }
     return;
   }
 
