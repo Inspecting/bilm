@@ -97,6 +97,20 @@ async function fetchJSON(url) {
   }
 }
 
+function pickMovieCertification(items) {
+  const list = Array.isArray(items) ? items : [];
+  const us = list.find((entry) => entry?.iso_3166_1 === 'US');
+  const fromUs = us?.release_dates?.find((entry) => String(entry?.certification || '').trim())?.certification;
+  if (String(fromUs || '').trim()) return String(fromUs).trim();
+
+  for (const entry of list) {
+    const value = entry?.release_dates?.find((row) => String(row?.certification || '').trim())?.certification;
+    if (String(value || '').trim()) return String(value).trim();
+  }
+
+  return '';
+}
+
 function startContinueWatchingTimer() {
   if (!continueWatchingEnabled || continueWatchingTimer || continueWatchingReady) return;
   continueWatchingTimer = setTimeout(() => {
@@ -480,15 +494,18 @@ async function loadMovieDetails() {
   }
 
   try {
-    const [response, externalResponse] = await Promise.all([
+    const [response, externalResponse, releaseDatesResponse] = await Promise.all([
       fetch(`https://api.themoviedb.org/3/movie/${contentId}?api_key=${TMDB_API_KEY}`),
-      fetch(`https://api.themoviedb.org/3/movie/${contentId}/external_ids?api_key=${TMDB_API_KEY}`)
+      fetch(`https://api.themoviedb.org/3/movie/${contentId}/external_ids?api_key=${TMDB_API_KEY}`),
+      fetch(`https://api.themoviedb.org/3/movie/${contentId}/release_dates?api_key=${TMDB_API_KEY}`)
     ]);
     if (!response.ok) {
       throw new Error('Failed to load movie details');
     }
     const details = await response.json();
     const external = externalResponse.ok ? await externalResponse.json() : {};
+    const releaseDates = releaseDatesResponse.ok ? await releaseDatesResponse.json() : {};
+    const certification = pickMovieCertification(releaseDates?.results);
     imdbId = external.imdb_id || null;
     const title = details.title || details.original_title || 'Unknown title';
     const releaseDate = details.release_date || '';
@@ -509,7 +526,8 @@ async function loadMovieDetails() {
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
       link: `${withBase('/movies/show.html')}?id=${contentId}`,
-      rating: details.vote_average
+      rating: details.vote_average,
+      certification
     };
 
     const favorites = loadList(FAVORITES_KEY);

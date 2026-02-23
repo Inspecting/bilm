@@ -18,7 +18,8 @@
     if (explicitSubtitle) return explicitSubtitle;
     const year = item?.year || 'N/A';
     const type = getTypeLabel(item?.type);
-    return `${year} • ${type}`;
+    const certification = String(item?.certification || '').trim();
+    return [year, type, certification].filter(Boolean).join(' • ');
   }
 
   function buildRating(item) {

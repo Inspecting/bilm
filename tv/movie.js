@@ -59,6 +59,15 @@ function setIconState(button, isActive, labels) {
   button.setAttribute('aria-label', text);
 }
 
+function pickCertification(items) {
+  const list = Array.isArray(items) ? items : [];
+  const us = list.find((entry) => entry?.iso_3166_1 === 'US' && String(entry?.rating || '').trim());
+  if (us) return String(us.rating).trim();
+
+  const fallback = list.find((entry) => String(entry?.rating || '').trim());
+  return fallback ? String(fallback.rating).trim() : '';
+}
+
 function createShowCard(show) {
   const cardItem = {
     tmdbId: show.id,
@@ -137,10 +146,11 @@ async function loadShowDetails() {
   }
 
   try {
-    const [details, videos, credits] = await Promise.all([
+    const [details, videos, credits, contentRatings] = await Promise.all([
       fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`),
       fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/videos?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/credits?api_key=${TMDB_API_KEY}`)
+      fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/credits?api_key=${TMDB_API_KEY}`),
+      fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/content_ratings?api_key=${TMDB_API_KEY}`)
     ]);
 
     document.getElementById('movieBody').style.display = '';
@@ -151,11 +161,14 @@ async function loadShowDetails() {
       ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
       : 'https://via.placeholder.com/500x750?text=No+Poster';
 
+    const certification = pickCertification(contentRatings?.results);
+
     const pills = document.getElementById('pills');
     pills.innerHTML = '';
     [
       details.first_air_date?.slice(0, 4),
       `${Math.round((details.vote_average || 0) * 10) / 10}/10`,
+      certification,
       `${details.number_of_seasons || '?'} season${details.number_of_seasons === 1 ? '' : 's'}`,
       ...(details.genres || []).map((genre) => genre.name)
     ].filter(Boolean).forEach((value) => {
@@ -194,6 +207,7 @@ async function loadShowDetails() {
       poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image',
       source: 'TMDB',
       rating: details.vote_average,
+      certification,
       link: `./show.html?id=${details.id}`,
       updatedAt: Date.now()
     };

@@ -333,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
           img: item.poster,
           source: item.source || 'TMDB',
           rating: normalizeMediaRating(item),
+          certification: item.certification,
           link: normalizeMediaLink(item)
         },
         className: 'movie-card',
