@@ -1,10 +1,10 @@
-# fly.toml app configuration file generated for bilm on 2026-02-23T15:21:40Z
+# fly.toml app configuration file generated for bilm on 2026-02-23T19:44:37Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
 app = 'bilm'
-primary_region = 'ams'
+primary_region = 'dfw'
 
 [build]
 
