@@ -127,6 +127,72 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
+  function parseStoredMediaIdentity(item) {
+    const typeFromItem = item?.type === 'tv' ? 'tv' : item?.type === 'movie' ? 'movie' : '';
+    const idFromItem = Number(item?.tmdbId || item?.id);
+    if (typeFromItem && idFromItem > 0) {
+      return { mediaType: typeFromItem, tmdbId: idFromItem };
+    }
+
+    const rawLink = String(item?.link || '');
+    if (!rawLink) {
+      return {
+        mediaType: typeFromItem || 'movie',
+        tmdbId: idFromItem > 0 ? idFromItem : 0
+      };
+    }
+
+    try {
+      const resolved = new URL(rawLink, window.location.origin);
+      const linkId = Number(resolved.searchParams.get('id') || item?.tmdbId || item?.id);
+      const inferredType = /\/tv\//i.test(resolved.pathname)
+        ? 'tv'
+        : /\/movies?\//i.test(resolved.pathname)
+          ? 'movie'
+          : (typeFromItem || 'movie');
+      return {
+        mediaType: inferredType,
+        tmdbId: Number.isFinite(linkId) && linkId > 0 ? linkId : 0
+      };
+    } catch {
+      return {
+        mediaType: typeFromItem || 'movie',
+        tmdbId: idFromItem > 0 ? idFromItem : 0
+      };
+    }
+  }
+
+  function normalizeCertification(value) {
+    const normalized = String(value || '').trim();
+    return normalized;
+  }
+
+  function pickMovieCertification(items) {
+    const list = Array.isArray(items) ? items : [];
+    const us = list.find((entry) => entry?.iso_3166_1 === 'US');
+    const fromUs = us?.release_dates?.find((entry) => String(entry?.certification || '').trim())?.certification;
+    if (String(fromUs || '').trim()) return String(fromUs).trim();
+
+    for (const entry of list) {
+      const value = entry?.release_dates?.find((row) => String(row?.certification || '').trim())?.certification;
+      if (String(value || '').trim()) return String(value).trim();
+    }
+    return '';
+  }
+
+  function pickTvCertification(items) {
+    const list = Array.isArray(items) ? items : [];
+    const us = list.find((entry) => entry?.iso_3166_1 === 'US');
+    const fromUs = String(us?.rating || '').trim();
+    if (fromUs) return fromUs;
+
+    for (const entry of list) {
+      const value = String(entry?.rating || '').trim();
+      if (value) return value;
+    }
+    return '';
+  }
+
   async function fetchJSON(url) {
     try {
       const response = await fetch(url);
@@ -138,26 +204,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function needsRatingHydration(item) {
-    return normalizeMediaRating(item) === null && Number(item?.tmdbId || item?.id) > 0;
+    const identity = parseStoredMediaIdentity(item);
+    return normalizeMediaRating(item) === null && identity.tmdbId > 0;
+  }
+
+  function needsCertificationHydration(item) {
+    const identity = parseStoredMediaIdentity(item);
+    return !normalizeCertification(item?.certification) && identity.tmdbId > 0;
   }
 
   async function hydrateRatingsForKey(key, expectedType) {
     const items = loadList(key);
     const targets = items.filter((item) => {
       if (expectedType && item?.type && item.type !== expectedType) return false;
-      return needsRatingHydration(item);
+      return needsRatingHydration(item) || needsCertificationHydration(item) || !item?.type || !Number(item?.tmdbId || item?.id);
     });
     if (!targets.length) return;
 
     const updates = await Promise.all(targets.map(async (item) => {
-      const tmdbId = Number(item?.tmdbId || item?.id);
-      const mediaType = item?.type === 'tv' ? 'tv' : expectedType || 'movie';
+      const identity = parseStoredMediaIdentity(item);
+      const tmdbId = identity.tmdbId;
+      const mediaType = identity.mediaType || expectedType || 'movie';
       if (!tmdbId) return null;
       const details = await fetchJSON(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
       const rating = Number(details?.vote_average);
       const source = details?.id ? 'TMDB' : item?.source;
-      if (!Number.isFinite(rating) || rating <= 0) return source ? { key: item.key, source } : null;
-      return { key: item.key, rating, vote_average: rating, source };
+      const endpoint = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
+      const ratingsData = await fetchJSON(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}/${endpoint}?api_key=${TMDB_API_KEY}`);
+      const certification = mediaType === 'movie'
+        ? pickMovieCertification(ratingsData?.results)
+        : pickTvCertification(ratingsData?.results);
+
+      if (!Number.isFinite(rating) || rating <= 0) {
+        return {
+          key: item.key,
+          source,
+          type: mediaType,
+          tmdbId,
+          ...(certification ? { certification } : {})
+        };
+      }
+      return { key: item.key, rating, vote_average: rating, source, type: mediaType, tmdbId, ...(certification ? { certification } : {}) };
     }));
 
     const mapped = new Map(updates.filter(Boolean).map((entry) => [entry.key, entry]));
@@ -169,7 +256,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return {
         ...item,
         ...(update.rating ? { rating: update.rating, vote_average: update.rating, tmdbRating: update.rating } : {}),
-        ...(update.source ? { source: update.source } : {})
+        ...(update.source ? { source: update.source } : {}),
+        ...(update.type ? { type: update.type } : {}),
+        ...(update.tmdbId ? { tmdbId: update.tmdbId, id: update.tmdbId } : {}),
+        ...(update.certification ? { certification: update.certification } : {})
       };
     });
 
@@ -324,12 +414,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     items.forEach(item => {
+      const identity = parseStoredMediaIdentity(item);
       const state = sectionState[section];
       const card = window.BilmMediaCard.createMediaCard({
         item: {
           title: item.title,
           year: item.year || toYear(item.date) || 'N/A',
-          type: item.type,
+          type: item.type || identity.mediaType,
+          tmdbId: Number(item?.tmdbId || identity.tmdbId || 0) || undefined,
+          id: Number(item?.id || identity.tmdbId || 0) || undefined,
           img: item.poster,
           source: item.source || 'TMDB',
           rating: normalizeMediaRating(item),
