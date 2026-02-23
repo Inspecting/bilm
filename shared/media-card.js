@@ -27,7 +27,7 @@
 
   function formatCertification(value) {
     const normalized = String(value || '').trim();
-    return `Rating: ${normalized || 'N/A'}`;
+    return normalized || 'N/A';
   }
 
   function getCertificationKey(item) {
