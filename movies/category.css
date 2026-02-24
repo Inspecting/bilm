@@ -6,7 +6,7 @@
 
 html, body {
   height: 100%;
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: var(--bg-main);
   color: var(--text-primary);
 }
@@ -49,14 +49,15 @@ main {
 
 .category-grid {
   display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, 140px);
+  justify-content: center;
 }
 
 .movie-card {
-  width: 100%;
-  max-width: 180px;
-  justify-self: center;
+  flex: 0 0 auto;
+  width: 140px;
+  height: 248px;
   background-color: var(--surface-2);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
@@ -77,8 +78,8 @@ main {
 }
 
 .movie-card img {
-  width: 100%;
-  aspect-ratio: 140 / 180;
+  width: 140px;
+  height: 188px;
   object-fit: cover;
   border-radius: 12px 12px 0 0;
   background: rgba(255, 255, 255, 0.05);
@@ -129,7 +130,6 @@ main {
   flex-direction: column;
   gap: 2px;
   min-height: 30px;
-  justify-content: center;
 }
 
 .card-title {
