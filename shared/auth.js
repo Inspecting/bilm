@@ -22,17 +22,43 @@
   let lastCloudSnapshotEvent = null;
   const cloudSubscribers = new Set();
 
-  const CLOUD_IMPORT_ONCE_KEY = 'bilm-cloud-import-once';
+  const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
+  let lastAppliedCloudSignature = '';
+
+  function isSyncEnabled() {
+    return localStorage.getItem(SYNC_ENABLED_KEY) !== '0';
+  }
+
+  function snapshotSignature(snapshot) {
+    try {
+      return JSON.stringify(snapshot || null);
+    } catch {
+      return '';
+    }
+  }
 
   function applyRemoteSnapshot(snapshot) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
     try {
+      const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
+      localStorage.clear();
+      sessionStorage.clear();
+
       Object.entries(snapshot.localStorage || {}).forEach(([key, value]) => {
         localStorage.setItem(key, value);
       });
       Object.entries(snapshot.sessionStorage || {}).forEach(([key, value]) => {
         sessionStorage.setItem(key, value);
       });
+
+      document.cookie.split(';').forEach((cookie) => {
+        const eqPos = cookie.indexOf('=');
+        const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
+        if (name) {
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+        }
+      });
+
       String(snapshot.cookies || '')
         .split(';')
         .map((entry) => entry.trim())
@@ -40,15 +66,13 @@
         .forEach((cookieEntry) => {
           document.cookie = `${cookieEntry};path=/`;
         });
+
+      if (syncPreference === '0') {
+        localStorage.setItem(SYNC_ENABLED_KEY, '0');
+      }
     } catch (error) {
       console.warn('Applying cloud snapshot failed:', error);
     }
-  }
-
-  function consumeCloudImportOnceFlag() {
-    if (sessionStorage.getItem(CLOUD_IMPORT_ONCE_KEY) !== '1') return false;
-    sessionStorage.removeItem(CLOUD_IMPORT_ONCE_KEY);
-    return true;
   }
 
   async function syncFromCloudNow() {
@@ -87,13 +111,20 @@
     cloudSnapshotUnsubscribe = modules.onSnapshot(userDocRef, (docSnap) => {
       const data = docSnap.data() || {};
       const cloudBackup = data.cloudBackup || {};
-      emitCloudSnapshotEvent({
+      const event = {
         snapshot: cloudBackup.snapshot || null,
         updatedAtMs: cloudBackup.updatedAt?.toMillis?.() || null,
         hasPendingWrites: docSnap.metadata?.hasPendingWrites === true,
         fromCache: docSnap.metadata?.fromCache === true,
         user
-      });
+      };
+      emitCloudSnapshotEvent(event);
+
+      if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
+      const signature = snapshotSignature(event.snapshot);
+      if (!signature || signature === lastAppliedCloudSignature) return;
+      applyRemoteSnapshot(event.snapshot);
+      lastAppliedCloudSignature = signature;
     }, (error) => {
       console.warn('Cloud snapshot listener failed:', error);
     });
@@ -158,9 +189,9 @@
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
           startCloudSnapshotListener(currentUser);
-          if (currentUser && consumeCloudImportOnceFlag()) {
+          if (currentUser && isSyncEnabled()) {
             syncFromCloudNow().catch((error) => {
-              console.warn('One-time cloud import failed:', error);
+              console.warn('Cloud import failed:', error);
             });
           }
           notifySubscribers(currentUser);
@@ -312,9 +343,6 @@
     getCurrentUser() {
       return auth?.currentUser || currentUser;
     },
-    requestCloudImportOnce() {
-      sessionStorage.setItem(CLOUD_IMPORT_ONCE_KEY, '1');
-    },
     onAuthStateChanged(callback) {
       subscribers.add(callback);
       if (currentUser !== null) callback(currentUser);
@@ -327,6 +355,7 @@
     },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
+      lastAppliedCloudSignature = snapshotSignature(snapshot);
       await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
         cloudBackup: {
           schema: 'bilm-cloud-sync-v1',
