@@ -463,6 +463,17 @@
 
       <div class="control-row">
         <div>
+          <label>Sync</label>
+          <small id="syncStatusText">Live sync is on for this device.</small>
+        </div>
+        <label class="toggle">
+          <input id="syncToggle" type="checkbox" checked />
+          <span></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <div>
           <label>Data Transfer</label>
           <small>Export/import local data or use cloud transfer while signed in.</small>
         </div>
@@ -649,6 +660,8 @@
   const logoutBtn = document.getElementById('logoutBtn');
   const openAccountSettingsBtn = document.getElementById('openAccountSettingsBtn');
   const cloudStatus = document.getElementById('cloudStatus');
+  const syncToggle = document.getElementById('syncToggle');
+  const syncStatusText = document.getElementById('syncStatusText');
   const loginModal = document.getElementById('loginModal');
   const loginForm = document.getElementById('loginForm');
   const loginEmail = document.getElementById('loginEmail');
@@ -669,7 +682,12 @@
   const backToLoginBtn = document.getElementById('backToLoginBtn');
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
   const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
+  const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   let pendingImportPayload = null;
+  let syncDebounceTimer = null;
+  let applyingRemoteSync = false;
+  let lastCloudAppliedAt = 0;
+  let lastUploadedSignature = '';
 
   function readStorage(storage) {
     return Object.entries(storage).reduce((all, [key, value]) => {
@@ -679,12 +697,14 @@
   }
 
   function collectBackupData() {
+    const localState = readStorage(localStorage);
+    delete localState[SYNC_ENABLED_KEY];
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
       origin: location.origin,
       pathname: location.pathname,
-      localStorage: readStorage(localStorage),
+      localStorage: localState,
       sessionStorage: readStorage(sessionStorage),
       cookies: document.cookie
     };
@@ -758,6 +778,7 @@
   }
 
   function applyBackup(payload) {
+    const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
     localStorage.clear();
     sessionStorage.clear();
 
@@ -781,6 +802,10 @@
     importedCookies.split(';').map(entry => entry.trim()).filter(Boolean).forEach(cookieEntry => {
       document.cookie = `${cookieEntry};path=/`;
     });
+
+    if (syncPreference === '0') {
+      localStorage.setItem(SYNC_ENABLED_KEY, '0');
+    }
   }
 
   function applySettings(partial) {
@@ -833,16 +858,57 @@
   }
 
 
+  function isSyncEnabled() {
+    return localStorage.getItem(SYNC_ENABLED_KEY) !== '0';
+  }
+
+  function setSyncEnabled(enabled) {
+    localStorage.setItem(SYNC_ENABLED_KEY, enabled ? '1' : '0');
+    if (syncToggle) syncToggle.checked = enabled;
+    if (syncStatusText) {
+      syncStatusText.textContent = enabled
+        ? 'Live sync is on for this device.'
+        : 'Live sync is paused on this device.';
+    }
+  }
+
+  function snapshotSignature(snapshot) {
+    try {
+      return JSON.stringify(snapshot || null);
+    } catch {
+      return '';
+    }
+  }
+
+  function scheduleAutoSync(reason = 'auto') {
+    if (!isSyncEnabled()) return;
+    clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(async () => {
+      if (applyingRemoteSync || !isSyncEnabled()) return;
+      try {
+        await runSaveNow('auto');
+      } catch (error) {
+        console.warn(`Auto sync skipped (${reason}):`, error);
+      }
+    }, 700);
+  }
+
   async function runSaveNow(reason = 'manual') {
     await ensureAuthReady();
     const user = window.bilmAuth.getCurrentUser();
     if (!user) {
-      const allowLogin = confirm('Cloud export requires sign in. Open log in now?');
-      if (allowLogin) openLoginModal();
-      throw new Error('Please log in first.');
+      if (reason === 'manual') {
+        const allowLogin = confirm('Cloud export requires sign in. Open log in now?');
+        if (allowLogin) openLoginModal();
+        throw new Error('Please log in first.');
+      }
+      return false;
     }
-    await window.bilmAuth.saveCloudSnapshot(collectBackupData());
+    const snapshot = collectBackupData();
+    await window.bilmAuth.saveCloudSnapshot(snapshot);
+    lastUploadedSignature = snapshotSignature(snapshot);
     if (reason !== 'auto') cloudStatus.textContent = 'Save complete. Local data uploaded.';
+    return true;
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -889,7 +955,9 @@
       openSignUpBtn.hidden = true;
       logoutBtn.hidden = false;
       openAccountSettingsBtn.disabled = false;
-      cloudStatus.textContent = 'Account ready. Open Account Settings to manage account options.';
+      cloudStatus.textContent = isSyncEnabled()
+        ? 'Account ready. Live sync is active on this device.'
+        : 'Account ready. Live sync is paused on this device.';
       loginHelperText.textContent = 'Logged in successfully.';
     } else {
       accountStatusText.textContent = 'You are in guest mode. Log in to use account transfer tools.';
@@ -1269,9 +1337,35 @@
   async function initCloudAuthUi() {
     try {
       await ensureAuthReady();
+      setSyncEnabled(isSyncEnabled());
       updateAccountUi(window.bilmAuth.getCurrentUser());
       window.bilmAuth.onAuthStateChanged((user) => {
         updateAccountUi(user);
+        if (user && isSyncEnabled()) scheduleAutoSync('auth-state');
+      });
+      window.bilmAuth.onCloudSnapshotChanged?.((event) => {
+        if (!isSyncEnabled() || applyingRemoteSync) return;
+        if (!event?.snapshot || event?.hasPendingWrites) return;
+        const remoteSignature = snapshotSignature(event.snapshot);
+        if (remoteSignature && remoteSignature === lastUploadedSignature) {
+          lastCloudAppliedAt = event.updatedAtMs || Date.now();
+          return;
+        }
+        const remoteUpdatedAtMs = Number(event.updatedAtMs || 0);
+        if (remoteUpdatedAtMs && remoteUpdatedAtMs <= lastCloudAppliedAt) return;
+
+        applyingRemoteSync = true;
+        try {
+          applyBackup(event.snapshot);
+          syncUI();
+          lastCloudAppliedAt = remoteUpdatedAtMs || Date.now();
+          lastUploadedSignature = remoteSignature;
+          cloudStatus.textContent = 'Synced latest cloud changes to this device.';
+        } catch (error) {
+          console.warn('Cloud sync apply failed:', error);
+        } finally {
+          applyingRemoteSync = false;
+        }
       });
     } catch (err) {
       accountStatusText.textContent = 'Account tools are unavailable right now. Refresh and try again.';
@@ -1286,11 +1380,36 @@
     if (event.target === dataModal) closeDataModal();
   });
 
+  syncToggle?.addEventListener('change', (event) => {
+    const enabled = event.target.checked;
+    setSyncEnabled(enabled);
+    if (enabled) {
+      cloudStatus.textContent = 'Live sync enabled for this device.';
+      scheduleAutoSync('toggle-on');
+    } else {
+      cloudStatus.textContent = 'Live sync paused on this device.';
+    }
+    updateAccountUi(window.bilmAuth?.getCurrentUser?.() || null);
+  });
+
   window.addEventListener('DOMContentLoaded', () => {
     syncUI();
+    setSyncEnabled(isSyncEnabled());
     initCloudAuthUi();
   });
-  window.addEventListener('bilm:theme-changed', syncUI);
+  window.addEventListener('bilm:theme-changed', () => {
+    syncUI();
+    scheduleAutoSync('theme-change');
+  });
+  window.addEventListener('beforeunload', () => {
+    if (!isSyncEnabled() || applyingRemoteSync) return;
+    try {
+      const user = window.bilmAuth?.getCurrentUser?.();
+      if (user) window.bilmAuth.saveCloudSnapshot(collectBackupData());
+    } catch {
+      // no-op best effort
+    }
+  });
 </script>
 
 </body>
