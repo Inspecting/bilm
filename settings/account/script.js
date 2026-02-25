@@ -76,12 +76,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const deleteAccountBtn = document.getElementById('deleteAccountBtn');
   const signOutBtn = document.getElementById('signOutBtn');
   const clearOnLogoutToggle = document.getElementById('clearOnLogoutToggle');
+  const syncToggle = document.getElementById('syncToggle');
+  const syncStatusText = document.getElementById('syncStatusText');
 
   let pendingImportPayload = null;
   let activeImportSlot = null;
   let reopenMergeAfterImportClose = false;
   const importSlots = { one: null, two: null };
   const CLEAR_ON_LOGOUT_KEY = 'bilm-clear-local-on-logout';
+  const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
 
   function openModal(modal) {
     modal?.classList.add('open');
@@ -287,6 +290,20 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(CLEAR_ON_LOGOUT_KEY, value ? '1' : '0');
   }
 
+  function isSyncEnabled() {
+    return localStorage.getItem(SYNC_ENABLED_KEY) !== '0';
+  }
+
+  function setSyncEnabled(enabled) {
+    localStorage.setItem(SYNC_ENABLED_KEY, enabled ? '1' : '0');
+    if (syncToggle) syncToggle.checked = enabled;
+    if (syncStatusText) {
+      syncStatusText.textContent = enabled
+        ? 'Live sync is on for this device.'
+        : 'Live sync is paused on this device.';
+    }
+  }
+
   async function requestCloudLoginPermission() {
     await ensureAuthReady();
     if (window.bilmAuth.getCurrentUser()) return true;
@@ -311,12 +328,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function applyBackup(payload) {
+    const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
     localStorage.clear();
     sessionStorage.clear();
 
     Object.entries(payload.localStorage || {}).forEach(([key, value]) => {
       localStorage.setItem(key, value);
     });
+
+    if (syncPreference === '0') {
+      localStorage.setItem(SYNC_ENABLED_KEY, '0');
+    }
 
     Object.entries(payload.sessionStorage || {}).forEach(([key, value]) => {
       sessionStorage.setItem(key, value);
@@ -699,6 +721,25 @@ document.addEventListener('DOMContentLoaded', () => {
       : 'Sign out will keep local data.';
   });
 
+  syncToggle?.addEventListener('change', async (event) => {
+    const enabled = event.target.checked;
+    setSyncEnabled(enabled);
+    if (!enabled) {
+      statusText.textContent = 'Live sync paused on this device.';
+      return;
+    }
+
+    statusText.textContent = 'Live sync enabled for this device.';
+    try {
+      await ensureAuthReady();
+      if (window.bilmAuth.getCurrentUser()) {
+        await window.bilmAuth.syncFromCloudNow();
+      }
+    } catch (error) {
+      statusText.textContent = `Sync refresh failed: ${error.message}`;
+    }
+  });
+
   confirmCloudLoginBtn?.addEventListener('click', () => {
     closeModal(cloudAuthPromptModal);
     closeModal(dataModal);
@@ -716,6 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await ensureAuthReady();
       if (clearOnLogoutToggle) clearOnLogoutToggle.checked = getClearOnLogoutSetting();
+      setSyncEnabled(isSyncEnabled());
       updateMergeUi();
       updateAccountUi(window.bilmAuth.getCurrentUser());
       window.bilmAuth.onAuthStateChanged((user) => {
