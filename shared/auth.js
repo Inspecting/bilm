@@ -18,6 +18,9 @@
   let firestore;
   let analytics;
   let currentUser = null;
+  let cloudSnapshotUnsubscribe = null;
+  let lastCloudSnapshotEvent = null;
+  const cloudSubscribers = new Set();
 
   const CLOUD_IMPORT_ONCE_KEY = 'bilm-cloud-import-once';
 
@@ -53,6 +56,47 @@
     if (!snapshot) return false;
     applyRemoteSnapshot(snapshot);
     return true;
+  }
+
+  function emitCloudSnapshotEvent(event) {
+    lastCloudSnapshotEvent = event;
+    cloudSubscribers.forEach((callback) => {
+      try {
+        callback(event);
+      } catch (error) {
+        console.error('Cloud snapshot subscriber failed:', error);
+      }
+    });
+  }
+
+  function stopCloudSnapshotListener() {
+    if (typeof cloudSnapshotUnsubscribe === 'function') {
+      cloudSnapshotUnsubscribe();
+    }
+    cloudSnapshotUnsubscribe = null;
+  }
+
+  function startCloudSnapshotListener(user) {
+    stopCloudSnapshotListener();
+    if (!user || !modules?.onSnapshot || !firestore) {
+      emitCloudSnapshotEvent({ snapshot: null, updatedAtMs: null, user: null });
+      return;
+    }
+
+    const userDocRef = modules.doc(firestore, 'users', user.uid);
+    cloudSnapshotUnsubscribe = modules.onSnapshot(userDocRef, (docSnap) => {
+      const data = docSnap.data() || {};
+      const cloudBackup = data.cloudBackup || {};
+      emitCloudSnapshotEvent({
+        snapshot: cloudBackup.snapshot || null,
+        updatedAtMs: cloudBackup.updatedAt?.toMillis?.() || null,
+        hasPendingWrites: docSnap.metadata?.hasPendingWrites === true,
+        fromCache: docSnap.metadata?.fromCache === true,
+        user
+      });
+    }, (error) => {
+      console.warn('Cloud snapshot listener failed:', error);
+    });
   }
 
 
@@ -113,6 +157,7 @@
 
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
+          startCloudSnapshotListener(currentUser);
           if (currentUser && consumeCloudImportOnceFlag()) {
             syncFromCloudNow().catch((error) => {
               console.warn('One-time cloud import failed:', error);
@@ -274,6 +319,11 @@
       subscribers.add(callback);
       if (currentUser !== null) callback(currentUser);
       return () => subscribers.delete(callback);
+    },
+    onCloudSnapshotChanged(callback) {
+      cloudSubscribers.add(callback);
+      if (lastCloudSnapshotEvent) callback(lastCloudSnapshotEvent);
+      return () => cloudSubscribers.delete(callback);
     },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
