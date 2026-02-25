@@ -1333,28 +1333,12 @@
         if (user && isSyncEnabled()) scheduleAutoSync('auth-state');
       });
       window.bilmAuth.onCloudSnapshotChanged?.((event) => {
-        if (!isSyncEnabled() || applyingRemoteSync) return;
-        if (!event?.snapshot || event?.hasPendingWrites) return;
-        const remoteSignature = snapshotSignature(event.snapshot);
-        if (remoteSignature && remoteSignature === lastUploadedSignature) {
-          lastCloudAppliedAt = event.updatedAtMs || Date.now();
-          return;
-        }
-        const remoteUpdatedAtMs = Number(event.updatedAtMs || 0);
+        if (!isSyncEnabled() || !event?.snapshot || event?.hasPendingWrites) return;
+        const remoteUpdatedAtMs = Number(event.updatedAtMs || event.snapshot?.meta?.updatedAtMs || 0);
         if (remoteUpdatedAtMs && remoteUpdatedAtMs <= lastCloudAppliedAt) return;
-
-        applyingRemoteSync = true;
-        try {
-          applyBackup(event.snapshot);
-          syncUI();
-          lastCloudAppliedAt = remoteUpdatedAtMs || Date.now();
-          lastUploadedSignature = remoteSignature;
-          cloudStatus.textContent = 'Synced latest cloud changes to this device.';
-        } catch (error) {
-          console.warn('Cloud sync apply failed:', error);
-        } finally {
-          applyingRemoteSync = false;
-        }
+        lastCloudAppliedAt = remoteUpdatedAtMs || Date.now();
+        lastUploadedSignature = snapshotSignature(event.snapshot);
+        cloudStatus.textContent = 'Cloud update detected. Sync engine will apply only if newer than local data.';
       });
     } catch (err) {
       accountStatusText.textContent = 'Account tools are unavailable right now. Refresh and try again.';
