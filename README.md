@@ -16,9 +16,13 @@ BILM is built for discovery and convenience, helping users find what to watch wi
 
 Visit the site here:
 👉 https://inspecting.github.io/bilm/
-👉https://watchbilm.org
-👉https://watchbilm.uk
+
+👉 https://watchbilm.org (Recommended)
+
+👉 https://watchbilm.uk
 
 👉 Direct Link: https://inspecting.github.io/bilm/home/
-👉https://watchbilm.org/home/
-👉https://watchbilm.uk/home/
+
+👉 https://watchbilm.org/home/ (Recommended)
+
+👉 https://watchbilm.uk/home/
