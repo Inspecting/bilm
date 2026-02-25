@@ -21,9 +21,88 @@
   let cloudSnapshotUnsubscribe = null;
   let lastCloudSnapshotEvent = null;
   const cloudSubscribers = new Set();
+  let autosyncInterval = null;
+  let autosyncFlushBound = false;
+  let pendingAutosync = false;
+  let mutationObserverInstalled = false;
+  let autosyncDebounceTimer = null;
+  let suppressMutationHook = false;
+  let lastUploadedCloudSignature = '';
+  let lastLocalSnapshotSignature = '';
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
+  const SYNC_META_KEY = 'bilm-sync-meta';
+  const SYNC_DEVICE_ID_KEY = 'bilm-sync-device-id';
   let lastAppliedCloudSignature = '';
+
+  function safeParse(raw, fallback = null) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  }
+
+  function getOrCreateDeviceId() {
+    const existing = String(localStorage.getItem(SYNC_DEVICE_ID_KEY) || '').trim();
+    if (existing) return existing;
+    const next = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    suppressMutationHook = true;
+    try {
+      localStorage.setItem(SYNC_DEVICE_ID_KEY, next);
+    } finally {
+      suppressMutationHook = false;
+    }
+    return next;
+  }
+
+  function readSyncMeta() {
+    return safeParse(localStorage.getItem(SYNC_META_KEY), {}) || {};
+  }
+
+  function writeSyncMeta(partial = {}) {
+    const previous = readSyncMeta();
+    const next = {
+      deviceId: previous.deviceId || getOrCreateDeviceId(),
+      ...previous,
+      ...partial
+    };
+    suppressMutationHook = true;
+    try {
+      localStorage.setItem(SYNC_META_KEY, JSON.stringify(next));
+    } finally {
+      suppressMutationHook = false;
+    }
+    return next;
+  }
+
+  function readStorage(storage) {
+    return Object.entries(storage).reduce((all, [key, value]) => {
+      all[key] = value;
+      return all;
+    }, {});
+  }
+
+  function collectBackupData() {
+    const localState = readStorage(localStorage);
+    delete localState[SYNC_ENABLED_KEY];
+    delete localState[SYNC_META_KEY];
+    delete localState[SYNC_DEVICE_ID_KEY];
+    return {
+      schema: 'bilm-backup-v1',
+      exportedAt: new Date().toISOString(),
+      origin: location.origin,
+      pathname: location.pathname,
+      localStorage: localState,
+      sessionStorage: readStorage(sessionStorage),
+      cookies: document.cookie,
+      meta: {
+        updatedAtMs: Date.now(),
+        deviceId: getOrCreateDeviceId(),
+        version: 1
+      }
+    };
+  }
 
   function isSyncEnabled() {
     return localStorage.getItem(SYNC_ENABLED_KEY) !== '0';
@@ -31,7 +110,19 @@
 
   function snapshotSignature(snapshot) {
     try {
-      return JSON.stringify(snapshot || null);
+      const normalized = snapshot
+        ? {
+          ...snapshot,
+          exportedAt: undefined,
+          meta: snapshot.meta
+            ? {
+              ...snapshot.meta,
+              updatedAtMs: undefined
+            }
+            : undefined
+        }
+        : null;
+      return JSON.stringify(normalized);
     } catch {
       return '';
     }
@@ -40,7 +131,10 @@
   function applyRemoteSnapshot(snapshot) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
     try {
+      suppressMutationHook = true;
       const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
+      const syncMetaRaw = localStorage.getItem(SYNC_META_KEY);
+      const deviceIdRaw = localStorage.getItem(SYNC_DEVICE_ID_KEY);
       localStorage.clear();
       sessionStorage.clear();
 
@@ -70,14 +164,180 @@
       if (syncPreference === '0') {
         localStorage.setItem(SYNC_ENABLED_KEY, '0');
       }
+
+      if (syncMetaRaw) localStorage.setItem(SYNC_META_KEY, syncMetaRaw);
+      if (deviceIdRaw) localStorage.setItem(SYNC_DEVICE_ID_KEY, deviceIdRaw);
+
+      writeSyncMeta({
+        lastCloudPullAt: Date.now(),
+        lastCloudSnapshotAt: Number(snapshot?.meta?.updatedAtMs || 0) || Date.now(),
+        lastAppliedFromDeviceId: snapshot?.meta?.deviceId || null
+      });
+
+      const signature = snapshotSignature(snapshot);
+      lastAppliedCloudSignature = signature;
+      lastUploadedCloudSignature = signature;
+      lastLocalSnapshotSignature = signature;
     } catch (error) {
       console.warn('Applying cloud snapshot failed:', error);
+    } finally {
+      suppressMutationHook = false;
+    }
+  }
+
+  function hasMeaningfulLocalData() {
+    const localKeys = Object.keys(localStorage).filter((key) => ![SYNC_ENABLED_KEY, SYNC_META_KEY, SYNC_DEVICE_ID_KEY].includes(key));
+    if (localKeys.length > 0) return true;
+    if (sessionStorage.length > 0) return true;
+    return String(document.cookie || '').trim().length > 0;
+  }
+
+  function shouldApplyRemoteSnapshot(snapshot) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return false;
+    if (!hasMeaningfulLocalData()) return true;
+
+    const cloudUpdatedAtMs = Number(snapshot?.meta?.updatedAtMs || 0);
+    if (!cloudUpdatedAtMs) return false;
+
+    const meta = readSyncMeta();
+    const localChangedAt = Number(meta?.lastLocalChangeAt || 0);
+    const localCloudPullAt = Number(meta?.lastCloudPullAt || 0);
+    const freshnessFloor = Math.max(localChangedAt, localCloudPullAt);
+    return cloudUpdatedAtMs > freshnessFloor;
+  }
+
+  async function saveLocalSnapshotToCloud(reason = 'auto') {
+    await init();
+    const user = auth?.currentUser;
+    if (!user || !isSyncEnabled() || pendingAutosync) return false;
+
+    const snapshot = collectBackupData();
+    const signature = snapshotSignature(snapshot);
+    if (!signature) return false;
+    if (signature === lastUploadedCloudSignature || signature === lastAppliedCloudSignature) {
+      lastLocalSnapshotSignature = signature;
+      return false;
+    }
+
+    pendingAutosync = true;
+    try {
+      await api.saveCloudSnapshot(snapshot);
+      writeSyncMeta({
+        lastCloudPushAt: Date.now(),
+        lastLocalChangeAt: Date.now(),
+        lastPushReason: reason
+      });
+      lastUploadedCloudSignature = signature;
+      lastLocalSnapshotSignature = signature;
+      return true;
+    } finally {
+      pendingAutosync = false;
+    }
+  }
+
+  function ensureAutosyncFlushBindings() {
+    if (autosyncFlushBound) return;
+    autosyncFlushBound = true;
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'hidden') return;
+      saveLocalSnapshotToCloud('visibility-hidden').catch((error) => {
+        console.warn('Visibility autosync save failed:', error);
+      });
+    });
+
+    window.addEventListener('pagehide', () => {
+      saveLocalSnapshotToCloud('pagehide').catch(() => {
+        // best effort
+      });
+    });
+  }
+
+  function scheduleAutosyncFromMutation(reason = 'mutation') {
+    if (!isSyncEnabled()) return;
+    clearTimeout(autosyncDebounceTimer);
+    autosyncDebounceTimer = window.setTimeout(() => {
+      saveLocalSnapshotToCloud(reason).catch((error) => {
+        console.warn('Mutation autosync save failed:', error);
+      });
+    }, 800);
+  }
+
+  function installMutationObservers() {
+    if (mutationObserverInstalled) return;
+    mutationObserverInstalled = true;
+
+    const localProto = window.Storage?.prototype;
+    if (localProto && !localProto.__bilmSyncWrapped) {
+      const originalSetItem = localProto.setItem;
+      const originalRemoveItem = localProto.removeItem;
+      const originalClear = localProto.clear;
+
+      localProto.setItem = function wrappedSetItem(...args) {
+        const result = originalSetItem.apply(this, args);
+        if (suppressMutationHook) return result;
+        const key = String(args?.[0] || '');
+        if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return result;
+        writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-set' });
+        scheduleAutosyncFromMutation('storage-set');
+        return result;
+      };
+      localProto.removeItem = function wrappedRemoveItem(...args) {
+        const result = originalRemoveItem.apply(this, args);
+        if (suppressMutationHook) return result;
+        const key = String(args?.[0] || '');
+        if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return result;
+        writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-remove' });
+        scheduleAutosyncFromMutation('storage-remove');
+        return result;
+      };
+      localProto.clear = function wrappedClear(...args) {
+        const result = originalClear.apply(this, args);
+        if (suppressMutationHook) return result;
+        writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-clear' });
+        scheduleAutosyncFromMutation('storage-clear');
+        return result;
+      };
+
+      Object.defineProperty(localProto, '__bilmSyncWrapped', {
+        value: true,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+    }
+  }
+
+  function startAutosyncLoop() {
+    stopAutosyncLoop();
+    ensureAutosyncFlushBindings();
+    autosyncInterval = window.setInterval(() => {
+      if (!isSyncEnabled() || !auth?.currentUser || pendingAutosync) return;
+      const snapshot = collectBackupData();
+      const signature = snapshotSignature(snapshot);
+      if (!signature || signature === lastLocalSnapshotSignature) return;
+      lastLocalSnapshotSignature = signature;
+      writeSyncMeta({ lastLocalChangeAt: Date.now() });
+      saveLocalSnapshotToCloud('interval').catch((error) => {
+        console.warn('Autosync interval save failed:', error);
+      });
+    }, 3000);
+  }
+
+  function stopAutosyncLoop() {
+    if (autosyncInterval) {
+      window.clearInterval(autosyncInterval);
+      autosyncInterval = null;
     }
   }
 
   async function syncFromCloudNow() {
     const snapshot = await api.getCloudSnapshot();
     if (!snapshot) return false;
+    if (!shouldApplyRemoteSnapshot(snapshot)) {
+      await saveLocalSnapshotToCloud('conflict-local-preferred');
+      return false;
+    }
     applyRemoteSnapshot(snapshot);
     return true;
   }
@@ -123,6 +383,7 @@
       if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
       const signature = snapshotSignature(event.snapshot);
       if (!signature || signature === lastAppliedCloudSignature) return;
+      if (!shouldApplyRemoteSnapshot(event.snapshot)) return;
       applyRemoteSnapshot(event.snapshot);
       lastAppliedCloudSignature = signature;
     }, (error) => {
@@ -178,6 +439,7 @@
         app = m.getApps().length ? m.getApp() : m.initializeApp(FIREBASE_CONFIG);
         auth = m.getAuth(app);
         firestore = m.getFirestore(app);
+        installMutationObservers();
         await configurePersistence();
 
         try {
@@ -193,6 +455,9 @@
             syncFromCloudNow().catch((error) => {
               console.warn('Cloud import failed:', error);
             });
+            startAutosyncLoop();
+          } else {
+            stopAutosyncLoop();
           }
           notifySubscribers(currentUser);
         });
@@ -355,14 +620,29 @@
     },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
-      lastAppliedCloudSignature = snapshotSignature(snapshot);
+      const payload = {
+        ...(snapshot || {}),
+        meta: {
+          ...(snapshot?.meta || {}),
+          updatedAtMs: Date.now(),
+          deviceId: getOrCreateDeviceId(),
+          version: 1
+        }
+      };
+      const signature = snapshotSignature(payload);
+      lastAppliedCloudSignature = signature;
+      lastUploadedCloudSignature = signature;
       await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
         cloudBackup: {
           schema: 'bilm-cloud-sync-v1',
           updatedAt: modules.serverTimestamp(),
-          snapshot
+          snapshot: payload
         }
       }, { merge: true });
+      writeSyncMeta({
+        lastCloudPushAt: Date.now(),
+        lastLocalChangeAt: Date.now()
+      });
     },
     async getCloudSnapshot() {
       const user = await requireAuth();
@@ -373,6 +653,9 @@
     async syncFromCloudNow() {
       await init();
       return syncFromCloudNow();
+    },
+    async scheduleCloudSave(reason = 'manual') {
+      return saveLocalSnapshotToCloud(reason);
     }
   };
   window.bilmAuth = api;
