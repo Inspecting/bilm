@@ -10,11 +10,6 @@ function withBase(path) {
   return `${detectBasePath()}${normalized}`;
 }
 
-const navbarScript = document.createElement('script');
-navbarScript.src = withBase('/shared/navbar.js');
-navbarScript.defer = true;
-document.body.appendChild(navbarScript);
-
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const params = new URLSearchParams(window.location.search);
 const contentId = params.get('id'); // movie or TV id
