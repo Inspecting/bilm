@@ -40,7 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
     selectMode: false,
     compactView: false,
     selectedKeys: new Set(),
+    visibleLimit: 10,
   };
+
+  const PAGE_SIZE = 10;
 
   const searchTabBtn = document.getElementById('searchTabBtn');
   const watchTabBtn = document.getElementById('watchTabBtn');
@@ -184,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getVisibleItems(items) {
-    return items;
+    return items.slice(0, state.visibleLimit);
   }
 
   function updateLoadState(visibleItems, allItems) {
@@ -193,7 +196,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    historyLoadState.textContent = `Showing all ${allItems.length} entries.`;
+    const hasMore = visibleItems.length < allItems.length;
+    historyLoadState.textContent = hasMore
+      ? `Showing ${visibleItems.length} of ${allItems.length} entries. Scroll to load more.`
+      : `Showing all ${allItems.length} entries.`;
   }
 
   function renderEmptyState() {
@@ -373,7 +379,22 @@ document.addEventListener('DOMContentLoaded', () => {
     state.selectedKeys.clear();
   }
 
-  function resetVisibleWindow() {}
+  function resetVisibleWindow() {
+    state.visibleLimit = PAGE_SIZE;
+    historyScrollRegion.scrollTop = 0;
+  }
+
+  function maybeLoadMore() {
+    const items = getFilteredItems();
+    if (state.visibleLimit >= items.length) return;
+
+    const thresholdPx = 140;
+    const distanceToBottom = historyScrollRegion.scrollHeight - historyScrollRegion.scrollTop - historyScrollRegion.clientHeight;
+    if (distanceToBottom > thresholdPx) return;
+
+    state.visibleLimit = Math.min(state.visibleLimit + PAGE_SIZE, items.length);
+    render();
+  }
 
   searchTabBtn.addEventListener('click', () => {
     state.activeType = 'search';
@@ -483,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  historyScrollRegion.addEventListener('scroll', () => {});
+  historyScrollRegion.addEventListener('scroll', maybeLoadMore);
 
   document.addEventListener('keydown', (event) => {
     if (event.key === '/' && document.activeElement !== searchFilterInput) {

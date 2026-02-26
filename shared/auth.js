@@ -29,6 +29,10 @@
   let suppressMutationHook = false;
   let lastUploadedCloudSignature = '';
   let lastLocalSnapshotSignature = '';
+  let lastSaveAttemptAt = 0;
+  let snapshotListenerReady = false;
+
+  const MIN_SAVE_INTERVAL_MS = 15000;
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -317,7 +321,11 @@
   async function saveLocalSnapshotToCloud(reason = 'auto') {
     await init();
     const user = auth?.currentUser;
-    if (!user || !isSyncEnabled() || pendingAutosync) return false;
+    if (!user || !isSyncEnabled() || pendingAutosync || !snapshotListenerReady) return false;
+
+    const now = Date.now();
+    const forceReasons = new Set(['manual', 'pagehide', 'visibility-hidden']);
+    if (!forceReasons.has(reason) && now - lastSaveAttemptAt < MIN_SAVE_INTERVAL_MS) return false;
 
     const snapshot = collectBackupData();
     const signature = snapshotSignature(snapshot);
@@ -328,6 +336,7 @@
     }
 
     pendingAutosync = true;
+    lastSaveAttemptAt = now;
     try {
       await api.saveCloudSnapshot(snapshot);
       writeSyncMeta({
@@ -499,13 +508,14 @@
 
   function startCloudSnapshotListener(user) {
     stopCloudSnapshotListener();
+    snapshotListenerReady = false;
     if (!user || !modules?.onSnapshot || !firestore) {
       emitCloudSnapshotEvent({ snapshot: null, updatedAtMs: null, user: null });
       return;
     }
 
     const userDocRef = modules.doc(firestore, 'users', user.uid);
-    cloudSnapshotUnsubscribe = modules.onSnapshot(userDocRef, (docSnap) => {
+    cloudSnapshotUnsubscribe = modules.onSnapshot(userDocRef, { includeMetadataChanges: false }, (docSnap) => {
       const data = docSnap.data() || {};
       const cloudBackup = data.cloudBackup || {};
       const event = {
@@ -513,8 +523,10 @@
         updatedAtMs: cloudBackup.updatedAt?.toMillis?.() || null,
         hasPendingWrites: docSnap.metadata?.hasPendingWrites === true,
         fromCache: docSnap.metadata?.fromCache === true,
+        sourceDeviceId: String(cloudBackup?.snapshot?.meta?.deviceId || '').trim() || null,
         user
       };
+      snapshotListenerReady = true;
       emitCloudSnapshotEvent(event);
 
       if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
@@ -533,7 +545,7 @@
         const mergedSnapshot = mergeSnapshots(event.snapshot, localSnapshot);
         if (mergedSnapshot) {
           applyRemoteSnapshot(mergedSnapshot);
-          saveLocalSnapshotToCloud('listener-merge').catch((error) => {
+          api.saveCloudSnapshot(mergedSnapshot).catch((error) => {
             console.warn('Listener merge save failed:', error);
           });
         }
@@ -612,6 +624,7 @@
             });
             startAutosyncLoop();
           } else {
+            snapshotListenerReady = false;
             stopAutosyncLoop();
           }
           notifySubscribers(currentUser);
