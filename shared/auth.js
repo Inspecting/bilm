@@ -33,7 +33,113 @@
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
   const SYNC_DEVICE_ID_KEY = 'bilm-sync-device-id';
+  const MERGEABLE_LIST_KEYS = new Set([
+    'bilm-favorites',
+    'bilm-watch-later',
+    'bilm-continue-watching',
+    'bilm-history-movies',
+    'bilm-history-tv'
+  ]);
   let lastAppliedCloudSignature = '';
+
+  function readJsonArray(raw) {
+    try {
+      const parsed = JSON.parse(raw || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function getListItemKey(item) {
+    if (!item || typeof item !== 'object') return '';
+    return String(item.key || item.tmdbId || item.id || '').trim();
+  }
+
+  function getItemUpdatedAt(item) {
+    return Number(item?.updatedAt || item?.timestamp || item?.savedAt || 0) || 0;
+  }
+
+  function mergeTombstoneMaps(...maps) {
+    const result = {};
+    maps.forEach((map) => {
+      if (!map || typeof map !== 'object') return;
+      Object.entries(map).forEach(([storageKey, value]) => {
+        if (!value || typeof value !== 'object') return;
+        if (!result[storageKey]) result[storageKey] = {};
+        Object.entries(value).forEach(([itemKey, timestamp]) => {
+          const nextTs = Number(timestamp || 0) || 0;
+          const prevTs = Number(result[storageKey][itemKey] || 0) || 0;
+          if (nextTs > prevTs) {
+            result[storageKey][itemKey] = nextTs;
+          }
+        });
+      });
+    });
+    return result;
+  }
+
+  function mergeSnapshots(baseSnapshot, incomingSnapshot) {
+    const base = baseSnapshot && typeof baseSnapshot === 'object' ? baseSnapshot : null;
+    const incoming = incomingSnapshot && typeof incomingSnapshot === 'object' ? incomingSnapshot : null;
+    if (!base) return incoming;
+    if (!incoming) return base;
+
+    const baseUpdatedAt = Number(base?.meta?.updatedAtMs || 0) || 0;
+    const incomingUpdatedAt = Number(incoming?.meta?.updatedAtMs || 0) || 0;
+    const newest = incomingUpdatedAt >= baseUpdatedAt ? incoming : base;
+    const oldest = newest === incoming ? base : incoming;
+
+    const merged = {
+      ...oldest,
+      ...newest,
+      localStorage: {
+        ...(oldest.localStorage || {}),
+        ...(newest.localStorage || {})
+      },
+      sessionStorage: {
+        ...(oldest.sessionStorage || {}),
+        ...(newest.sessionStorage || {})
+      },
+      meta: {
+        ...(oldest.meta || {}),
+        ...(newest.meta || {})
+      }
+    };
+
+    const tombstones = mergeTombstoneMaps(base?.meta?.listTombstones, incoming?.meta?.listTombstones);
+
+    MERGEABLE_LIST_KEYS.forEach((storageKey) => {
+      const baseList = readJsonArray(base?.localStorage?.[storageKey]);
+      const incomingList = readJsonArray(incoming?.localStorage?.[storageKey]);
+      const byKey = new Map();
+
+      [...baseList, ...incomingList].forEach((item) => {
+        const itemKey = getListItemKey(item);
+        if (!itemKey) return;
+        const existing = byKey.get(itemKey);
+        if (!existing || getItemUpdatedAt(item) >= getItemUpdatedAt(existing)) {
+          byKey.set(itemKey, item);
+        }
+      });
+
+      const keyedTombstones = tombstones[storageKey] || {};
+      const filtered = [...byKey.entries()]
+        .filter(([itemKey, item]) => (Number(keyedTombstones[itemKey] || 0) || 0) < getItemUpdatedAt(item))
+        .sort((a, b) => getItemUpdatedAt(b[1]) - getItemUpdatedAt(a[1]))
+        .map(([, item]) => item)
+        .slice(0, 120);
+
+      merged.localStorage[storageKey] = JSON.stringify(filtered);
+    });
+
+    merged.meta = {
+      ...(merged.meta || {}),
+      listTombstones: tombstones
+    };
+
+    return merged;
+  }
 
   function safeParse(raw, fallback = null) {
     try {
@@ -84,6 +190,7 @@
   }
 
   function collectBackupData() {
+    const meta = readSyncMeta();
     const localState = readStorage(localStorage);
     delete localState[SYNC_ENABLED_KEY];
     delete localState[SYNC_META_KEY];
@@ -99,7 +206,8 @@
       meta: {
         updatedAtMs: Date.now(),
         deviceId: getOrCreateDeviceId(),
-        version: 1
+        version: 1,
+        listTombstones: meta?.listTombstones || {}
       }
     };
   }
@@ -274,10 +382,34 @@
       const originalClear = localProto.clear;
 
       localProto.setItem = function wrappedSetItem(...args) {
+        const key = String(args?.[0] || '');
+        const beforeRaw = key ? this.getItem(key) : null;
         const result = originalSetItem.apply(this, args);
         if (suppressMutationHook) return result;
-        const key = String(args?.[0] || '');
         if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return result;
+        if (MERGEABLE_LIST_KEYS.has(key)) {
+          const afterRaw = this.getItem(key);
+          const beforeList = readJsonArray(beforeRaw);
+          const afterList = readJsonArray(afterRaw);
+          const beforeKeys = new Set(beforeList.map(getListItemKey).filter(Boolean));
+          const afterKeys = new Set(afterList.map(getListItemKey).filter(Boolean));
+          const now = Date.now();
+          const meta = readSyncMeta();
+          const tombstones = mergeTombstoneMaps(meta?.listTombstones, {});
+          if (!tombstones[key]) tombstones[key] = {};
+          beforeKeys.forEach((itemKey) => {
+            if (!afterKeys.has(itemKey)) {
+              tombstones[key][itemKey] = now;
+            }
+          });
+          afterList.forEach((item) => {
+            const itemKey = getListItemKey(item);
+            if (itemKey && tombstones[key]?.[itemKey]) {
+              delete tombstones[key][itemKey];
+            }
+          });
+          writeSyncMeta({ listTombstones: tombstones });
+        }
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-set' });
         scheduleAutosyncFromMutation('storage-set');
         return result;
@@ -335,7 +467,12 @@
     const snapshot = await api.getCloudSnapshot();
     if (!snapshot) return false;
     if (!shouldApplyRemoteSnapshot(snapshot)) {
-      await saveLocalSnapshotToCloud('conflict-local-preferred');
+      const localSnapshot = collectBackupData();
+      const mergedSnapshot = mergeSnapshots(snapshot, localSnapshot);
+      if (mergedSnapshot) {
+        applyRemoteSnapshot(mergedSnapshot);
+        await api.saveCloudSnapshot(mergedSnapshot);
+      }
       return false;
     }
     applyRemoteSnapshot(snapshot);
@@ -383,7 +520,17 @@
       if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
       const signature = snapshotSignature(event.snapshot);
       if (!signature || signature === lastAppliedCloudSignature) return;
-      if (!shouldApplyRemoteSnapshot(event.snapshot)) return;
+      if (!shouldApplyRemoteSnapshot(event.snapshot)) {
+        const localSnapshot = collectBackupData();
+        const mergedSnapshot = mergeSnapshots(event.snapshot, localSnapshot);
+        if (mergedSnapshot) {
+          applyRemoteSnapshot(mergedSnapshot);
+          saveLocalSnapshotToCloud('listener-merge').catch((error) => {
+            console.warn('Listener merge save failed:', error);
+          });
+        }
+        return;
+      }
       applyRemoteSnapshot(event.snapshot);
       lastAppliedCloudSignature = signature;
     }, (error) => {
@@ -620,10 +767,13 @@
     },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
+      const currentDoc = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
+      const cloudSnapshot = (currentDoc.data() || {})?.cloudBackup?.snapshot || null;
+      const mergedSnapshot = mergeSnapshots(cloudSnapshot, snapshot || null) || snapshot || null;
       const payload = {
-        ...(snapshot || {}),
+        ...(mergedSnapshot || {}),
         meta: {
-          ...(snapshot?.meta || {}),
+          ...(mergedSnapshot?.meta || {}),
           updatedAtMs: Date.now(),
           deviceId: getOrCreateDeviceId(),
           version: 1
