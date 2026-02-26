@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const next = [
         { query, updatedAt: Date.now() },
         ...history
-      ].slice(0, 10);
+      ];
       saveList(SEARCH_HISTORY_KEY, next);
     }
 
