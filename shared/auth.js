@@ -520,6 +520,14 @@
       if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
       const signature = snapshotSignature(event.snapshot);
       if (!signature || signature === lastAppliedCloudSignature) return;
+
+      const localDeviceId = getOrCreateDeviceId();
+      const sourceDeviceId = String(event.snapshot?.meta?.deviceId || '').trim();
+      if (sourceDeviceId && sourceDeviceId === localDeviceId) {
+        lastAppliedCloudSignature = signature;
+        return;
+      }
+
       if (!shouldApplyRemoteSnapshot(event.snapshot)) {
         const localSnapshot = collectBackupData();
         const mergedSnapshot = mergeSnapshots(event.snapshot, localSnapshot);

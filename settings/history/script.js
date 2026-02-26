@@ -40,9 +40,6 @@ document.addEventListener('DOMContentLoaded', () => {
     selectMode: false,
     compactView: false,
     selectedKeys: new Set(),
-    pageSize: 25,
-    visibleLimit: 25,
-    loadingMore: false
   };
 
   const searchTabBtn = document.getElementById('searchTabBtn');
@@ -187,19 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getVisibleItems(items) {
-    return items.slice(0, state.visibleLimit);
-  }
-
-  function queueMoreItems() {
-    const items = getFilteredItems();
-    if (state.visibleLimit >= items.length) return;
-    state.loadingMore = true;
-    historyLoadState.textContent = 'Loading more...';
-    window.requestAnimationFrame(() => {
-      state.visibleLimit = Math.min(state.visibleLimit + state.pageSize, items.length);
-      state.loadingMore = false;
-      render();
-    });
+    return items;
   }
 
   function updateLoadState(visibleItems, allItems) {
@@ -208,12 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (visibleItems.length >= allItems.length) {
-      historyLoadState.textContent = `Showing all ${allItems.length} entries.`;
-      return;
-    }
-
-    historyLoadState.textContent = `Showing ${visibleItems.length} of ${allItems.length}. Scroll to load more.`;
+    historyLoadState.textContent = `Showing all ${allItems.length} entries.`;
   }
 
   function renderEmptyState() {
@@ -393,9 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.selectedKeys.clear();
   }
 
-  function resetVisibleWindow() {
-    state.visibleLimit = state.pageSize;
-  }
+  function resetVisibleWindow() {}
 
   searchTabBtn.addEventListener('click', () => {
     state.activeType = 'search';
@@ -505,14 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  historyScrollRegion.addEventListener('scroll', () => {
-    if (state.loadingMore || state.selectMode) return;
-    const threshold = 120;
-    const isNearBottom = historyScrollRegion.scrollTop + historyScrollRegion.clientHeight >= historyScrollRegion.scrollHeight - threshold;
-    if (isNearBottom) {
-      queueMoreItems();
-    }
-  });
+  historyScrollRegion.addEventListener('scroll', () => {});
 
   document.addEventListener('keydown', (event) => {
     if (event.key === '/' && document.activeElement !== searchFilterInput) {
