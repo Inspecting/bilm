@@ -85,6 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const importSlots = { one: null, two: null };
   const CLEAR_ON_LOGOUT_KEY = 'bilm-clear-local-on-logout';
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
+  const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^tmdb-/, /^theme-/];
+  const BACKUP_SESSION_ALLOWLIST = [/^bilm-/, /^tmdb-/];
 
   function openModal(modal) {
     modal?.classList.add('open');
@@ -114,8 +116,13 @@ document.addEventListener('DOMContentLoaded', () => {
     reopenMergeAfterImportClose = false;
   }
 
-  function readStorage(storage) {
+  function shouldIncludeStorageKey(key, allowlist) {
+    return allowlist.some((pattern) => pattern.test(String(key || '')));
+  }
+
+  function readStorage(storage, allowlist = []) {
     return Object.entries(storage).reduce((all, [key, value]) => {
+      if (allowlist.length && !shouldIncludeStorageKey(key, allowlist)) return all;
       all[key] = value;
       return all;
     }, {});
@@ -127,9 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
       exportedAt: new Date().toISOString(),
       origin: location.origin,
       pathname: location.pathname,
-      localStorage: readStorage(localStorage),
-      sessionStorage: readStorage(sessionStorage),
-      cookies: document.cookie
+      localStorage: readStorage(localStorage, BACKUP_LOCAL_ALLOWLIST),
+      sessionStorage: readStorage(sessionStorage, BACKUP_SESSION_ALLOWLIST)
     };
   }
 
@@ -255,30 +261,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return merged;
     };
 
-    const mergeCookies = () => {
-      const cookieMap = new Map();
-      sources.forEach((source) => {
-        String(source?.cookies || '')
-          .split(';')
-          .map((entry) => entry.trim())
-          .filter(Boolean)
-          .forEach((entry) => {
-            const [name] = entry.split('=');
-            if (!name || cookieMap.has(name)) return;
-            cookieMap.set(name, entry);
-          });
-      });
-      return [...cookieMap.values()].join('; ');
-    };
-
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
       origin: location.origin,
       pathname: location.pathname,
       localStorage: mergeStorageMap('localStorage'),
-      sessionStorage: mergeStorageMap('sessionStorage'),
-      cookies: mergeCookies()
+      sessionStorage: mergeStorageMap('sessionStorage')
     };
   }
 
@@ -344,21 +333,10 @@ document.addEventListener('DOMContentLoaded', () => {
       sessionStorage.setItem(key, value);
     });
 
-    document.cookie.split(';').forEach((cookie) => {
-      const eqPos = cookie.indexOf('=');
-      const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
-      if (name) {
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-      }
-    });
+  }
 
-    String(payload.cookies || '')
-      .split(';')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .forEach((cookieEntry) => {
-        document.cookie = `${cookieEntry};path=/`;
-      });
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
   }
 
   async function ensureAuthReady() {
@@ -623,6 +601,8 @@ document.addEventListener('DOMContentLoaded', () => {
       await ensureAuthReady();
       const email = loginEmail.value.trim();
       const password = loginPassword.value;
+      if (!isValidEmail(email)) throw new Error('Enter a valid email address.');
+      if (!password) throw new Error('Enter your password.');
       await window.bilmAuth.signIn(email, password);
       await saveCredentialsForAutofill(email, password);
       closeModal(loginModal);
@@ -637,6 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
       await ensureAuthReady();
       const email = signUpEmail.value.trim();
       const password = signUpPassword.value;
+      if (!isValidEmail(email)) throw new Error('Enter a valid email address.');
+      if (!password || password.length < 8) throw new Error('Password must be at least 8 characters.');
       await window.bilmAuth.signUp(email, password);
       await saveCredentialsForAutofill(email, password);
       closeModal(signUpModal);

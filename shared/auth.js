@@ -44,6 +44,15 @@
     'bilm-history-movies',
     'bilm-history-tv'
   ]);
+  const BACKUP_LOCAL_ALLOWLIST = [
+    /^bilm-/,
+    /^tmdb-/,
+    /^theme-/
+  ];
+  const BACKUP_SESSION_ALLOWLIST = [
+    /^bilm-/,
+    /^tmdb-/
+  ];
   let lastAppliedCloudSignature = '';
 
   function readJsonArray(raw) {
@@ -186,8 +195,15 @@
     return next;
   }
 
-  function readStorage(storage) {
+  function shouldIncludeStorageKey(key, allowlist) {
+    return allowlist.some((pattern) => pattern.test(String(key || '')));
+  }
+
+  function readStorage(storage, allowlist = []) {
     return Object.entries(storage).reduce((all, [key, value]) => {
+      if (allowlist.length && !shouldIncludeStorageKey(key, allowlist)) {
+        return all;
+      }
       all[key] = value;
       return all;
     }, {});
@@ -195,7 +211,7 @@
 
   function collectBackupData() {
     const meta = readSyncMeta();
-    const localState = readStorage(localStorage);
+    const localState = readStorage(localStorage, BACKUP_LOCAL_ALLOWLIST);
     delete localState[SYNC_ENABLED_KEY];
     delete localState[SYNC_META_KEY];
     delete localState[SYNC_DEVICE_ID_KEY];
@@ -205,8 +221,7 @@
       origin: location.origin,
       pathname: location.pathname,
       localStorage: localState,
-      sessionStorage: readStorage(sessionStorage),
-      cookies: document.cookie,
+      sessionStorage: readStorage(sessionStorage, BACKUP_SESSION_ALLOWLIST),
       meta: {
         updatedAtMs: Date.now(),
         deviceId: getOrCreateDeviceId(),
@@ -256,22 +271,6 @@
       Object.entries(snapshot.sessionStorage || {}).forEach(([key, value]) => {
         sessionStorage.setItem(key, value);
       });
-
-      document.cookie.split(';').forEach((cookie) => {
-        const eqPos = cookie.indexOf('=');
-        const name = eqPos > -1 ? cookie.slice(0, eqPos).trim() : cookie.trim();
-        if (name) {
-          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-        }
-      });
-
-      String(snapshot.cookies || '')
-        .split(';')
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-        .forEach((cookieEntry) => {
-          document.cookie = `${cookieEntry};path=/`;
-        });
 
       if (syncPreference === '0') {
         localStorage.setItem(SYNC_ENABLED_KEY, '0');
@@ -573,6 +572,21 @@
     return String(username || '').trim().toLowerCase();
   }
 
+  async function resolveEmailFromIdentifier(identifier) {
+    const cleaned = String(identifier || '').trim();
+    if (!cleaned) throw new Error('Email or username is required.');
+    if (cleaned.includes('@')) return cleaned;
+    const usernameKey = normalizeUsername(cleaned);
+    if (!usernameKey) throw new Error('Email or username is required.');
+    const usernameDoc = await modules.getDoc(modules.doc(firestore, 'usernames', usernameKey));
+    const mappedUid = String(usernameDoc.data()?.uid || '').trim();
+    if (!mappedUid) throw new Error('Email or password is incorrect.');
+    const userDoc = await modules.getDoc(modules.doc(firestore, 'users', mappedUid));
+    const email = String(userDoc.data()?.profile?.email || '').trim();
+    if (!email) throw new Error('Email or password is incorrect.');
+    return email;
+  }
+
   async function loadFirebaseModules() {
     if (modules) return modules;
     const [appModule, authModule, firestoreModule] = await Promise.all([
@@ -657,6 +671,8 @@
     const code = String(error?.code || '').toLowerCase();
     if (code === 'auth/network-request-failed') {
       error.message = 'Network request failed. Check your connection, disable VPN/content blockers, and try again.';
+    } else if (code === 'auth/invalid-email') {
+      error.message = 'Enter a valid email address.';
     } else if (code === 'auth/operation-not-supported-in-this-environment') {
       error.message = 'This browser blocked secure account storage. Disable private mode or content blockers and refresh.';
     } else if (code === 'auth/too-many-requests') {
@@ -723,9 +739,21 @@
       await init();
       return withAuthRetry(() => modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password));
     },
-    async signUpWithUsername({ email, password }) {
+    async signUpWithUsername({ email, password, username }) {
       await init();
-      return withAuthRetry(() => modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password));
+      const cleanedEmail = String(email || '').trim();
+      const cleanedUsername = String(username || '').trim();
+      const credential = await withAuthRetry(() => modules.createUserWithEmailAndPassword(auth, cleanedEmail, password));
+      if (cleanedUsername) {
+        await api.setUsername(cleanedUsername);
+      }
+      await modules.setDoc(modules.doc(firestore, 'users', credential.user.uid), {
+        profile: {
+          email: cleanedEmail,
+          updatedAt: modules.serverTimestamp()
+        }
+      }, { merge: true });
+      return credential;
     },
     async signIn(email, password) {
       await init();
@@ -733,7 +761,8 @@
     },
     async signInWithIdentifier(identifier, password) {
       await init();
-      return withAuthRetry(() => modules.signInWithEmailAndPassword(auth, String(identifier || '').trim(), password));
+      const resolvedEmail = await resolveEmailFromIdentifier(identifier);
+      return withAuthRetry(() => modules.signInWithEmailAndPassword(auth, resolvedEmail, password));
     },
     async setUsername(username) {
       await init();
@@ -744,9 +773,17 @@
       await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
         profile: {
           username: cleaned || null,
+          email: user.email || null,
           updatedAt: modules.serverTimestamp()
         }
       }, { merge: true });
+      if (cleaned) {
+        await modules.setDoc(modules.doc(firestore, 'usernames', normalizeUsername(cleaned)), {
+          uid: user.uid,
+          username: cleaned,
+          updatedAt: modules.serverTimestamp()
+        }, { merge: true });
+      }
       currentUser = { ...user, displayName: cleaned || null };
       notifySubscribers(auth.currentUser || currentUser);
       return cleaned;
