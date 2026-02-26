@@ -1,6 +1,10 @@
 const gameStoreKey = 'bilm:games:selection';
 const placeholderSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="#1f1f28"/><text x="50%" y="50%" font-size="22" font-family="Poppins, sans-serif" fill="#9ca3af" text-anchor="middle" dominant-baseline="middle">Game</text></svg>`;
 const placeholderImage = `data:image/svg+xml,${encodeURIComponent(placeholderSvg)}`;
+const allowedFrameHosts = new Set([
+  'www.onlinegames.io',
+  'onlinegames.io'
+]);
 
 const elements = {
   title: document.getElementById('gameTitle'),
@@ -35,6 +39,27 @@ const extractEmbedSrc = (embedMarkup) => {
     console.warn('Unable to parse embed HTML', error);
     return '';
   }
+};
+
+const isSafeFrameUrl = (urlValue) => {
+  try {
+    const url = new URL(String(urlValue || ''), window.location.origin);
+    return url.protocol === 'https:' && allowedFrameHosts.has(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const createSafeFrame = (src, title) => {
+  if (!isSafeFrameUrl(src)) return null;
+  const iframe = document.createElement('iframe');
+  iframe.src = src;
+  iframe.title = title || 'Game';
+  iframe.loading = 'lazy';
+  iframe.allowFullscreen = true;
+  iframe.referrerPolicy = 'no-referrer';
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-pointer-lock');
+  return iframe;
 };
 
 const getQueryParams = () => new URLSearchParams(window.location.search);
@@ -118,12 +143,20 @@ const loadGame = () => {
     elements.poster.alt = game.title;
   }
 
-  const embedMarkup = game.embedMarkup || (game.url ? `<iframe src="${game.url}" title="${game.title}" loading="lazy" allowfullscreen></iframe>` : '');
+  const embedMarkup = game.embedMarkup || '';
+  const embedSrc = extractEmbedSrc(embedMarkup);
+  const sourceUrl = embedSrc || game.url;
   if (elements.frame) {
-    elements.frame.innerHTML = embedMarkup || '<p>Game unavailable.</p>';
+    elements.frame.textContent = '';
+    const safeFrame = createSafeFrame(sourceUrl, game.title);
+    if (safeFrame) {
+      elements.frame.appendChild(safeFrame);
+    } else {
+      elements.frame.textContent = 'Game unavailable.';
+    }
   }
 
-  const openUrl = extractEmbedSrc(embedMarkup) || game.url;
+  const openUrl = isSafeFrameUrl(sourceUrl) ? sourceUrl : '';
   attachFrameControls(openUrl);
 };
 
