@@ -19,10 +19,6 @@ Visit the site here:
 
 👉 https://watchbilm.org (Recommended)
 
-👉 https://watchbilm.uk
-
 👉 Direct Link: https://inspecting.github.io/bilm/home/
 
 👉 https://watchbilm.org/home/ (Recommended)
-
-👉 https://watchbilm.uk/home/
