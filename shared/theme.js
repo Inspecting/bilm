@@ -50,6 +50,8 @@ function withBase(path) {
     particles: true,
     loading: true,
     defaultServer: 'vidsrc',
+    proxyEnabled: false,
+    proxyProvider: 'none',
     searchHistory: true,
     continueWatching: true,
     incognito: false
