@@ -1,19 +1,5 @@
-function detectBasePath() {
-  const parts = window.location.pathname.split('/').filter(Boolean);
-  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
-  if (!parts.length || appRoots.has(parts[0])) return '';
-  return `/${parts[0]}`;
-}
-
-function withBase(path) {
-  const normalized = path.startsWith('/') ? path : `/${path}`;
-  return `${detectBasePath()}${normalized}`;
-}
-
-const navbarScript = document.createElement('script');
-navbarScript.src = withBase('/shared/navbar.js');
-navbarScript.defer = true;
-document.body.appendChild(navbarScript);
+const proxyRouting = window.BilmProxyRouting || {}
+const appWithBase = proxyRouting.withBase || ((path) => path);
 
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const params = new URLSearchParams(window.location.search);
@@ -198,7 +184,7 @@ function createMoreLikeCard(show) {
       : 'https://via.placeholder.com/140x210?text=No+Image',
     source: 'TMDB',
     rating: show.vote_average,
-    link: `${withBase('/tv/show.html')}?id=${show.id}`
+    link: `${appWithBase('/tv/show.html')}?id=${show.id}`
   };
 
   return window.BilmMediaCard.createMediaCard({
@@ -679,32 +665,15 @@ function buildTvUrl(server) {
 
 
 function buildProxiedUrl(url) {
-  if (!url || proxyEnabled !== true) return url;
-  const provider = normalizeProxyProvider(proxyProvider);
-  if (provider === 'none') return url;
-
-  try {
-    switch (provider) {
-      case 'ultraviolet':
-        return `${window.location.origin}${withBase(`/uv/service/${encodeURIComponent(url)}`)}`;
-      case 'scramjet':
-        return `${window.location.origin}${withBase(`/scramjet/${encodeURIComponent(url)}`)}`;
-      default:
-        return url;
-    }
-  } catch {
-    return url;
-  }
+  return proxyRouting.buildProxiedUrl
+    ? proxyRouting.buildProxiedUrl(url, { proxyEnabled, proxyProvider })
+    : url;
 }
 
 function buildReloadableUrl(url) {
-  try {
-    const parsed = new URL(url, window.location.href);
-    parsed.searchParams.set('bilm_refresh', Date.now().toString());
-    return parsed.toString();
-  } catch {
-    return `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
-  }
+  return proxyRouting.buildReloadableUrl
+    ? proxyRouting.buildReloadableUrl(url)
+    : `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
 }
 
 function refreshIframe(url) {
@@ -999,7 +968,7 @@ async function fetchTMDBData() {
       rating: details.vote_average,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${withBase('/tv/show.html')}?id=${tmdbId}`,
+      link: `${appWithBase('/tv/show.html')}?id=${tmdbId}`,
       certification
     };
 
