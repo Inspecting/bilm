@@ -161,14 +161,11 @@ function buildProxiedUrl(url) {
   if (provider === 'none') return url;
 
   try {
-    const encodedTarget = encodeURIComponent(url);
     switch (provider) {
       case 'ultraviolet':
-        // Placeholder route: replace with your actual deployed Ultraviolet endpoint.
-        return `${window.location.origin}/uv/service/${encodedTarget}`;
+        return `${window.location.origin}${withBase(`/uv/service/${encodeURIComponent(url)}`)}`;
       case 'scramjet':
-        // Placeholder route: replace with your actual deployed Scramjet endpoint.
-        return `${window.location.origin}/scramjet/service/${encodedTarget}`;
+        return `${window.location.origin}${withBase(`/scramjet/${encodeURIComponent(url)}`)}`;
       default:
         return url;
     }
