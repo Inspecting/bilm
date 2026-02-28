@@ -2,8 +2,10 @@
 function detectBasePath() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
-  if (!parts.length || appRoots.has(parts[0])) return '';
-  return `/${parts[0]}`;
+  const reservedRoots = new Set(['service', 'uv', 'scramjet']);
+  if (!parts.length || appRoots.has(parts[0]) || reservedRoots.has(parts[0])) return '';
+  if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
+  return '';
 }
 
 function withBase(path) {

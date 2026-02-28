@@ -1,5 +1,6 @@
 function detectBasePath() {
   const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  const reservedRoots = new Set(['service', 'uv', 'scramjet']);
 
   const scriptSrc = document.currentScript?.src;
   if (scriptSrc) {
@@ -8,6 +9,8 @@ function detectBasePath() {
       const sharedIndex = scriptPath.lastIndexOf('/shared/');
       if (sharedIndex >= 0) {
         const prefix = scriptPath.slice(0, sharedIndex);
+        const firstSegment = prefix.split('/').filter(Boolean)[0] || '';
+        if (firstSegment && reservedRoots.has(firstSegment)) return '';
         return prefix || '';
       }
     } catch {
@@ -16,8 +19,9 @@ function detectBasePath() {
   }
 
   const parts = window.location.pathname.split('/').filter(Boolean);
-  if (!parts.length || appRoots.has(parts[0])) return '';
-  return `/${parts[0]}`;
+  if (!parts.length || appRoots.has(parts[0]) || reservedRoots.has(parts[0])) return '';
+  if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
+  return '';
 }
 
 function withBase(path) {
