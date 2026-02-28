@@ -1,1 +1,9 @@
-
+{
+	"lsp": {
+		"biome": {
+			"enabled": false
+		}
+	},
+	"format_on_save": "on",
+	"formatter": "prettier"
+}
