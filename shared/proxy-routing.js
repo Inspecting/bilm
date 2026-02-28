@@ -11,6 +11,16 @@
     return `${detectBasePath()}${normalized}`;
   }
 
+  function getProxyPrefixes(provider) {
+    if (provider === 'ultraviolet') {
+      return ['/uv/service/'];
+    }
+    if (provider === 'scramjet') {
+      return ['/service/scramjet/', '/scramjet/'];
+    }
+    return [];
+  }
+
   function normalizeProxyProvider(provider) {
     return provider === 'ultraviolet' || provider === 'scramjet' ? provider : 'none';
   }
@@ -20,16 +30,14 @@
     const provider = normalizeProxyProvider(proxyProvider);
     if (provider === 'none') return url;
 
-    if (provider === 'ultraviolet') {
-      return `${window.location.origin}${withBase(`/uv/service/${encodeURIComponent(url)}`)}`;
-    }
-
-    return `${window.location.origin}${withBase(`/scramjet/${encodeURIComponent(url)}`)}`;
+    const [primaryPrefix] = getProxyPrefixes(provider);
+    return `${window.location.origin}${withBase(`${primaryPrefix}${encodeURIComponent(url)}`)}`;
   }
 
   function isProxyPath(pathname) {
     const base = detectBasePath();
-    return pathname.startsWith(`${base}/uv/service/`) || pathname.startsWith(`${base}/scramjet/`);
+    const prefixes = [...getProxyPrefixes('ultraviolet'), ...getProxyPrefixes('scramjet')];
+    return prefixes.some((prefix) => pathname.startsWith(`${base}${prefix}`) || pathname.startsWith(prefix));
   }
 
   function buildReloadableUrl(url) {
