@@ -179,9 +179,11 @@
 
     function getBasePath() {
       const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+      const reservedRoots = new Set(['service', 'uv', 'scramjet']);
       const parts = window.location.pathname.split('/').filter(Boolean);
-      if (!parts.length || appRoots.has(parts[0])) return '';
-      return `/${parts[0]}`;
+      if (!parts.length || appRoots.has(parts[0]) || reservedRoots.has(parts[0])) return '';
+      if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
+      return '';
     }
 
     function getHomeUrl() {
@@ -305,7 +307,8 @@
 
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js')
+      const serviceWorkerUrl = `${getBasePath()}/sw.js`;
+      navigator.serviceWorker.register(serviceWorkerUrl)
         .then(() => console.log('Service Worker registered'))
         .catch(err => console.error('Service Worker registration failed:', err));
     }
