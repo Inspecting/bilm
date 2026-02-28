@@ -30,148 +30,6 @@ function safeJoin(base, target) {
   return targetPath.startsWith(base) ? targetPath : null;
 }
 
-function parseProxyTarget(prefix, pathname) {
-  if (!pathname.startsWith(prefix)) return null;
-  const encoded = pathname.slice(prefix.length);
-  if (!encoded) return null;
-  let decoded;
-  try {
-    decoded = decodeURIComponent(encoded);
-  } catch {
-    return null;
-  }
-  try {
-    return new URL(decoded);
-  } catch {
-    return null;
-  }
-}
-
-function buildProxyUrl(url) {
-  return `/service/scramjet/${encodeURIComponent(url)}`;
-}
-
-function rewriteHtml(html, baseUrl) {
-  const baseTag = `<base href="${baseUrl.toString()}">`;
-  let out = html;
-  if (/<head[^>]*>/i.test(out) && !/<base\s/i.test(out)) {
-    out = out.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
-  }
-
-  out = out.replace(/\b(href|src|action)=(["'])([^"']+)\2/gi, (match, attr, quote, value) => {
-    if (
-      value.startsWith('data:') ||
-      value.startsWith('blob:') ||
-      value.startsWith('javascript:') ||
-      value.startsWith('#')
-    ) {
-      return match;
-    }
-
-    let absolute;
-    try {
-      absolute = new URL(value, baseUrl).toString();
-    } catch {
-      return match;
-    }
-
-    return `${attr}=${quote}${buildProxyUrl(absolute)}${quote}`;
-  });
-
-  return out;
-}
-
-async function handleProxy(req, res, targetUrl) {
-  const bodyAllowed = !['GET', 'HEAD'].includes(req.method || 'GET');
-  const reqHeaders = new Headers();
-  for (const [key, val] of Object.entries(req.headers)) {
-    if (!val) continue;
-    const lower = key.toLowerCase();
-    if (['host', 'content-length'].includes(lower)) continue;
-    if (Array.isArray(val)) {
-      reqHeaders.set(key, val.join(', '));
-    } else {
-      reqHeaders.set(key, val);
-    }
-  }
-
-  reqHeaders.set('origin', targetUrl.origin);
-  reqHeaders.set('referer', targetUrl.toString());
-
-  let upstream;
-  try {
-    upstream = await fetch(targetUrl, {
-      method: req.method,
-      headers: reqHeaders,
-      body: bodyAllowed ? req : undefined,
-      redirect: 'follow',
-      duplex: bodyAllowed ? 'half' : undefined
-    });
-  } catch (error) {
-    res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end(`Proxy upstream error: ${error?.message || 'unknown error'}`);
-    return;
-  }
-
-  const headers = {};
-  upstream.headers.forEach((value, key) => {
-    const lower = key.toLowerCase();
-    if (
-      [
-        'content-security-policy',
-        'x-frame-options',
-        'content-encoding',
-        'content-length',
-        'transfer-encoding',
-        'connection'
-      ].includes(lower)
-    ) {
-      return;
-    }
-    if (lower === 'location') {
-      try {
-        const absolute = new URL(value, targetUrl).toString();
-        headers.location = buildProxyUrl(absolute);
-      } catch {
-        headers.location = value;
-      }
-      return;
-    }
-    headers[key] = value;
-  });
-
-  const contentType = upstream.headers.get('content-type') || '';
-  if (contentType.includes('text/html')) {
-    const html = await upstream.text();
-    const rewritten = rewriteHtml(html, targetUrl);
-    headers['content-type'] = 'text/html; charset=utf-8';
-    headers['content-length'] = Buffer.byteLength(rewritten).toString();
-    res.writeHead(upstream.status, headers);
-    res.end(rewritten);
-    return;
-  }
-
-  res.writeHead(upstream.status, headers);
-  if (!upstream.body) {
-    res.end();
-    return;
-  }
-  const stream = upstream.body;
-  stream.pipeTo(new WritableStream({
-    write(chunk) {
-      res.write(Buffer.from(chunk));
-    },
-    close() {
-      res.end();
-    },
-    abort() {
-      res.destroy();
-    }
-  })).catch(() => {
-    res.destroy();
-  });
-}
-
 async function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   const candidate = safeJoin(rootDir, rel);
@@ -185,7 +43,6 @@ async function serveStatic(req, res, pathname) {
   try {
     stat = await fsp.stat(candidate);
   } catch {
-    // try folder index
     const folderCandidate = safeJoin(rootDir, path.join(rel, 'index.html'));
     if (!folderCandidate) {
       res.writeHead(404);
@@ -226,22 +83,7 @@ async function serveStatic(req, res, pathname) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
-
-  const scramjetTarget = parseProxyTarget('/service/scramjet/', pathname)
-    || parseProxyTarget('/scramjet/', pathname);
-  if (scramjetTarget) {
-    await handleProxy(req, res, scramjetTarget);
-    return;
-  }
-
-  const uvTarget = parseProxyTarget('/uv/service/', pathname);
-  if (uvTarget) {
-    await handleProxy(req, res, uvTarget);
-    return;
-  }
-
-  await serveStatic(req, res, pathname);
+  await serveStatic(req, res, url.pathname);
 });
 
 server.listen(port, '0.0.0.0', () => {

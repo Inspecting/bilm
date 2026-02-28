@@ -1,5 +1,4 @@
-const proxyRouting = window.BilmProxyRouting || {}
-const appWithBase = proxyRouting.withBase || ((path) => path);
+const appWithBase = window.bilmTheme?.withBase || ((path) => path);
 
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const params = new URLSearchParams(window.location.search);
@@ -28,11 +27,7 @@ const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 const initialSettings = window.bilmTheme?.getSettings?.();
 const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
 const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'embedmaster');
-const supportedProxyProviders = ['none', 'ultraviolet', 'scramjet'];
-const normalizeProxyProvider = (provider) => (supportedProxyProviders.includes(provider) ? provider : 'none');
 let currentServer = normalizeServer(initialSettings?.defaultServer || 'embedmaster');
-let proxyEnabled = initialSettings?.proxyEnabled === true;
-let proxyProvider = normalizeProxyProvider(initialSettings?.proxyProvider || 'none');
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 
@@ -146,16 +141,9 @@ function buildMovieUrl(server) {
 }
 
 
-function buildProxiedUrl(url) {
-  return proxyRouting.buildProxiedUrl
-    ? proxyRouting.buildProxiedUrl(url, { proxyEnabled, proxyProvider })
-    : url;
-}
 
 function buildReloadableUrl(url) {
-  return proxyRouting.buildReloadableUrl
-    ? proxyRouting.buildReloadableUrl(url)
-    : `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
+  return `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
 }
 
 function refreshIframe(url) {
@@ -187,7 +175,6 @@ function updateIframe() {
     setActiveServer(fallbackServer);
     url = buildMovieUrl(fallbackServer);
   }
-  url = buildProxiedUrl(url);
   refreshIframe(url);
   if (continueWatchingReady) {
     updateContinueWatching();
@@ -588,18 +575,10 @@ if (currentServer) {
 
 window.addEventListener('bilm:theme-changed', (event) => {
   const newServer = normalizeServer(event.detail?.defaultServer);
-  const nextProxyEnabled = event.detail?.proxyEnabled === true;
-  const nextProxyProvider = normalizeProxyProvider(event.detail?.proxyProvider || 'none');
   let shouldRefresh = false;
 
   if (newServer && newServer !== currentServer) {
     setActiveServer(newServer);
-    shouldRefresh = true;
-  }
-
-  if (nextProxyEnabled !== proxyEnabled || nextProxyProvider !== proxyProvider) {
-    proxyEnabled = nextProxyEnabled;
-    proxyProvider = nextProxyProvider;
     shouldRefresh = true;
   }
 
