@@ -48,7 +48,7 @@ function parseProxyTarget(prefix, pathname) {
 }
 
 function buildProxyUrl(url) {
-  return `/scramjet/${encodeURIComponent(url)}`;
+  return `/service/scramjet/${encodeURIComponent(url)}`;
 }
 
 function rewriteHtml(html, baseUrl) {
@@ -228,7 +228,8 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
 
-  const scramjetTarget = parseProxyTarget('/scramjet/', pathname);
+  const scramjetTarget = parseProxyTarget('/service/scramjet/', pathname)
+    || parseProxyTarget('/scramjet/', pathname);
   if (scramjetTarget) {
     await handleProxy(req, res, scramjetTarget);
     return;
