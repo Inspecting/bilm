@@ -44,7 +44,11 @@ let currentEpisode = 1;
 const initialSettings = window.bilmTheme?.getSettings?.();
 const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
 const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'embedmaster');
+const supportedProxyProviders = ['none', 'ultraviolet', 'scramjet'];
+const normalizeProxyProvider = (provider) => (supportedProxyProviders.includes(provider) ? provider : 'none');
 let currentServer = normalizeServer(initialSettings?.defaultServer || 'embedmaster');
+let proxyEnabled = initialSettings?.proxyEnabled === true;
+let proxyProvider = normalizeProxyProvider(initialSettings?.proxyProvider || 'none');
 let totalSeasons = 1;
 let episodesPerSeason = {};
 let seasonEpisodeMemory = {};
@@ -559,10 +563,25 @@ if (currentServer) {
 
 window.addEventListener('bilm:theme-changed', (event) => {
   const newServer = normalizeServer(event.detail?.defaultServer);
+  const nextProxyEnabled = event.detail?.proxyEnabled === true;
+  const nextProxyProvider = normalizeProxyProvider(event.detail?.proxyProvider || 'none');
+  let shouldRefresh = false;
+
   if (newServer && newServer !== currentServer) {
     setActiveServer(newServer);
+    shouldRefresh = true;
+  }
+
+  if (nextProxyEnabled !== proxyEnabled || nextProxyProvider !== proxyProvider) {
+    proxyEnabled = nextProxyEnabled;
+    proxyProvider = nextProxyProvider;
+    shouldRefresh = true;
+  }
+
+  if (shouldRefresh) {
     updateIframe();
   }
+
   const nextContinueWatching = event.detail?.continueWatching !== false;
   if (nextContinueWatching !== continueWatchingEnabled) {
     continueWatchingEnabled = nextContinueWatching;
@@ -653,6 +672,29 @@ function buildTvUrl(server) {
   }
 }
 
+
+function buildProxiedUrl(url) {
+  if (!url || proxyEnabled !== true) return url;
+  const provider = normalizeProxyProvider(proxyProvider);
+  if (provider === 'none') return url;
+
+  try {
+    const encodedTarget = encodeURIComponent(url);
+    switch (provider) {
+      case 'ultraviolet':
+        // Placeholder route: replace with your actual deployed Ultraviolet endpoint.
+        return `${window.location.origin}/uv/service/${encodedTarget}`;
+      case 'scramjet':
+        // Placeholder route: replace with your actual deployed Scramjet endpoint.
+        return `${window.location.origin}/scramjet/service/${encodedTarget}`;
+      default:
+        return url;
+    }
+  } catch {
+    return url;
+  }
+}
+
 function buildReloadableUrl(url) {
   try {
     const parsed = new URL(url, window.location.href);
@@ -693,6 +735,7 @@ function updateIframe() {
     setActiveServer('vidsrc');
     url = buildTvUrl('vidsrc');
   }
+  url = buildProxiedUrl(url);
   refreshIframe(url);
 
   if (continueWatchingReady) {

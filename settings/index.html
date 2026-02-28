@@ -480,8 +480,8 @@
     </section>
 
     <section class="settings-card">
-      <h2>Playback Defaults</h2>
-      <p>Choose the default server for your viewer pages.</p>
+      <h2>Defaults</h2>
+      <p>Choose defaults for your viewer pages.</p>
 
       <div class="control-row">
         <div>
@@ -494,6 +494,29 @@
           <option value="godrive">GoDrive Player</option>
           <option value="multiembed">MultiEmbed</option>
         </select>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label for="proxyProviderSelect">Proxy</label>
+          <small>Provider used when proxied playback is enabled.</small>
+        </div>
+        <select id="proxyProviderSelect">
+          <option value="none">None</option>
+          <option value="ultraviolet">Ultraviolet</option>
+          <option value="scramjet">Scramjet</option>
+        </select>
+      </div>
+
+      <div class="control-row">
+        <div>
+          <label>Proxied Playback</label>
+          <small>Only the player embed loads through the selected proxy.</small>
+        </div>
+        <label class="toggle">
+          <input id="proxyEnabledToggle" type="checkbox" />
+          <span></span>
+        </label>
       </div>
     </section>
 
@@ -624,6 +647,8 @@
   const loadingToggle = document.getElementById('loadingToggle');
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
+  const proxyProviderSelect = document.getElementById('proxyProviderSelect');
+  const proxyEnabledToggle = document.getElementById('proxyEnabledToggle');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
   const exportDataBtn = document.getElementById('exportDataBtn');
@@ -671,6 +696,7 @@
   const backToLoginBtn = document.getElementById('backToLoginBtn');
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
   const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
+  const supportedProxyProviders = ['none', 'ultraviolet', 'scramjet'];
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^tmdb-/, /^theme-/];
   const BACKUP_SESSION_ALLOWLIST = [/^bilm-/, /^tmdb-/];
@@ -840,6 +866,9 @@
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'embedmaster';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'embedmaster';
+    const proxyProvider = settings.proxyProvider || 'none';
+    proxyProviderSelect.value = supportedProxyProviders.includes(proxyProvider) ? proxyProvider : 'none';
+    proxyEnabledToggle.checked = settings.proxyEnabled === true;
     updatePresetVisuals();
   }
 
@@ -1071,6 +1100,14 @@
 
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
+  });
+
+  proxyProviderSelect.addEventListener('change', (event) => {
+    applySettings({ proxyProvider: event.target.value });
+  });
+
+  proxyEnabledToggle.addEventListener('change', (event) => {
+    applySettings({ proxyEnabled: event.target.checked });
   });
 
   resetThemeBtn.addEventListener('click', () => {
