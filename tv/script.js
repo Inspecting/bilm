@@ -150,10 +150,17 @@ async function fetchAnimeShowsByGenre(genre, page = 1) {
     }
   `;
 
-  const data = await postJSON(ANILIST_GRAPHQL_URL, {
-    query,
-    variables: { page, perPage: animeShowsPerLoad, genre }
-  });
+  let data = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    data = await postJSON(ANILIST_GRAPHQL_URL, {
+      query,
+      variables: { page, perPage: animeShowsPerLoad, genre }
+    });
+    if (data?.data?.Page?.media?.length) break;
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+    }
+  }
 
   return data?.data?.Page?.media || [];
 }
@@ -194,8 +201,13 @@ function createSectionSkeleton(section, container, prefix = '') {
   rowEl.className = 'scroll-row';
   rowEl.id = `${prefix}row-${section.slug}`;
 
+  const statusEl = document.createElement('p');
+  statusEl.className = 'section-status';
+  statusEl.setAttribute('aria-live', 'polite');
+
   sectionEl.appendChild(headerEl);
   sectionEl.appendChild(rowEl);
+  sectionEl.appendChild(statusEl);
   container.appendChild(sectionEl);
 }
 
@@ -262,15 +274,24 @@ async function loadAnimeShowsForSection(section) {
   animeLoadedCounts[section.slug] ??= 0;
   animeLoadedIds[section.slug] ??= new Set();
 
+  const rowEl = document.getElementById(`anime-row-${section.slug}`);
+  if (!rowEl) return false;
+  const sectionEl = rowEl.closest('.section');
+  const statusEl = sectionEl?.querySelector('.section-status');
+
   const page = Math.floor(animeLoadedCounts[section.slug] / animeShowsPerLoad) + 1;
   const animeShows = await fetchAnimeShowsByGenre(section.genre, page);
-  if (!animeShows.length) return false;
-
-  const rowEl = document.getElementById(`anime-row-${section.slug}`);
+  if (!animeShows.length) {
+    if (statusEl && !rowEl.children.length) {
+      statusEl.textContent = 'Could not load anime titles right now. Please try again.';
+    }
+    return false;
+  }
 
   const uniqueShows = animeShows.filter((show) => !animeLoadedIds[section.slug].has(show.id));
+  const visibleShows = uniqueShows.slice(0, animeShowsPerLoad);
 
-  for (const animeShow of uniqueShows.slice(0, animeShowsPerLoad)) {
+  for (const animeShow of visibleShows) {
     animeLoadedIds[section.slug].add(animeShow.id);
 
     const showData = {
@@ -285,6 +306,10 @@ async function loadAnimeShowsForSection(section) {
 
     const card = createShowCard(showData);
     rowEl.appendChild(card);
+  }
+
+  if (statusEl) {
+    statusEl.textContent = visibleShows.length ? '' : 'No new titles available right now.';
   }
 
   animeLoadedCounts[section.slug] += animeShowsPerLoad;

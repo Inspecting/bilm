@@ -65,10 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const settings = window.bilmTheme?.getSettings?.() || {};
     if (settings.searchHistory !== false && settings.incognito !== true) {
       const history = loadList(SEARCH_HISTORY_KEY);
+      const normalizedQuery = query.toLowerCase();
       const next = [
         { query, updatedAt: Date.now() },
-        ...history
-      ];
+        ...history.filter((entry) => String(entry?.query || '').trim().toLowerCase() !== normalizedQuery)
+      ].slice(0, 120);
       saveList(SEARCH_HISTORY_KEY, next);
     }
 
