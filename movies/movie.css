@@ -117,7 +117,7 @@ body {
 }
 
 .movie-card img {
-  width: 100%;
+  width: 140px;
   height: 188px;
   object-fit: cover;
   border-radius: 12px 12px 0 0;

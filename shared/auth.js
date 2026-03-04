@@ -41,6 +41,8 @@
     'bilm-favorites',
     'bilm-watch-later',
     'bilm-continue-watching',
+    'bilm-watch-history',
+    'bilm-search-history',
     'bilm-history-movies',
     'bilm-history-tv'
   ]);
@@ -66,7 +68,20 @@
 
   function getListItemKey(item) {
     if (!item || typeof item !== 'object') return '';
-    return String(item.key || item.tmdbId || item.id || '').trim();
+    const explicitKey = String(item.key || '').trim();
+    if (explicitKey) return explicitKey;
+
+    const normalizedQuery = String(item.query || '').trim().toLowerCase();
+    if (normalizedQuery) return `search:${normalizedQuery}`;
+
+    const mediaType = String(item.type || 'media').trim().toLowerCase();
+    const mediaId = String(item.tmdbId || item.id || '').trim();
+    if (mediaId) return `${mediaType}:${mediaId}`;
+
+    const titleFallback = String(item.title || '').trim().toLowerCase();
+    if (titleFallback) return `${mediaType}:${titleFallback}`;
+
+    return '';
   }
 
   function getItemUpdatedAt(item) {

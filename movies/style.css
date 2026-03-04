@@ -29,6 +29,13 @@ main {
   margin-bottom: 30px;
 }
 
+.section-status {
+  min-height: 18px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
 .section-title {
   font-size: 26px;
   font-weight: 700;
