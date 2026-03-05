@@ -294,6 +294,8 @@
     let cachedAll = [];
     let activeFilter = 'all';
     let activeSort = 'relevance';
+    const API_COOLDOWN_MS = 1000;
+    const apiCooldownByHost = new Map();
 
     function normalizeTitle(value) {
       return (value || '').trim().toLowerCase();
@@ -307,7 +309,25 @@
       return `${normalizeTitle(title)}-${year || 'N/A'}`;
     }
 
+
+    async function waitForApiCooldown(url) {
+      let host = 'default';
+      try {
+        host = new URL(url, window.location.origin).host || 'default';
+      } catch {
+        host = 'default';
+      }
+      const now = Date.now();
+      const nextAllowedAt = apiCooldownByHost.get(host) || 0;
+      const waitMs = nextAllowedAt - now;
+      if (waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+      apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+    }
+
     async function fetchJSON(url) {
+      await waitForApiCooldown(url);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
@@ -413,7 +433,7 @@
     function fetchTvmazeShows(query) {
       if (!query) return Promise.resolve([]);
       const url = `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`;
-      return fetch(url)
+      return waitForApiCooldown(url).then(() => fetch(url))
         .then(res => res.json())
         .then(data => {
           if (!Array.isArray(data)) return [];

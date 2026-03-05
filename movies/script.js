@@ -19,6 +19,8 @@ const loadedCounts = {};
 const loadedMovieIds = {};
 const animeLoadedCounts = {};
 const animeLoadedIds = {};
+const API_COOLDOWN_MS = 1000;
+const apiCooldownByHost = new Map();
 
 const modeState = { current: 'regular' };
 
@@ -62,8 +64,25 @@ function slugifySectionTitle(title) {
     .replace(/^-+|-+$/g, '') || 'section';
 }
 
+
+async function waitForApiCooldown(url) {
+  let host = 'default';
+  try {
+    host = new URL(url, window.location.origin).host || 'default';
+  } catch {
+    host = 'default';
+  }
+  const now = Date.now();
+  const nextAllowedAt = apiCooldownByHost.get(host) || 0;
+  const waitMs = nextAllowedAt - now;
+  if (waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+}
 async function fetchJSON(url) {
   try {
+    await waitForApiCooldown(url);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
@@ -74,9 +93,13 @@ async function fetchJSON(url) {
 
 async function postJSON(url, body) {
   try {
+    await waitForApiCooldown(url);
+    const isAniList = /graphql\.anilist\.co/i.test(url);
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: isAniList
+        ? { 'Content-Type': 'text/plain;charset=UTF-8' }
+        : { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(body)
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

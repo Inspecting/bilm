@@ -54,6 +54,13 @@
             <input id="playbackNoteMinutes" type="text" inputmode="numeric" placeholder="00" aria-label="Minutes" />
           </div>
         </div>
+        <button id="languageBtn" title="Select Sub or Dub" aria-haspopup="true" aria-expanded="false" aria-controls="languageDropdown" aria-label="Select sub or dub">
+          SUB/DUB
+          <div id="languageDropdown" role="menu" aria-label="Audio selection">
+            <div class="serverDropdownItem active" data-language="sub" role="menuitem" tabindex="0">Sub</div>
+            <div class="serverDropdownItem" data-language="dub" role="menuitem" tabindex="0">Dub</div>
+          </div>
+        </button>
         <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
@@ -62,17 +69,11 @@
             <line x1="6" y1="17" x2="6" y2="17"></line>
           </svg>
           <div id="serverDropdown" role="menu" aria-label="Server selection">
+            <div class="serverDropdownItem" data-server="vidnest" role="menuitem" tabindex="0">VidNest</div>
             <div class="serverDropdownItem active" data-server="embedmaster" role="menuitem" tabindex="0">EmbedMaster</div>
             <div class="serverDropdownItem" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
             <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
             <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
-          </div>
-        </button>
-        <button id="languageBtn" title="Select Sub or Dub" aria-haspopup="true" aria-expanded="false" aria-controls="languageDropdown" aria-label="Select sub or dub">
-          SUB/DUB
-          <div id="languageDropdown" role="menu" aria-label="Audio selection">
-            <div class="serverDropdownItem active" data-language="sub" role="menuitem" tabindex="0">Sub</div>
-            <div class="serverDropdownItem" data-language="dub" role="menuitem" tabindex="0">Dub</div>
           </div>
         </button>
         <button id="fullscreenBtn" title="Fullscreen" aria-label="Fullscreen">
