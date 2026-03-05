@@ -19,9 +19,12 @@ const loadedCounts = {};
 const loadedShowIds = {};
 const animeLoadedCounts = {};
 const animeLoadedIds = {};
-const API_COOLDOWN_MS = 1000;
+const API_COOLDOWN_MS = 100;
+const API_MAX_RETRIES = 2;
 const apiCooldownByHost = new Map();
 const apiRequestQueueByHost = new Map();
+const inFlightGetRequests = new Map();
+const inFlightPostRequests = new Map();
 
 const modeState = { current: 'regular' };
 
@@ -66,32 +69,97 @@ function slugifySectionTitle(title) {
 }
 
 async function fetchJSON(url) {
-  try {
-    await waitForApiCooldown(url);
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch {
-    return null;
+  const cacheKey = String(url);
+  if (inFlightGetRequests.has(cacheKey)) {
+    return inFlightGetRequests.get(cacheKey);
   }
+
+  const request = (async () => {
+    for (let attempt = 0; attempt <= API_MAX_RETRIES; attempt += 1) {
+      try {
+        await waitForApiCooldown(url);
+        const res = await fetch(url);
+        if (res.ok) {
+          return await res.json();
+        }
+
+        if (res.status === 429 || res.status >= 500) {
+          const retryAfter = Number.parseFloat(res.headers.get('Retry-After'));
+          const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
+            ? retryAfter * 1000
+            : 250 * (attempt + 1);
+          if (attempt < API_MAX_RETRIES) {
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            continue;
+          }
+        }
+
+        throw new Error(`HTTP ${res.status}`);
+      } catch {
+        if (attempt >= API_MAX_RETRIES) return null;
+      }
+    }
+
+    return null;
+  })();
+
+  inFlightGetRequests.set(cacheKey, request);
+  request.finally(() => {
+    inFlightGetRequests.delete(cacheKey);
+  });
+
+  return request;
 }
 
 async function postJSON(url, body) {
-  try {
-    await waitForApiCooldown(url);
-    const isAniList = /graphql\.anilist\.co/i.test(url);
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: isAniList
-        ? { 'Content-Type': 'text/plain;charset=UTF-8' }
-        : { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch {
-    return null;
+  const cacheKey = `${url}:${JSON.stringify(body)}`;
+  if (inFlightPostRequests.has(cacheKey)) {
+    return inFlightPostRequests.get(cacheKey);
   }
+
+  const request = (async () => {
+    const isAniList = /graphql\.anilist\.co/i.test(url);
+
+    for (let attempt = 0; attempt <= API_MAX_RETRIES; attempt += 1) {
+      try {
+        await waitForApiCooldown(url);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: isAniList
+            ? { 'Content-Type': 'text/plain;charset=UTF-8' }
+            : { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+
+        if (res.status === 429 || res.status >= 500) {
+          const retryAfter = Number.parseFloat(res.headers.get('Retry-After'));
+          const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
+            ? retryAfter * 1000
+            : 250 * (attempt + 1);
+          if (attempt < API_MAX_RETRIES) {
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            continue;
+          }
+        }
+
+        throw new Error(`HTTP ${res.status}`);
+      } catch {
+        if (attempt >= API_MAX_RETRIES) return null;
+      }
+    }
+
+    return null;
+  })();
+
+  inFlightPostRequests.set(cacheKey, request);
+  request.finally(() => {
+    inFlightPostRequests.delete(cacheKey);
+  });
+
+  return request;
 }
 
 function getApiHost(url) {
