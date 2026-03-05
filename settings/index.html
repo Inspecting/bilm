@@ -497,6 +497,15 @@
       </div>
       <div class="control-row">
         <div>
+          <label for="animeServerSelect">Anime Default Server</label>
+          <small>Used for anime viewer pages.</small>
+        </div>
+        <select id="animeServerSelect">
+          <option value="vidnest">Vidnest</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <div>
           <label>Proxied Playback</label>
           <small>Save your preference for proxied playback.</small>
         </div>
@@ -634,6 +643,7 @@
   const loadingToggle = document.getElementById('loadingToggle');
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
+  const animeServerSelect = document.getElementById('animeServerSelect');
   const proxyEnabledToggle = document.getElementById('proxyEnabledToggle');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
@@ -851,6 +861,8 @@
     incognitoToggle.checked = settings.incognito === true;
     const preferredServer = settings.defaultServer || 'embedmaster';
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'embedmaster';
+    const preferredAnimeServer = settings.animeDefaultServer || 'vidnest';
+    animeServerSelect.value = preferredAnimeServer === 'vidnest' ? 'vidnest' : 'vidnest';
     proxyEnabledToggle.checked = settings.proxyEnabled === true;
     updatePresetVisuals();
   }
@@ -1083,6 +1095,10 @@
 
   serverSelect.addEventListener('change', (event) => {
     applySettings({ defaultServer: event.target.value });
+  });
+
+  animeServerSelect.addEventListener('change', (event) => {
+    applySettings({ animeDefaultServer: event.target.value });
   });
 
   proxyEnabledToggle.addEventListener('change', (event) => {

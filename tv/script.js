@@ -300,7 +300,7 @@ async function loadAnimeShowsForSection(section) {
       type: 'tv',
       year: animeShow.startDate?.year || 'N/A',
       img: animeShow.coverImage?.large || animeShow.coverImage?.medium,
-      link: `https://anilist.co/anime/${animeShow.id}`,
+      link: `${BASE_URL}/tv/show.html?anime=1&aid=${animeShow.id}&type=tv`,
       source: 'AniList'
     };
 

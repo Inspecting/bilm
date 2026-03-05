@@ -300,7 +300,7 @@ async function loadAnimeMoviesForSection(section) {
       type: 'movie',
       year: animeMovie.startDate?.year || 'N/A',
       img: animeMovie.coverImage?.large || animeMovie.coverImage?.medium,
-      link: `https://anilist.co/anime/${animeMovie.id}`,
+      link: `${BASE_URL}/movies/show.html?anime=1&aid=${animeMovie.id}&type=movie`,
       source: 'AniList'
     };
 

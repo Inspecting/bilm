@@ -3,6 +3,8 @@ const appWithBase = window.bilmTheme?.withBase || ((path) => path);
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const params = new URLSearchParams(window.location.search);
 const contentId = params.get('id'); // movie or TV id
+const isAnime = params.get('anime') === '1';
+const animeId = params.get('aid') || contentId;
 
 const iframe = document.getElementById('videoPlayer');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -23,11 +25,19 @@ const moreLikeStatus = document.getElementById('moreLikeStatus');
 const serverBtn = document.getElementById('serverBtn');
 const serverDropdown = document.getElementById('serverDropdown');
 const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
+const languageBtn = document.getElementById('languageBtn');
+const languageDropdown = document.getElementById('languageDropdown');
+const languageItems = languageDropdown ? [...languageDropdown.querySelectorAll('[data-language]')] : [];
 
 const initialSettings = window.bilmTheme?.getSettings?.();
 const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
-const normalizeServer = (server) => (supportedServers.includes(server) ? server : 'embedmaster');
-let currentServer = normalizeServer(initialSettings?.defaultServer || 'embedmaster');
+const animeSupportedServers = ['vidnest'];
+const normalizeServer = (server) => {
+  if (isAnime) return animeSupportedServers.includes(server) ? server : 'vidnest';
+  return supportedServers.includes(server) ? server : 'embedmaster';
+};
+let currentServer = normalizeServer(isAnime ? (initialSettings?.animeDefaultServer || 'vidnest') : (initialSettings?.defaultServer || 'embedmaster'));
+let currentLanguage = params.get('lang') === 'dub' ? 'dub' : 'sub';
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 
@@ -82,6 +92,20 @@ async function fetchJSON(url) {
   }
 }
 
+async function postJSON(url, body) {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 function pickMovieCertification(items) {
   const list = Array.isArray(items) ? items : [];
   const us = list.find((entry) => entry?.iso_3166_1 === 'US');
@@ -123,6 +147,10 @@ function stopContinueWatchingTimer() {
 }
 
 function buildMovieUrl(server) {
+  if (isAnime) {
+    if (!animeId) return '';
+    return `https://vidnest.fun/anime/${encodeURIComponent(animeId)}/1/${currentLanguage}`;
+  }
   if (!contentId) return '';
   switch (server) {
     case 'vidsrc':
@@ -473,6 +501,53 @@ function savePlaybackNote() {
 }
 
 async function loadMovieDetails() {
+  if (isAnime) {
+    if (!animeId) {
+      mediaTitle.textContent = 'Unknown anime';
+      mediaMeta.textContent = 'Anime id unavailable';
+      return;
+    }
+    const query = `
+      query ($id: Int!) {
+        Media(id: $id, type: ANIME) {
+          id
+          title { romaji english }
+          coverImage { large medium }
+          averageScore
+          episodes
+          genres
+          startDate { year month day }
+        }
+      }
+    `;
+    const payload = await postJSON('https://graphql.anilist.co', { query, variables: { id: Number(animeId) } });
+    const details = payload?.data?.Media;
+    const title = details?.title?.english || details?.title?.romaji || 'Unknown anime';
+    const year = details?.startDate?.year || 'N/A';
+    mediaTitle.textContent = title;
+    mediaMeta.textContent = `${year} • Anime`;
+    document.title = `Bilm 💜 - ${title}`;
+    mediaDetails = {
+      id: animeId,
+      title,
+      year,
+      poster: details?.coverImage?.large || details?.coverImage?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
+      link: `${appWithBase('/movies/show.html')}?anime=1&aid=${animeId}&type=movie`,
+      rating: details?.averageScore ? details.averageScore / 10 : null,
+      certification: 'N/A'
+    };
+    const baseItem = { key: `anime-movie-${animeId}`, anilistId: Number(animeId) };
+    updateFavoriteButton(loadList(FAVORITES_KEY).some(item => item.key === baseItem.key || item.anilistId === baseItem.anilistId));
+    updateWatchLaterButton(loadList(WATCH_LATER_KEY).some(item => item.key === baseItem.key || item.anilistId === baseItem.anilistId));
+    loadPlaybackNote();
+    updateIframe();
+    startContinueWatchingTimer();
+    if (moreLikeBox) {
+      moreLikeBox.style.display = 'none';
+    }
+    return;
+  }
+
   if (!contentId) {
     mediaTitle.textContent = 'Unknown title';
     mediaMeta.textContent = 'Release date unavailable';
@@ -537,7 +612,7 @@ async function loadMovieDetails() {
   }
 }
 
-serverBtn.addEventListener('click', (e) => {
+if (serverBtn) serverBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   const isOpen = serverDropdown.style.display === 'flex';
   if (isOpen) {
@@ -552,6 +627,10 @@ serverBtn.addEventListener('click', (e) => {
 document.addEventListener('click', () => {
   serverDropdown.style.display = 'none';
   serverBtn.setAttribute('aria-expanded', 'false');
+  if (languageDropdown && languageBtn) {
+    languageDropdown.style.display = 'none';
+    languageBtn.setAttribute('aria-expanded', 'false');
+  }
 });
 
 function setActiveServer(server) {
@@ -572,9 +651,12 @@ serverItems.forEach(item => {
 if (currentServer) {
   setActiveServer(normalizeServer(currentServer));
 }
+if (isAnime) {
+  serverBtn.style.display = 'none';
+}
 
 window.addEventListener('bilm:theme-changed', (event) => {
-  const newServer = normalizeServer(event.detail?.defaultServer);
+  const newServer = normalizeServer(isAnime ? event.detail?.animeDefaultServer : event.detail?.defaultServer);
   let shouldRefresh = false;
 
   if (newServer && newServer !== currentServer) {
@@ -597,6 +679,30 @@ window.addEventListener('bilm:theme-changed', (event) => {
   }
 });
 
+
+function setActiveLanguage(language) {
+  currentLanguage = language === 'dub' ? 'dub' : 'sub';
+  languageItems.forEach(i => i.classList.toggle('active', i.getAttribute('data-language') === currentLanguage));
+}
+
+if (languageBtn && languageDropdown) {
+  languageBtn.style.display = isAnime ? 'flex' : 'none';
+  languageBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = languageDropdown.style.display === 'flex';
+    languageDropdown.style.display = isOpen ? 'none' : 'flex';
+    languageBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+  });
+  languageItems.forEach((item) => {
+    item.addEventListener('click', () => {
+      setActiveLanguage(item.getAttribute('data-language'));
+      updateIframe();
+      languageDropdown.style.display = 'none';
+      languageBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
+  setActiveLanguage(currentLanguage);
+}
 if (favoriteBtn) {
   favoriteBtn.addEventListener('click', (event) => {
     event.stopPropagation();
