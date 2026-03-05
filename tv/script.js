@@ -21,6 +21,7 @@ const animeLoadedCounts = {};
 const animeLoadedIds = {};
 const API_COOLDOWN_MS = 1000;
 const apiCooldownByHost = new Map();
+const apiRequestQueueByHost = new Map();
 
 const modeState = { current: 'regular' };
 
@@ -93,20 +94,32 @@ async function postJSON(url, body) {
   }
 }
 
-async function waitForApiCooldown(url) {
-  let host = 'default';
+function getApiHost(url) {
   try {
-    host = new URL(url, window.location.origin).host || 'default';
+    return new URL(url, window.location.origin).host || 'default';
   } catch {
-    host = 'default';
+    return 'default';
   }
-  const now = Date.now();
-  const nextAllowedAt = apiCooldownByHost.get(host) || 0;
-  const waitMs = nextAllowedAt - now;
-  if (waitMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
-  apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+}
+
+async function waitForApiCooldown(url) {
+  const host = getApiHost(url);
+  const previousRequest = apiRequestQueueByHost.get(host) || Promise.resolve();
+
+  const requestTurn = previousRequest
+    .catch(() => {})
+    .then(async () => {
+      const now = Date.now();
+      const nextAllowedAt = apiCooldownByHost.get(host) || 0;
+      const waitMs = nextAllowedAt - now;
+      if (waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+      apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+    });
+
+  apiRequestQueueByHost.set(host, requestTurn);
+  await requestTurn;
 }
 
 async function fetchGenres() {
