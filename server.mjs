@@ -81,8 +81,46 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
+async function readRequestBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf-8');
+}
+
+async function handleAniListProxy(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+    return;
+  }
+
+  try {
+    const body = await readRequestBody(req);
+    const upstream = await fetch('https://graphql.anilist.co', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body
+    });
+    const payload = await upstream.text();
+    res.writeHead(upstream.status, {
+      'content-type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
+      'cache-control': 'no-store'
+    });
+    res.end(payload);
+  } catch {
+    res.writeHead(502, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: 'AniList proxy request failed' }));
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  if (url.pathname === '/api/anilist') {
+    await handleAniListProxy(req, res);
+    return;
+  }
   await serveStatic(req, res, url.pathname);
 });
 

@@ -76,13 +76,31 @@ function loadAuthScript() {
   const chatForm = shadow.getElementById('sharedChatForm');
   const chatInput = shadow.getElementById('sharedChatInput');
   const chatMessages = shadow.getElementById('sharedChatMessages');
-  const CHAT_PANEL_SYNC_KEY = 'bilm-shared-chat-panel-state';
   let chatMessagesUnsubscribe = null;
   let chatCurrentUser = null;
+  let chatRemoteMessages = [];
+  let chatPendingMessages = [];
+  let chatRealtimeEnabled = true;
 
   function formatChatTime(ts) {
     const value = Number(ts || 0) || Date.now();
     return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function normalizeChatMessages(messages = []) {
+    return messages
+      .map((entry) => ({
+        ...entry,
+        createdAtMs: Number(entry?.createdAtMs || Date.now()) || Date.now(),
+        text: String(entry?.text || ''),
+        author: String(entry?.author || 'Account')
+      }))
+      .filter((entry) => entry.text.trim().length > 0)
+      .sort((a, b) => a.createdAtMs - b.createdAtMs);
+  }
+
+  function composeVisibleChatMessages() {
+    return normalizeChatMessages([...(chatRemoteMessages || []), ...(chatPendingMessages || [])]);
   }
 
   function renderChatMessages(messages = []) {
@@ -109,8 +127,10 @@ function loadAuthScript() {
 
       const del = document.createElement('button');
       del.type = 'button';
-      del.textContent = 'Delete';
+      del.textContent = entry.pending ? 'Pending' : 'Delete';
+      del.disabled = Boolean(entry.pending);
       del.addEventListener('click', async () => {
+        if (entry.pending) return;
         if (!chatCurrentUser || !window.bilmAuth?.init) return;
         try {
           await window.bilmAuth.init();
@@ -135,47 +155,30 @@ function loadAuthScript() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  function syncChatPanelState(open) {
-    try {
-      localStorage.setItem(CHAT_PANEL_SYNC_KEY, JSON.stringify({ open: Boolean(open), updatedAt: Date.now() }));
-    } catch {
-      // Ignore storage sync failures and still update local UI.
-    }
-  }
-
-  function toggleChatPanel(nextOpen, options = {}) {
+  function toggleChatPanel(nextOpen) {
     if (!chatPanel || !chatToggle) return;
     const open = Boolean(nextOpen);
     chatPanel.hidden = !open;
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open && chatInput) chatInput.focus();
-    if (options.sync !== false) {
-      syncChatPanelState(open);
-    }
   }
 
   // Always start collapsed on a fresh page load.
-  toggleChatPanel(false, { sync: false });
+  toggleChatPanel(false);
 
   if (chatToggle) {
     chatToggle.addEventListener('click', () => {
-      toggleChatPanel(chatPanel?.hidden);
+      toggleChatPanel(chatPanel?.hidden === true);
     });
   }
 
   if (chatClose) {
-    chatClose.addEventListener('click', () => toggleChatPanel(false));
+    chatClose.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleChatPanel(false);
+    });
   }
-
-  window.addEventListener('storage', (event) => {
-    if (event.key !== CHAT_PANEL_SYNC_KEY || !event.newValue) return;
-    try {
-      const next = JSON.parse(event.newValue);
-      toggleChatPanel(next?.open === true, { sync: false });
-    } catch {
-      // Ignore malformed state from storage.
-    }
-  });
 
   const pathParts = location.pathname.split('/').filter(Boolean);
   const appSections = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test']);
@@ -323,13 +326,15 @@ function loadAuthScript() {
     const syncAccountButton = (user) => {
       chatCurrentUser = user || null;
       if (!user) {
+        chatRemoteMessages = [];
+        chatPendingMessages = [];
         renderChatMessages([]);
         if (chatMessagesUnsubscribe) {
           chatMessagesUnsubscribe();
           chatMessagesUnsubscribe = null;
         }
       }
-      if (user && window.bilmAuthModules?.onSnapshot) {
+      if (user && window.bilmAuthModules?.onSnapshot && chatRealtimeEnabled) {
         if (chatMessagesUnsubscribe) {
           chatMessagesUnsubscribe();
         }
@@ -338,9 +343,20 @@ function loadAuthScript() {
         const chatCollection = modules.collection(modules.doc(fs, 'users', user.uid), 'sharedChat');
         const chatQuery = modules.query(chatCollection, modules.orderBy('createdAtMs', 'asc'), modules.limit(120));
         chatMessagesUnsubscribe = modules.onSnapshot(chatQuery, (snap) => {
-          const rows = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }));
-          renderChatMessages(rows);
+          chatRemoteMessages = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }));
+          renderChatMessages(composeVisibleChatMessages());
         }, (error) => {
+          const code = String(error?.code || '');
+          if (code.includes('permission-denied') || code.includes('insufficient-permissions')) {
+            chatRealtimeEnabled = false;
+            if (chatMessagesUnsubscribe) {
+              chatMessagesUnsubscribe();
+              chatMessagesUnsubscribe = null;
+            }
+            chatRemoteMessages = [];
+            renderChatMessages(composeVisibleChatMessages());
+            return;
+          }
           console.warn('Shared chat listener failed:', error);
         });
       }
@@ -357,6 +373,21 @@ function loadAuthScript() {
         event.preventDefault();
         const text = chatInput.value.trim();
         if (!text || !chatCurrentUser) return;
+
+        const optimisticId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const optimisticMessage = {
+          id: optimisticId,
+          pending: true,
+          text,
+          author: chatCurrentUser.displayName || chatCurrentUser.email || 'Account',
+          authorUid: chatCurrentUser.uid,
+          createdAtMs: Date.now()
+        };
+
+        chatPendingMessages.push(optimisticMessage);
+        renderChatMessages(composeVisibleChatMessages());
+        chatInput.value = '';
+
         try {
           const modules = window.bilmAuthModules;
           if (!modules?.addDoc || !modules?.collection || !modules?.doc || !modules?.getFirestore) return;
@@ -364,12 +395,15 @@ function loadAuthScript() {
           const chatCollection = modules.collection(modules.doc(fs, 'users', chatCurrentUser.uid), 'sharedChat');
           await modules.addDoc(chatCollection, {
             text,
-            author: chatCurrentUser.displayName || chatCurrentUser.email || 'Account',
+            author: optimisticMessage.author,
             authorUid: chatCurrentUser.uid,
-            createdAtMs: Date.now()
+            createdAtMs: optimisticMessage.createdAtMs
           });
-          chatInput.value = '';
+          chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
+          renderChatMessages(composeVisibleChatMessages());
         } catch (error) {
+          chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
+          renderChatMessages(composeVisibleChatMessages());
           console.warn('Failed to send shared chat message:', error);
         }
       });
