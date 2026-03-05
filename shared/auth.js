@@ -626,6 +626,11 @@
     return modules;
   }
 
+
+
+  function getFirestoreInstance() {
+    return firestore;
+  }
   async function init() {
     if (initPromise) return initPromise;
 
@@ -750,6 +755,9 @@
 
   const api = {
     init,
+    getFirestore() {
+      return getFirestoreInstance();
+    },
     async signUp(email, password) {
       await init();
       return withAuthRetry(() => modules.createUserWithEmailAndPassword(auth, String(email || '').trim(), password));
@@ -881,5 +889,24 @@
       return saveLocalSnapshotToCloud(reason);
     }
   };
+  Object.defineProperty(window, 'bilmAuthModules', {
+    configurable: true,
+    enumerable: false,
+    get() {
+      if (!modules) return null;
+      return {
+        addDoc: modules.addDoc,
+        collection: modules.collection,
+        deleteDoc: modules.deleteDoc,
+        doc: modules.doc,
+        getFirestore: () => firestore,
+        limit: modules.limit,
+        onSnapshot: modules.onSnapshot,
+        orderBy: modules.orderBy,
+        query: modules.query
+      };
+    }
+  });
+
   window.bilmAuth = api;
 })();

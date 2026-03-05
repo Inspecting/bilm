@@ -98,3 +98,20 @@
     <button id="mobileSearchCloseBtn" aria-label="Clear search input">×</button>
   </div>
 </div>
+
+<div id="sharedChatWidget" class="shared-chat-widget" hidden>
+  <button type="button" id="sharedChatToggle" class="shared-chat-toggle" aria-label="Open shared account chat" aria-expanded="false">
+    💬
+  </button>
+  <section id="sharedChatPanel" class="shared-chat-panel" aria-label="Shared account chat" hidden>
+    <header class="shared-chat-header">
+      <h3>Shared Chat</h3>
+      <button type="button" id="sharedChatClose" class="shared-chat-close" aria-label="Close chat">×</button>
+    </header>
+    <div id="sharedChatMessages" class="shared-chat-messages" role="log" aria-live="polite"></div>
+    <form id="sharedChatForm" class="shared-chat-form">
+      <input type="text" id="sharedChatInput" maxlength="300" placeholder="Type a message" autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+  </section>
+</div>
