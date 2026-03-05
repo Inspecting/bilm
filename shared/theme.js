@@ -51,6 +51,7 @@ function withBase(path) {
     particles: true,
     loading: true,
     defaultServer: 'vidsrc',
+    animeDefaultServer: 'vidnest',
     proxyEnabled: false,
     searchHistory: true,
     continueWatching: true,

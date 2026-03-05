@@ -1,6 +1,9 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
+const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
 const params = new URLSearchParams(window.location.search);
 const tmdbId = params.get('id');
+const isAnime = params.get('anime') === '1';
+const anilistId = params.get('aid') || params.get('id');
 
 const FAVORITES_KEY = 'bilm-favorites';
 const WATCH_LATER_KEY = 'bilm-watch-later';
@@ -139,7 +142,121 @@ async function loadMoreLikeShows() {
   similarLoading = false;
 }
 
+async function fetchAnimeShowDetails() {
+  if (!anilistId) {
+    status.textContent = 'Missing anime id.';
+    return;
+  }
+
+  const query = `
+    query ($id: Int!) {
+      Media(id: $id, type: ANIME) {
+        id
+        title { romaji english }
+        coverImage { large medium }
+        description(asHtml: false)
+        episodes
+        duration
+        averageScore
+        genres
+        startDate { year month day }
+      }
+    }
+  `;
+
+  try {
+    const response = await fetch(ANILIST_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query, variables: { id: Number(anilistId) } })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const details = payload?.data?.Media;
+    if (!details?.id) throw new Error('Anime not found');
+
+    const title = details.title?.english || details.title?.romaji || 'Unknown title';
+    const year = details.startDate?.year || 'N/A';
+
+    document.getElementById('movieBody').style.display = '';
+    document.getElementById('movieTitle').textContent = `${title} (${year})`;
+    document.getElementById('titleHead').textContent = title;
+    document.getElementById('overview').textContent = (details.description || 'No description available.').replace(/<[^>]+>/g, '');
+    document.getElementById('poster').src = details.coverImage?.large || details.coverImage?.medium || 'https://via.placeholder.com/500x750?text=No+Poster';
+
+    const pills = document.getElementById('pills');
+    pills.innerHTML = '';
+    [
+      year,
+      details.averageScore ? `${Math.round((details.averageScore / 10) * 10) / 10}/10` : null,
+      details.episodes ? `${details.episodes} episode${details.episodes === 1 ? '' : 's'}` : null,
+      details.duration ? `${details.duration} min` : null,
+      ...(details.genres || [])
+    ].filter(Boolean).forEach((value) => {
+      const span = document.createElement('span');
+      span.className = 'pill';
+      span.textContent = value;
+      pills.appendChild(span);
+    });
+
+    document.getElementById('trailerBox').innerHTML = '<p class="subtitle">Trailer not available from this source.</p>';
+    document.getElementById('castLine').textContent = 'Cast data unavailable for anime source.';
+
+    document.getElementById('watchLink').href = `./watch/viewer.html?anime=1&aid=${details.id}&type=tv&episode=1&episodes=${details.episodes || 1}`;
+    document.getElementById('tmdbLink').textContent = 'Open on AniList';
+    document.getElementById('tmdbLink').href = `https://anilist.co/anime/${details.id}`;
+
+    if (moreLikeEl) {
+      moreLikeEl.innerHTML = '';
+      setMoreLikeStatus('Recommendations unavailable for anime right now.');
+    }
+
+    const showItem = {
+      key: `anime-tv-${details.id}`,
+      id: details.id,
+      tmdbId: details.id,
+      anilistId: details.id,
+      title,
+      type: 'tv',
+      year: String(year),
+      poster: details.coverImage?.large || details.coverImage?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
+      source: 'AniList',
+      rating: details.averageScore ? details.averageScore / 10 : null,
+      certification: 'N/A',
+      link: `./show.html?anime=1&aid=${details.id}&type=tv`,
+      updatedAt: Date.now()
+    };
+
+    const syncStates = () => {
+      const isFavorite = readList(FAVORITES_KEY).some((entry) => entry.key === showItem.key || entry.anilistId === showItem.anilistId);
+      const isWatchLater = readList(WATCH_LATER_KEY).some((entry) => entry.key === showItem.key || entry.anilistId === showItem.anilistId);
+      setIconState(favoriteBtn, isFavorite, { active: 'Remove from favorites', inactive: 'Add to favorites' });
+      setIconState(watchLaterBtn, isWatchLater, { active: 'Remove from watch later', inactive: 'Add to watch later' });
+    };
+
+    favoriteBtn.addEventListener('click', () => {
+      toggleInList(FAVORITES_KEY, showItem);
+      syncStates();
+    });
+
+    watchLaterBtn.addEventListener('click', () => {
+      toggleInList(WATCH_LATER_KEY, showItem);
+      syncStates();
+    });
+
+    syncStates();
+    status.textContent = '';
+  } catch {
+    status.textContent = 'Unable to load anime details right now.';
+  }
+}
+
 async function loadShowDetails() {
+  if (isAnime) {
+    await fetchAnimeShowDetails();
+    return;
+  }
+
   if (!tmdbId) {
     status.textContent = 'Missing TV show id.';
     return;
