@@ -142,6 +142,19 @@ function loadAuthScript() {
     if (open && chatInput) chatInput.focus();
   }
 
+  // Always start collapsed on a fresh page load.
+  toggleChatPanel(false);
+
+  if (chatToggle) {
+    chatToggle.addEventListener('click', () => {
+      toggleChatPanel(chatPanel?.hidden);
+    });
+  }
+
+  if (chatClose) {
+    chatClose.addEventListener('click', () => toggleChatPanel(false));
+  }
+
   const pathParts = location.pathname.split('/').filter(Boolean);
   const appSections = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test']);
   const section = pathParts.find(part => appSections.has(part)) || 'home';
@@ -316,18 +329,6 @@ function loadAuthScript() {
 
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
-
-
-
-    if (chatToggle) {
-      chatToggle.addEventListener('click', () => {
-        toggleChatPanel(chatPanel?.hidden);
-      });
-    }
-
-    if (chatClose) {
-      chatClose.addEventListener('click', () => toggleChatPanel(false));
-    }
 
     if (chatForm && chatInput) {
       chatForm.addEventListener('submit', async (event) => {
