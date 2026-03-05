@@ -549,7 +549,7 @@ async function loadMovieDetails() {
         }
       }
     `;
-    const payload = await postJSON('https://graphql.anilist.co', { query, variables: { id: Number(animeId) } });
+    const payload = await postJSON('/api/anilist', { query, variables: { id: Number(animeId) } });
     const details = payload?.data?.Media;
     const title = details?.title?.english || details?.title?.romaji || 'Unknown anime';
     const year = details?.startDate?.year || 'N/A';

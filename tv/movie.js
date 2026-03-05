@@ -1,5 +1,5 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
-const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
+const ANILIST_GRAPHQL_URL = '/api/anilist';
 const params = new URLSearchParams(window.location.search);
 const API_COOLDOWN_MS = 1000;
 const apiCooldownByHost = new Map();

@@ -435,6 +435,7 @@ nav button.active {
 }
 
 .shared-chat-close {
+  pointer-events: auto;
   background: none;
   border: 0;
   color: var(--text-muted);
@@ -537,4 +538,9 @@ nav button.active {
   .mobile-bottom-nav {
     display: none;
   }
+}
+
+.shared-chat-message button:disabled {
+  color: var(--text-muted);
+  cursor: default;
 }
