@@ -76,6 +76,7 @@ function loadAuthScript() {
   const chatForm = shadow.getElementById('sharedChatForm');
   const chatInput = shadow.getElementById('sharedChatInput');
   const chatMessages = shadow.getElementById('sharedChatMessages');
+  const CHAT_PANEL_SYNC_KEY = 'bilm-shared-chat-panel-state';
   let chatMessagesUnsubscribe = null;
   let chatCurrentUser = null;
 
@@ -134,16 +135,27 @@ function loadAuthScript() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  function toggleChatPanel(nextOpen) {
+  function syncChatPanelState(open) {
+    try {
+      localStorage.setItem(CHAT_PANEL_SYNC_KEY, JSON.stringify({ open: Boolean(open), updatedAt: Date.now() }));
+    } catch {
+      // Ignore storage sync failures and still update local UI.
+    }
+  }
+
+  function toggleChatPanel(nextOpen, options = {}) {
     if (!chatPanel || !chatToggle) return;
     const open = Boolean(nextOpen);
     chatPanel.hidden = !open;
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open && chatInput) chatInput.focus();
+    if (options.sync !== false) {
+      syncChatPanelState(open);
+    }
   }
 
   // Always start collapsed on a fresh page load.
-  toggleChatPanel(false);
+  toggleChatPanel(false, { sync: false });
 
   if (chatToggle) {
     chatToggle.addEventListener('click', () => {
@@ -154,6 +166,16 @@ function loadAuthScript() {
   if (chatClose) {
     chatClose.addEventListener('click', () => toggleChatPanel(false));
   }
+
+  window.addEventListener('storage', (event) => {
+    if (event.key !== CHAT_PANEL_SYNC_KEY || !event.newValue) return;
+    try {
+      const next = JSON.parse(event.newValue);
+      toggleChatPanel(next?.open === true, { sync: false });
+    } catch {
+      // Ignore malformed state from storage.
+    }
+  });
 
   const pathParts = location.pathname.split('/').filter(Boolean);
   const appSections = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test']);
