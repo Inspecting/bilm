@@ -395,6 +395,10 @@ nav button.active {
   align-items: flex-end;
 }
 
+.shared-chat-widget[hidden] {
+  display: none !important;
+}
+
 .shared-chat-toggle {
   width: 44px;
   height: 44px;
@@ -419,6 +423,10 @@ nav button.active {
   box-shadow: 0 12px 24px color-mix(in srgb, var(--bg-main) 35%, transparent);
   display: flex;
   flex-direction: column;
+}
+
+.shared-chat-panel[hidden] {
+  display: none !important;
 }
 
 .shared-chat-header {

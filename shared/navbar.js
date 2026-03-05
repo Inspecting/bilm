@@ -81,6 +81,21 @@ function loadAuthScript() {
   let chatRemoteMessages = [];
   let chatPendingMessages = [];
   let chatRealtimeEnabled = true;
+  let chatWriteEnabled = true;
+
+
+  function setChatNotice(message) {
+    if (!chatMessages) return;
+    if (!message) {
+      renderChatMessages(composeVisibleChatMessages());
+      return;
+    }
+    chatMessages.innerHTML = '';
+    const notice = document.createElement('p');
+    notice.className = 'shared-chat-empty';
+    notice.textContent = message;
+    chatMessages.appendChild(notice);
+  }
 
   function formatChatTime(ts) {
     const value = Number(ts || 0) || Date.now();
@@ -328,6 +343,7 @@ function loadAuthScript() {
       if (!user) {
         chatRemoteMessages = [];
         chatPendingMessages = [];
+        chatWriteEnabled = true;
         renderChatMessages([]);
         if (chatMessagesUnsubscribe) {
           chatMessagesUnsubscribe();
@@ -335,6 +351,7 @@ function loadAuthScript() {
         }
       }
       if (user && window.bilmAuthModules?.onSnapshot && chatRealtimeEnabled) {
+        chatWriteEnabled = true;
         if (chatMessagesUnsubscribe) {
           chatMessagesUnsubscribe();
         }
@@ -354,7 +371,8 @@ function loadAuthScript() {
               chatMessagesUnsubscribe = null;
             }
             chatRemoteMessages = [];
-            renderChatMessages(composeVisibleChatMessages());
+            chatWriteEnabled = false;
+            setChatNotice('Cloud chat is unavailable for this account (Firebase permissions).');
             return;
           }
           console.warn('Shared chat listener failed:', error);
@@ -372,7 +390,7 @@ function loadAuthScript() {
       chatForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const text = chatInput.value.trim();
-        if (!text || !chatCurrentUser) return;
+        if (!text || !chatCurrentUser || !chatWriteEnabled) return;
 
         const optimisticId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const optimisticMessage = {
@@ -403,7 +421,13 @@ function loadAuthScript() {
           renderChatMessages(composeVisibleChatMessages());
         } catch (error) {
           chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
-          renderChatMessages(composeVisibleChatMessages());
+          const code = String(error?.code || '');
+          if (code.includes('permission-denied') || code.includes('insufficient-permissions')) {
+            chatWriteEnabled = false;
+            setChatNotice('Could not send message: Firebase permissions for shared chat are not enabled.');
+          } else {
+            renderChatMessages(composeVisibleChatMessages());
+          }
           console.warn('Failed to send shared chat message:', error);
         }
       });
