@@ -32,6 +32,12 @@ const languageItems = languageDropdown ? [...languageDropdown.querySelectorAll('
 const initialSettings = window.bilmTheme?.getSettings?.();
 const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
 const animeSupportedServers = ['vidnest'];
+const visibleServerItems = serverItems.filter((item) => {
+  const server = item.getAttribute('data-server');
+  const supported = isAnime ? animeSupportedServers.includes(server) : supportedServers.includes(server);
+  item.style.display = supported ? '' : 'none';
+  return supported;
+});
 const normalizeServer = (server) => {
   if (isAnime) return animeSupportedServers.includes(server) ? server : 'vidnest';
   return supportedServers.includes(server) ? server : 'embedmaster';
@@ -40,6 +46,8 @@ let currentServer = normalizeServer(isAnime ? (initialSettings?.animeDefaultServ
 let currentLanguage = params.get('lang') === 'dub' ? 'dub' : 'sub';
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
+const API_COOLDOWN_MS = 1000;
+const apiCooldownByHost = new Map();
 
 function toSlug(value) {
   return (value || '')
@@ -82,8 +90,25 @@ let similarEnded = false;
 let similarActive = false;
 const similarMovieIds = new Set();
 
+
+async function waitForApiCooldown(url) {
+  let host = 'default';
+  try {
+    host = new URL(url, window.location.origin).host || 'default';
+  } catch {
+    host = 'default';
+  }
+  const now = Date.now();
+  const nextAllowedAt = apiCooldownByHost.get(host) || 0;
+  const waitMs = nextAllowedAt - now;
+  if (waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+}
 async function fetchJSON(url) {
   try {
+    await waitForApiCooldown(url);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
@@ -94,9 +119,13 @@ async function fetchJSON(url) {
 
 async function postJSON(url, body) {
   try {
+    await waitForApiCooldown(url);
+    const isAniList = /graphql\.anilist\.co/i.test(url);
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: isAniList
+        ? { 'Content-Type': 'text/plain;charset=UTF-8' }
+        : { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(body)
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -634,11 +663,11 @@ document.addEventListener('click', () => {
 });
 
 function setActiveServer(server) {
-  serverItems.forEach(i => i.classList.toggle('active', i.getAttribute('data-server') === server));
+  visibleServerItems.forEach((i) => i.classList.toggle('active', i.getAttribute('data-server') === server));
   currentServer = server;
 }
 
-serverItems.forEach(item => {
+visibleServerItems.forEach((item) => {
   item.addEventListener('click', () => {
     if (item.classList.contains('active')) return;
     setActiveServer(item.getAttribute('data-server'));
@@ -650,9 +679,6 @@ serverItems.forEach(item => {
 
 if (currentServer) {
   setActiveServer(normalizeServer(currentServer));
-}
-if (isAnime) {
-  serverBtn.style.display = 'none';
 }
 
 window.addEventListener('bilm:theme-changed', (event) => {

@@ -1,6 +1,8 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const ANILIST_GRAPHQL_URL = 'https://graphql.anilist.co';
 const params = new URLSearchParams(window.location.search);
+const API_COOLDOWN_MS = 1000;
+const apiCooldownByHost = new Map();
 const tmdbId = params.get('id');
 const isAnime = params.get('anime') === '1';
 const anilistId = params.get('aid') || params.get('id');
@@ -171,9 +173,10 @@ async function fetchAnimeMovieDetails() {
   `;
 
   try {
+    await waitForApiCooldown(ANILIST_GRAPHQL_URL);
     const response = await fetch(ANILIST_GRAPHQL_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
       body: JSON.stringify({ query, variables: { id: Number(anilistId) } })
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -373,3 +376,20 @@ if (moreLikeBox) {
     }
   });
 }
+async function waitForApiCooldown(url) {
+  let host = 'default';
+  try {
+    host = new URL(url, window.location.origin).host || 'default';
+  } catch {
+    host = 'default';
+  }
+  const now = Date.now();
+  const nextAllowedAt = apiCooldownByHost.get(host) || 0;
+  const waitMs = nextAllowedAt - now;
+  if (waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+}
+
+
