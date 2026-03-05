@@ -21,10 +21,14 @@ const animeLoadedCounts = {};
 const animeLoadedIds = {};
 const API_COOLDOWN_MS = 100;
 const API_MAX_RETRIES = 2;
+const SECTION_API_MAX_RETRIES = 1;
+const SECTION_LOAD_INTERVAL_MS = 100;
+const API_DEBUG_TIMING = false;
 const apiCooldownByHost = new Map();
 const apiRequestQueueByHost = new Map();
 const inFlightGetRequests = new Map();
 const inFlightPostRequests = new Map();
+const pageRequestController = new AbortController();
 
 const modeState = { current: 'regular' };
 
@@ -68,17 +72,45 @@ function slugifySectionTitle(title) {
     .replace(/^-+|-+$/g, '') || 'section';
 }
 
-async function fetchJSON(url) {
-  const cacheKey = String(url);
+function getRequestSignal(signal) {
+  return signal || pageRequestController.signal;
+}
+
+function debugApiTiming(event, details) {
+  if (!API_DEBUG_TIMING) return;
+  console.debug(`[api:${event}]`, details);
+}
+
+function isAbortError(error) {
+  return error?.name === 'AbortError';
+}
+
+async function sleep(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchJSON(url, options = {}) {
+  const signal = getRequestSignal(options.signal);
+  const maxRetries = options.maxRetries ?? API_MAX_RETRIES;
+  const cacheKey = `${url}::${signal === pageRequestController.signal ? 'page' : 'custom'}`;
   if (inFlightGetRequests.has(cacheKey)) {
     return inFlightGetRequests.get(cacheKey);
   }
 
   const request = (async () => {
-    for (let attempt = 0; attempt <= API_MAX_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       try {
-        await waitForApiCooldown(url);
-        const res = await fetch(url);
+        const queueWaitMs = attempt === 0 ? await waitForApiCooldown(url, signal) : 0;
+        const startedAt = performance.now();
+        const res = await fetch(url, { signal });
+        debugApiTiming('fetch', {
+          url,
+          method: 'GET',
+          attempt,
+          queueWaitMs,
+          fetchDurationMs: Math.round(performance.now() - startedAt),
+          status: res.status
+        });
         if (res.ok) {
           return await res.json();
         }
@@ -87,16 +119,18 @@ async function fetchJSON(url) {
           const retryAfter = Number.parseFloat(res.headers.get('Retry-After'));
           const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
             ? retryAfter * 1000
-            : 250 * (attempt + 1);
-          if (attempt < API_MAX_RETRIES) {
-            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            : Math.min(350, 150 * (attempt + 1));
+          if (attempt < maxRetries) {
+            debugApiTiming('retry-backoff', { url, method: 'GET', attempt, backoffMs });
+            await sleep(backoffMs);
             continue;
           }
         }
 
         throw new Error(`HTTP ${res.status}`);
-      } catch {
-        if (attempt >= API_MAX_RETRIES) return null;
+      } catch (error) {
+        if (isAbortError(error) || signal.aborted) return null;
+        if (attempt >= maxRetries) return null;
       }
     }
 
@@ -111,8 +145,10 @@ async function fetchJSON(url) {
   return request;
 }
 
-async function postJSON(url, body) {
-  const cacheKey = `${url}:${JSON.stringify(body)}`;
+async function postJSON(url, body, options = {}) {
+  const signal = getRequestSignal(options.signal);
+  const maxRetries = options.maxRetries ?? API_MAX_RETRIES;
+  const cacheKey = `${url}:${JSON.stringify(body)}::${signal === pageRequestController.signal ? 'page' : 'custom'}`;
   if (inFlightPostRequests.has(cacheKey)) {
     return inFlightPostRequests.get(cacheKey);
   }
@@ -120,15 +156,25 @@ async function postJSON(url, body) {
   const request = (async () => {
     const isAniList = /graphql\.anilist\.co/i.test(url);
 
-    for (let attempt = 0; attempt <= API_MAX_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       try {
-        await waitForApiCooldown(url);
+        const queueWaitMs = attempt === 0 ? await waitForApiCooldown(url, signal) : 0;
+        const startedAt = performance.now();
         const res = await fetch(url, {
           method: 'POST',
           headers: isAniList
             ? { 'Content-Type': 'text/plain;charset=UTF-8' }
             : { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify(body),
+          signal
+        });
+        debugApiTiming('fetch', {
+          url,
+          method: 'POST',
+          attempt,
+          queueWaitMs,
+          fetchDurationMs: Math.round(performance.now() - startedAt),
+          status: res.status
         });
         if (res.ok) {
           return await res.json();
@@ -138,16 +184,18 @@ async function postJSON(url, body) {
           const retryAfter = Number.parseFloat(res.headers.get('Retry-After'));
           const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
             ? retryAfter * 1000
-            : 250 * (attempt + 1);
-          if (attempt < API_MAX_RETRIES) {
-            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            : Math.min(350, 150 * (attempt + 1));
+          if (attempt < maxRetries) {
+            debugApiTiming('retry-backoff', { url, method: 'POST', attempt, backoffMs });
+            await sleep(backoffMs);
             continue;
           }
         }
 
         throw new Error(`HTTP ${res.status}`);
-      } catch {
-        if (attempt >= API_MAX_RETRIES) return null;
+      } catch (error) {
+        if (isAbortError(error) || signal.aborted) return null;
+        if (attempt >= maxRetries) return null;
       }
     }
 
@@ -170,7 +218,8 @@ function getApiHost(url) {
   }
 }
 
-async function waitForApiCooldown(url) {
+async function waitForApiCooldown(url, signal) {
+  if (signal?.aborted) return 0;
   const host = getApiHost(url);
   const previousRequest = apiRequestQueueByHost.get(host) || Promise.resolve();
 
@@ -181,18 +230,19 @@ async function waitForApiCooldown(url) {
       const nextAllowedAt = apiCooldownByHost.get(host) || 0;
       const waitMs = nextAllowedAt - now;
       if (waitMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        await sleep(waitMs);
       }
       apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+      return Math.max(waitMs, 0);
     });
 
   apiRequestQueueByHost.set(host, requestTurn);
-  await requestTurn;
+  return requestTurn;
 }
 
 async function fetchGenres() {
   const url = `https://api.themoviedb.org/3/genre/tv/list?api_key=${TMDB_API_KEY}&language=en-US`;
-  const data = await fetchJSON(url);
+  const data = await fetchJSON(url, { maxRetries: SECTION_API_MAX_RETRIES });
   allGenres = data?.genres || [];
   return allGenres;
 }
@@ -228,7 +278,7 @@ async function fetchShows(endpoint, page = 1) {
   const url = endpoint.includes('?')
     ? `https://api.themoviedb.org/3${endpoint}&api_key=${TMDB_API_KEY}&page=${page}`
     : `https://api.themoviedb.org/3${endpoint}?api_key=${TMDB_API_KEY}&page=${page}`;
-  const data = await fetchJSON(url);
+  const data = await fetchJSON(url, { maxRetries: SECTION_API_MAX_RETRIES });
   return data?.results || [];
 }
 
@@ -259,10 +309,10 @@ async function fetchAnimeShowsByGenre(genre, page = 1) {
     data = await postJSON(ANILIST_GRAPHQL_URL, {
       query,
       variables: { page, perPage: animeShowsPerLoad, genre }
-    });
+    }, { maxRetries: SECTION_API_MAX_RETRIES });
     if (data?.data?.Page?.media?.length) break;
     if (attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+      await sleep(200 * (attempt + 1));
     }
   }
 
@@ -337,6 +387,7 @@ function renderQuickFilters(sections, containerId = 'quickFilters', targetPrefix
 }
 
 async function loadShowsForSection(section) {
+  if (pageRequestController.signal.aborted) return false;
   loadedCounts[section.slug] ??= 0;
   loadedShowIds[section.slug] ??= new Set();
 
@@ -345,10 +396,13 @@ async function loadShowsForSection(section) {
   if (!shows.length) return false;
 
   const rowEl = document.getElementById(`row-${section.slug}`);
+  const statusEl = rowEl?.closest('.section')?.querySelector('.section-status');
+  if (!rowEl || pageRequestController.signal.aborted) return false;
 
-  const uniqueShows = shows.filter((s) => !loadedShowIds[section.slug].has(s.id));
+  const uniqueShows = shows.filter((show) => !loadedShowIds[section.slug].has(show.id));
 
   for (const show of uniqueShows.slice(0, showsPerLoad)) {
+    if (pageRequestController.signal.aborted) return false;
     loadedShowIds[section.slug].add(show.id);
 
     const poster = show.poster_path
@@ -370,11 +424,16 @@ async function loadShowsForSection(section) {
     rowEl.appendChild(card);
   }
 
+  if (statusEl) {
+    statusEl.textContent = uniqueShows.length ? '' : 'No new titles available right now.';
+  }
+
   loadedCounts[section.slug] += showsPerLoad;
   return true;
 }
 
 async function loadAnimeShowsForSection(section) {
+  if (pageRequestController.signal.aborted) return false;
   animeLoadedCounts[section.slug] ??= 0;
   animeLoadedIds[section.slug] ??= new Set();
 
@@ -396,6 +455,7 @@ async function loadAnimeShowsForSection(section) {
   const visibleShows = uniqueShows.slice(0, animeShowsPerLoad);
 
   for (const animeShow of visibleShows) {
+    if (pageRequestController.signal.aborted) return false;
     animeLoadedIds[section.slug].add(animeShow.id);
 
     const showData = {
@@ -418,6 +478,19 @@ async function loadAnimeShowsForSection(section) {
 
   animeLoadedCounts[section.slug] += animeShowsPerLoad;
   return true;
+}
+
+
+async function runSectionScheduler(prioritySections, deferredSections, loaderFn) {
+  const schedule = [...prioritySections, ...deferredSections];
+  for (const [index, section] of schedule.entries()) {
+    if (pageRequestController.signal.aborted) break;
+    await loaderFn(section);
+    if (index < schedule.length - 1) {
+      // Intentional UX pacing: start one section roughly every 100ms.
+      await sleep(SECTION_LOAD_INTERVAL_MS);
+    }
+  }
 }
 
 function setupInfiniteScroll(section, loaderFn, rowPrefix = '') {
@@ -447,6 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setContentMode('regular');
 
   await fetchGenres();
+  if (pageRequestController.signal.aborted) return;
   const sections = getSections();
   const animeSections = getAnimeTvSections();
 
@@ -458,23 +532,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
   const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
-  await Promise.all(prioritySections.map((section) => loadShowsForSection(section)));
-
   const priorityAnimeSections = animeSections.slice(0, PRIORITY_SECTION_COUNT);
   const deferredAnimeSections = animeSections.slice(PRIORITY_SECTION_COUNT);
-  await Promise.all(priorityAnimeSections.map((section) => loadAnimeShowsForSection(section)));
 
-  const loadDeferredSections = async () => {
-    await Promise.all(deferredSections.map((section) => loadShowsForSection(section)));
-    await Promise.all(deferredAnimeSections.map((section) => loadAnimeShowsForSection(section)));
-  };
-
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(loadDeferredSections, { timeout: 1200 });
-  } else {
-    setTimeout(loadDeferredSections, 0);
-  }
+  await Promise.all([
+    runSectionScheduler(prioritySections, deferredSections, loadShowsForSection),
+    runSectionScheduler(priorityAnimeSections, deferredAnimeSections, loadAnimeShowsForSection)
+  ]);
 
   sections.forEach((section) => setupInfiniteScroll(section, loadShowsForSection));
   animeSections.forEach((section) => setupInfiniteScroll(section, loadAnimeShowsForSection, 'anime-'));
+});
+
+
+window.addEventListener('beforeunload', () => {
+  pageRequestController.abort();
 });
