@@ -68,6 +68,80 @@ function loadAuthScript() {
 
   shadow.innerHTML = `<style>${css}</style>${html}`;
 
+
+  const chatWidget = shadow.getElementById('sharedChatWidget');
+  const chatToggle = shadow.getElementById('sharedChatToggle');
+  const chatPanel = shadow.getElementById('sharedChatPanel');
+  const chatClose = shadow.getElementById('sharedChatClose');
+  const chatForm = shadow.getElementById('sharedChatForm');
+  const chatInput = shadow.getElementById('sharedChatInput');
+  const chatMessages = shadow.getElementById('sharedChatMessages');
+  let chatMessagesUnsubscribe = null;
+  let chatCurrentUser = null;
+
+  function formatChatTime(ts) {
+    const value = Number(ts || 0) || Date.now();
+    return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function renderChatMessages(messages = []) {
+    if (!chatMessages) return;
+    chatMessages.innerHTML = '';
+    if (!messages.length) {
+      const empty = document.createElement('p');
+      empty.className = 'shared-chat-empty';
+      empty.textContent = 'No messages yet.';
+      chatMessages.appendChild(empty);
+      return;
+    }
+
+    messages.forEach((entry) => {
+      const row = document.createElement('article');
+      row.className = 'shared-chat-message';
+
+      const meta = document.createElement('div');
+      meta.className = 'shared-chat-message-meta';
+
+      const left = document.createElement('span');
+      const author = String(entry.author || 'Account').trim() || 'Account';
+      left.textContent = `${author} • ${formatChatTime(entry.createdAtMs)}`;
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = 'Delete';
+      del.addEventListener('click', async () => {
+        if (!chatCurrentUser || !window.bilmAuth?.init) return;
+        try {
+          await window.bilmAuth.init();
+          const modules = window.bilmAuthModules;
+          if (!modules?.deleteDoc || !modules?.doc || !modules?.collection || !modules?.getFirestore) return;
+          const fs = modules.getFirestore();
+          await modules.deleteDoc(modules.doc(modules.collection(modules.doc(fs, 'users', chatCurrentUser.uid), 'sharedChat'), entry.id));
+        } catch (error) {
+          console.warn('Failed to delete chat message:', error);
+        }
+      });
+
+      meta.append(left, del);
+
+      const body = document.createElement('p');
+      body.textContent = String(entry.text || '');
+
+      row.append(meta, body);
+      chatMessages.appendChild(row);
+    });
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function toggleChatPanel(nextOpen) {
+    if (!chatPanel || !chatToggle) return;
+    const open = Boolean(nextOpen);
+    chatPanel.hidden = !open;
+    chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open && chatInput) chatInput.focus();
+  }
+
   const pathParts = location.pathname.split('/').filter(Boolean);
   const appSections = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test']);
   const section = pathParts.find(part => appSections.has(part)) || 'home';
@@ -206,7 +280,35 @@ function loadAuthScript() {
   const accountBtn = shadow.getElementById('navbarAccountBtn');
   loadAuthScript().then(async (authApi) => {
     await authApi.init();
+
+    if (chatWidget) {
+      chatWidget.hidden = false;
+    }
+
     const syncAccountButton = (user) => {
+      chatCurrentUser = user || null;
+      if (!user) {
+        renderChatMessages([]);
+        if (chatMessagesUnsubscribe) {
+          chatMessagesUnsubscribe();
+          chatMessagesUnsubscribe = null;
+        }
+      }
+      if (user && window.bilmAuthModules?.onSnapshot) {
+        if (chatMessagesUnsubscribe) {
+          chatMessagesUnsubscribe();
+        }
+        const modules = window.bilmAuthModules;
+        const fs = modules.getFirestore();
+        const chatCollection = modules.collection(modules.doc(fs, 'users', user.uid), 'sharedChat');
+        const chatQuery = modules.query(chatCollection, modules.orderBy('createdAtMs', 'asc'), modules.limit(120));
+        chatMessagesUnsubscribe = modules.onSnapshot(chatQuery, (snap) => {
+          const rows = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }));
+          renderChatMessages(rows);
+        }, (error) => {
+          console.warn('Shared chat listener failed:', error);
+        });
+      }
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
       accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
@@ -215,9 +317,38 @@ function loadAuthScript() {
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
 
-    if (accountBtn) {
-      accountBtn.addEventListener('click', () => {
-        window.location.href = withBase('/settings/account/');
+
+
+    if (chatToggle) {
+      chatToggle.addEventListener('click', () => {
+        toggleChatPanel(chatPanel?.hidden);
+      });
+    }
+
+    if (chatClose) {
+      chatClose.addEventListener('click', () => toggleChatPanel(false));
+    }
+
+    if (chatForm && chatInput) {
+      chatForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const text = chatInput.value.trim();
+        if (!text || !chatCurrentUser) return;
+        try {
+          const modules = window.bilmAuthModules;
+          if (!modules?.addDoc || !modules?.collection || !modules?.doc || !modules?.getFirestore) return;
+          const fs = modules.getFirestore();
+          const chatCollection = modules.collection(modules.doc(fs, 'users', chatCurrentUser.uid), 'sharedChat');
+          await modules.addDoc(chatCollection, {
+            text,
+            author: chatCurrentUser.displayName || chatCurrentUser.email || 'Account',
+            authorUid: chatCurrentUser.uid,
+            createdAtMs: Date.now()
+          });
+          chatInput.value = '';
+        } catch (error) {
+          console.warn('Failed to send shared chat message:', error);
+        }
       });
     }
   }).catch(() => {
