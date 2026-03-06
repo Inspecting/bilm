@@ -10,6 +10,73 @@
     measurementId: 'G-3481XXPLFV'
   };
 
+
+  const DATA_API_BASE = 'https://data-api.watchbilm.org';
+
+  function getTransferUserId(user) {
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (email) return email;
+    const uid = String(user?.uid || '').trim();
+    if (uid) return uid;
+    throw new Error('Missing account identifier for cloud transfer.');
+  }
+
+  function extractSnapshotFromApiPayload(payload) {
+    if (!payload) return null;
+    if (payload.schema === 'bilm-backup-v1') return payload;
+    const candidates = [payload.snapshot, payload.value, payload.data, payload.backup, payload.cloudBackup?.snapshot];
+    for (const candidate of candidates) {
+      if (candidate && typeof candidate === 'object' && candidate.schema === 'bilm-backup-v1') {
+        return candidate;
+      }
+      if (typeof candidate === 'string') {
+        const parsed = safeParse(candidate, null);
+        if (parsed?.schema === 'bilm-backup-v1') return parsed;
+      }
+    }
+    return null;
+  }
+
+  async function saveSnapshotToTransferApi(userId, snapshot) {
+    const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
+    const body = JSON.stringify(snapshot);
+    const headers = { 'content-type': 'application/json' };
+
+    let response = await fetch(url, { method: 'PUT', headers, body });
+    if (response.status === 405 || response.status === 501) {
+      response = await fetch(url, { method: 'POST', headers, body });
+    }
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Data API save failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+    }
+  }
+
+  async function loadSnapshotFromTransferApi(userId) {
+    const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { accept: 'application/json,text/plain;q=0.9,*/*;q=0.8' }
+    });
+
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Data API load failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+    }
+
+    const text = await response.text();
+    const parsed = safeParse(text, null);
+    if (!parsed && !text.trim()) return null;
+    const snapshot = extractSnapshotFromApiPayload(parsed || text);
+    if (!snapshot && text) {
+      const second = safeParse(String(text), null);
+      return second?.schema === 'bilm-backup-v1' ? second : null;
+    }
+    return snapshot;
+  }
+
   const subscribers = new Set();
   let initPromise;
   let modules;
@@ -848,8 +915,7 @@
     },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
-      const currentDoc = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
-      const cloudSnapshot = (currentDoc.data() || {})?.cloudBackup?.snapshot || null;
+      const cloudSnapshot = await api.getCloudSnapshot();
       const mergedSnapshot = mergeSnapshots(cloudSnapshot, snapshot || null) || snapshot || null;
       const payload = {
         ...(mergedSnapshot || {}),
@@ -863,13 +929,26 @@
       const signature = snapshotSignature(payload);
       lastAppliedCloudSignature = signature;
       lastUploadedCloudSignature = signature;
-      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
-        cloudBackup: {
-          schema: 'bilm-cloud-sync-v1',
-          updatedAt: modules.serverTimestamp(),
-          snapshot: payload
-        }
-      }, { merge: true });
+
+      const userId = getTransferUserId(user);
+      let savedToTransferApi = false;
+      try {
+        await saveSnapshotToTransferApi(userId, payload);
+        savedToTransferApi = true;
+      } catch (error) {
+        console.warn('Data API save failed, falling back to Firestore:', error);
+      }
+
+      if (!savedToTransferApi) {
+        await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+          cloudBackup: {
+            schema: 'bilm-cloud-sync-v1',
+            updatedAt: modules.serverTimestamp(),
+            snapshot: payload
+          }
+        }, { merge: true });
+      }
+
       writeSyncMeta({
         lastCloudPushAt: Date.now(),
         lastLocalChangeAt: Date.now()
@@ -877,6 +956,13 @@
     },
     async getCloudSnapshot() {
       const user = await requireAuth();
+      const userId = getTransferUserId(user);
+      try {
+        const snapshot = await loadSnapshotFromTransferApi(userId);
+        if (snapshot) return snapshot;
+      } catch (error) {
+        console.warn('Data API load failed, falling back to Firestore:', error);
+      }
       const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
       const data = docSnap.data() || {};
       return data.cloudBackup?.snapshot || null;
