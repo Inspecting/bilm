@@ -192,6 +192,15 @@
     const explicitKey = String(item.key || '').trim();
     if (explicitKey) return explicitKey;
 
+    const chatId = String(item.id || '').trim();
+    if (chatId) return `chat:${chatId}`;
+
+    const chatText = String(item.text || '').trim().toLowerCase();
+    if (chatText) {
+      const chatCreatedAt = Number(item.createdAtMs || item.updatedAt || item.timestamp || 0) || 0;
+      return `chat:${chatCreatedAt}:${chatText}`;
+    }
+
     const normalizedQuery = String(item.query || '').trim().toLowerCase();
     if (normalizedQuery) return `search:${normalizedQuery}`;
 
@@ -206,7 +215,7 @@
   }
 
   function getItemUpdatedAt(item) {
-    return Number(item?.updatedAt || item?.timestamp || item?.savedAt || 0) || 0;
+    return Number(item?.updatedAt || item?.createdAtMs || item?.timestamp || item?.savedAt || 0) || 0;
   }
 
   function mergeTombstoneMaps(...maps) {
