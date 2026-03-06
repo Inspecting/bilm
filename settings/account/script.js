@@ -199,7 +199,8 @@ document.addEventListener('DOMContentLoaded', () => {
       'bilm-watch-history',
       'bilm-favorites',
       'bilm-watch-later',
-      'bilm-search-history'
+      'bilm-search-history',
+      'bilm-shared-chat'
     ]);
 
     const parseJson = (value, fallback) => {
