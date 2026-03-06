@@ -14,11 +14,18 @@
   const DATA_API_BASE = 'https://data-api.watchbilm.org';
 
   function getTransferUserId(user) {
-    const email = String(user?.email || '').trim().toLowerCase();
-    if (email) return `user-${email}`;
     const uid = String(user?.uid || '').trim();
-    if (uid) return `user-${uid}`;
+    if (uid) return uid;
     throw new Error('Missing account identifier for cloud transfer.');
+  }
+
+  async function getTransferAuthHeader(user) {
+    if (!user || typeof user.getIdToken !== 'function') {
+      throw new Error('Cloud transfer requires a signed-in Firebase session.');
+    }
+    const idToken = await user.getIdToken();
+    if (!idToken) throw new Error('Missing Firebase auth token for cloud transfer.');
+    return `Bearer ${idToken}`;
   }
 
   function extractSnapshotFromApiPayload(payload) {
@@ -37,15 +44,16 @@
     return null;
   }
 
-  async function saveSnapshotToTransferApi(userId, snapshot) {
-    const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
-    const body = JSON.stringify({ export: snapshot });
-    const headers = { 'content-type': 'application/json' };
+  async function saveSnapshotToTransferApi(user, userId, snapshot) {
+    const url = `${DATA_API_BASE}/`;
+    const authorization = await getTransferAuthHeader(user);
+    const body = JSON.stringify({ userId, data: snapshot });
+    const headers = {
+      'content-type': 'application/json',
+      authorization
+    };
 
-    let response = await fetch(url, { method: 'PUT', headers, body });
-    if (response.status === 405 || response.status === 501) {
-      response = await fetch(url, { method: 'POST', headers, body });
-    }
+    const response = await fetch(url, { method: 'POST', headers, body });
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
@@ -53,11 +61,15 @@
     }
   }
 
-  async function loadSnapshotFromTransferApi(userId) {
+  async function loadSnapshotFromTransferApi(user, userId) {
     const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
+    const authorization = await getTransferAuthHeader(user);
     const response = await fetch(url, {
       method: 'GET',
-      headers: { accept: 'application/json,text/plain;q=0.9,*/*;q=0.8' }
+      headers: {
+        accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
+        authorization
+      }
     });
 
     if (response.status === 404) return null;
@@ -933,7 +945,7 @@
       const userId = getTransferUserId(user);
       let savedToTransferApi = false;
       try {
-        await saveSnapshotToTransferApi(userId, payload);
+        await saveSnapshotToTransferApi(user, userId, payload);
         savedToTransferApi = true;
       } catch (error) {
         console.warn('Data API save failed, falling back to Firestore:', error);
@@ -958,7 +970,7 @@
       const user = await requireAuth();
       const userId = getTransferUserId(user);
       try {
-        const snapshot = await loadSnapshotFromTransferApi(userId);
+        const snapshot = await loadSnapshotFromTransferApi(user, userId);
         if (snapshot) return snapshot;
       } catch (error) {
         console.warn('Data API load failed, falling back to Firestore:', error);
