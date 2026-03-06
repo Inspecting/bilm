@@ -15,16 +15,16 @@
 
   function getTransferUserId(user) {
     const email = String(user?.email || '').trim().toLowerCase();
-    if (email) return email;
+    if (email) return `user-${email}`;
     const uid = String(user?.uid || '').trim();
-    if (uid) return uid;
+    if (uid) return `user-${uid}`;
     throw new Error('Missing account identifier for cloud transfer.');
   }
 
   function extractSnapshotFromApiPayload(payload) {
     if (!payload) return null;
     if (payload.schema === 'bilm-backup-v1') return payload;
-    const candidates = [payload.snapshot, payload.value, payload.data, payload.backup, payload.cloudBackup?.snapshot];
+    const candidates = [payload.export, payload.snapshot, payload.value, payload.data, payload.backup, payload.cloudBackup?.snapshot];
     for (const candidate of candidates) {
       if (candidate && typeof candidate === 'object' && candidate.schema === 'bilm-backup-v1') {
         return candidate;
@@ -39,7 +39,7 @@
 
   async function saveSnapshotToTransferApi(userId, snapshot) {
     const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
-    const body = JSON.stringify(snapshot);
+    const body = JSON.stringify({ export: snapshot });
     const headers = { 'content-type': 'application/json' };
 
     let response = await fetch(url, { method: 'PUT', headers, body });
