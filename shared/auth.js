@@ -64,9 +64,17 @@
 
   async function saveSnapshotToTransferApi(user, userId, snapshot) {
     if (transferApiDisabled) return false;
-    const url = `${DATA_API_BASE}/`;
+    const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
     const authorization = await getTransferAuthHeader(user);
-    const body = JSON.stringify({ userId, data: snapshot });
+    const normalizedSnapshot = snapshot && typeof snapshot === 'object' ? snapshot : null;
+    if (!normalizedSnapshot) {
+      throw new Error('Cannot save cloud snapshot: invalid payload format.');
+    }
+    const body = JSON.stringify({
+      userId,
+      data: normalizedSnapshot,
+      value: JSON.stringify(normalizedSnapshot)
+    });
     const headers = {
       'content-type': 'application/json',
       authorization
