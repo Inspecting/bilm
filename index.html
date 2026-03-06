@@ -180,7 +180,9 @@
     function getBasePath() {
       const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
       const parts = window.location.pathname.split('/').filter(Boolean);
-      if (!parts.length || appRoots.has(parts[0])) return '';
+      if (!parts.length) return '';
+      if (parts.length === 1 && !appRoots.has(parts[0])) return `/${parts[0]}`;
+      if (appRoots.has(parts[0])) return '';
       if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
       return '';
     }
