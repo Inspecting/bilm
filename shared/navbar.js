@@ -75,6 +75,7 @@ function loadAuthScript() {
   const chatClose = shadow.getElementById('sharedChatClose');
   const chatForm = shadow.getElementById('sharedChatForm');
   const chatInput = shadow.getElementById('sharedChatInput');
+  const chatRefreshBtn = shadow.getElementById('sharedChatRefreshBtn');
   const chatMessages = shadow.getElementById('sharedChatMessages');
   let chatCurrentUser = null;
   let chatRemoteMessages = [];
@@ -125,6 +126,11 @@ function loadAuthScript() {
     const normalized = normalizeChatMessages(messages).slice(-120);
     storage.setJSON(CHAT_STORAGE_KEY, normalized);
     chatRemoteMessages = normalized;
+  }
+
+  function refreshChatMessages() {
+    chatRemoteMessages = loadStoredChatMessages();
+    renderChatMessages(composeVisibleChatMessages());
   }
 
   function renderChatMessages(messages = []) {
@@ -352,17 +358,21 @@ function loadAuthScript() {
       accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
     };
 
-    chatRemoteMessages = loadStoredChatMessages();
+    refreshChatMessages();
     chatPendingMessages = [];
-    renderChatMessages(composeVisibleChatMessages());
 
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
     window.addEventListener('storage', (event) => {
       if (event.key !== CHAT_STORAGE_KEY) return;
-      chatRemoteMessages = loadStoredChatMessages();
-      renderChatMessages(composeVisibleChatMessages());
+      refreshChatMessages();
     });
+
+    if (chatRefreshBtn) {
+      chatRefreshBtn.addEventListener('click', () => {
+        refreshChatMessages();
+      });
+    }
 
     if (chatForm && chatInput) {
       chatForm.addEventListener('submit', async (event) => {

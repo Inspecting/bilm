@@ -519,6 +519,11 @@ nav button.active {
   font-weight: 600;
 }
 
+.shared-chat-refresh {
+  border-color: var(--border) !important;
+  background: var(--surface) !important;
+}
+
 .shared-chat-empty {
   color: var(--text-muted);
   font-size: 13px;
