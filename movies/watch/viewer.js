@@ -46,7 +46,7 @@ let currentServer = normalizeServer(isAnime ? (initialSettings?.animeDefaultServ
 let currentLanguage = params.get('lang') === 'dub' ? 'dub' : 'sub';
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
-const API_COOLDOWN_MS = 1000;
+const API_COOLDOWN_MS = 250;
 const apiCooldownByHost = new Map();
 
 function toSlug(value) {

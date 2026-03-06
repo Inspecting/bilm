@@ -56,7 +56,7 @@ let episodesPerSeason = {};
 let seasonEpisodeMemory = {};
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
-const API_COOLDOWN_MS = 1000;
+const API_COOLDOWN_MS = 250;
 const apiCooldownByHost = new Map();
 
 function toSlug(value) {
