@@ -163,11 +163,9 @@
     'bilm-continue-watching',
     'bilm-watch-history',
     'bilm-search-history',
+    'bilm-shared-chat',
     'bilm-history-movies',
     'bilm-history-tv'
-  ]);
-  const CLOUD_SYNC_EXCLUDED_LOCAL_KEYS = new Set([
-    'bilm-shared-chat'
   ]);
   const BACKUP_LOCAL_ALLOWLIST = [
     /^bilm-/,
@@ -353,9 +351,6 @@
     delete localState[SYNC_ENABLED_KEY];
     delete localState[SYNC_META_KEY];
     delete localState[SYNC_DEVICE_ID_KEY];
-    CLOUD_SYNC_EXCLUDED_LOCAL_KEYS.forEach((key) => {
-      delete localState[key];
-    });
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
@@ -407,7 +402,6 @@
       sessionStorage.clear();
 
       Object.entries(snapshot.localStorage || {}).forEach(([key, value]) => {
-        if (CLOUD_SYNC_EXCLUDED_LOCAL_KEYS.has(key)) return;
         localStorage.setItem(key, value);
       });
       Object.entries(snapshot.sessionStorage || {}).forEach(([key, value]) => {
