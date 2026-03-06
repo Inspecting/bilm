@@ -12,11 +12,29 @@
 
 
   const DATA_API_BASE = 'https://data-api.watchbilm.org';
+  const TRANSFER_API_DISABLE_KEY = 'bilm-transfer-api-disabled';
+
+  let transferApiDisabled = localStorage.getItem(TRANSFER_API_DISABLE_KEY) === '1';
 
   function getTransferUserId(user) {
     const uid = String(user?.uid || '').trim();
-    if (uid) return uid;
-    throw new Error('Missing account identifier for cloud transfer.');
+    if (!uid) throw new Error('Missing account identifier for cloud transfer.');
+    // The transfer API already namespaces user IDs with "user-" internally.
+    return uid.replace(/^user-/i, '');
+  }
+
+  function disableTransferApi(reason) {
+    if (transferApiDisabled) return;
+    transferApiDisabled = true;
+    try {
+      localStorage.setItem(TRANSFER_API_DISABLE_KEY, '1');
+    } catch {}
+    console.warn(`Data API disabled for this browser session (${reason}). Using Firestore fallback.`);
+  }
+
+  function shouldDisableTransferApi(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return error instanceof TypeError || message.includes('failed to fetch') || message.includes('networkerror');
   }
 
   async function getTransferAuthHeader(user) {
@@ -45,6 +63,7 @@
   }
 
   async function saveSnapshotToTransferApi(user, userId, snapshot) {
+    if (transferApiDisabled) return false;
     const url = `${DATA_API_BASE}/`;
     const authorization = await getTransferAuthHeader(user);
     const body = JSON.stringify({ userId, data: snapshot });
@@ -53,24 +72,38 @@
       authorization
     };
 
-    const response = await fetch(url, { method: 'POST', headers, body });
+    let response;
+    try {
+      response = await fetch(url, { method: 'POST', headers, body });
+    } catch (error) {
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on save');
+      throw error;
+    }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
       throw new Error(`Data API save failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
     }
+    return true;
   }
 
   async function loadSnapshotFromTransferApi(user, userId) {
+    if (transferApiDisabled) return null;
     const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
     const authorization = await getTransferAuthHeader(user);
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
-        authorization
-      }
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
+          authorization
+        }
+      });
+    } catch (error) {
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on load');
+      throw error;
+    }
 
     if (response.status === 404) return null;
     if (!response.ok) {
