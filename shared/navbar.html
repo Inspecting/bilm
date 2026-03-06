@@ -111,7 +111,12 @@
     <div id="sharedChatMessages" class="shared-chat-messages" role="log" aria-live="polite"></div>
     <form id="sharedChatForm" class="shared-chat-form">
       <input type="text" id="sharedChatInput" maxlength="300" placeholder="Type a message" autocomplete="off" />
-      <button type="button" id="sharedChatRefreshBtn" class="shared-chat-refresh" aria-label="Refresh shared chat messages">Refresh</button>
+      <button type="button" id="sharedChatRefreshBtn" class="shared-chat-refresh" aria-label="Refresh shared chat messages" title="Refresh">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <polyline points="21 3 21 9 15 9" />
+        </svg>
+      </button>
       <button type="submit">Send</button>
     </form>
   </section>

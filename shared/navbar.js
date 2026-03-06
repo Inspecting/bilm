@@ -76,6 +76,8 @@ function loadAuthScript() {
   const chatForm = shadow.getElementById('sharedChatForm');
   const chatInput = shadow.getElementById('sharedChatInput');
   const chatRefreshBtn = shadow.getElementById('sharedChatRefreshBtn');
+  const CHAT_REFRESH_COOLDOWN_MS = 5000;
+  let chatRefreshCooldownUntil = 0;
   const chatMessages = shadow.getElementById('sharedChatMessages');
   let chatCurrentUser = null;
   let chatRemoteMessages = [];
@@ -131,6 +133,18 @@ function loadAuthScript() {
   function refreshChatMessages() {
     chatRemoteMessages = loadStoredChatMessages();
     renderChatMessages(composeVisibleChatMessages());
+  }
+
+  function setChatRefreshCooldown() {
+    if (!chatRefreshBtn) return;
+    chatRefreshCooldownUntil = Date.now() + CHAT_REFRESH_COOLDOWN_MS;
+    chatRefreshBtn.disabled = true;
+    window.setTimeout(() => {
+      if (!chatRefreshBtn) return;
+      if (Date.now() < chatRefreshCooldownUntil) return;
+      chatRefreshBtn.disabled = false;
+      chatRefreshBtn.removeAttribute('aria-busy');
+    }, CHAT_REFRESH_COOLDOWN_MS);
   }
 
   function renderChatMessages(messages = []) {
@@ -370,7 +384,10 @@ function loadAuthScript() {
 
     if (chatRefreshBtn) {
       chatRefreshBtn.addEventListener('click', () => {
+        if (Date.now() < chatRefreshCooldownUntil) return;
+        chatRefreshBtn.setAttribute('aria-busy', 'true');
         refreshChatMessages();
+        setChatRefreshCooldown();
       });
     }
 

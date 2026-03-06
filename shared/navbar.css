@@ -522,6 +522,26 @@ nav button.active {
 .shared-chat-refresh {
   border-color: var(--border) !important;
   background: var(--surface) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  padding: 8px;
+}
+
+.shared-chat-refresh svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.shared-chat-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .shared-chat-empty {
