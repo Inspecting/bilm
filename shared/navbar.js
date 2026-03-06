@@ -76,11 +76,10 @@ function loadAuthScript() {
   const chatForm = shadow.getElementById('sharedChatForm');
   const chatInput = shadow.getElementById('sharedChatInput');
   const chatMessages = shadow.getElementById('sharedChatMessages');
-  let chatMessagesUnsubscribe = null;
   let chatCurrentUser = null;
   let chatRemoteMessages = [];
   let chatPendingMessages = [];
-  let chatRealtimeEnabled = true;
+  const CHAT_STORAGE_KEY = 'bilm-shared-chat';
   let chatWriteEnabled = true;
 
 
@@ -118,6 +117,17 @@ function loadAuthScript() {
     return normalizeChatMessages([...(chatRemoteMessages || []), ...(chatPendingMessages || [])]);
   }
 
+  function loadStoredChatMessages() {
+    const stored = storage.getJSON(CHAT_STORAGE_KEY, []);
+    return normalizeChatMessages(Array.isArray(stored) ? stored : []);
+  }
+
+  function saveStoredChatMessages(messages) {
+    const normalized = normalizeChatMessages(messages).slice(-120);
+    storage.setJSON(CHAT_STORAGE_KEY, normalized);
+    chatRemoteMessages = normalized;
+  }
+
   function renderChatMessages(messages = []) {
     if (!chatMessages) return;
     chatMessages.innerHTML = '';
@@ -148,11 +158,9 @@ function loadAuthScript() {
         if (entry.pending) return;
         if (!chatCurrentUser || !window.bilmAuth?.init) return;
         try {
-          await window.bilmAuth.init();
-          const modules = window.bilmAuthModules;
-          if (!modules?.deleteDoc || !modules?.doc || !modules?.collection || !modules?.getFirestore) return;
-          const fs = modules.getFirestore();
-          await modules.deleteDoc(modules.doc(modules.collection(modules.doc(fs, 'users', chatCurrentUser.uid), 'sharedChat'), entry.id));
+          const current = loadStoredChatMessages();
+          saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
+          renderChatMessages(composeVisibleChatMessages());
         } catch (error) {
           console.warn('Failed to delete chat message:', error);
         }
@@ -345,39 +353,12 @@ function loadAuthScript() {
         chatPendingMessages = [];
         chatWriteEnabled = true;
         renderChatMessages([]);
-        if (chatMessagesUnsubscribe) {
-          chatMessagesUnsubscribe();
-          chatMessagesUnsubscribe = null;
-        }
-      }
-      if (user && window.bilmAuthModules?.onSnapshot && chatRealtimeEnabled) {
+      } else {
         chatWriteEnabled = true;
-        if (chatMessagesUnsubscribe) {
-          chatMessagesUnsubscribe();
-        }
-        const modules = window.bilmAuthModules;
-        const fs = modules.getFirestore();
-        const chatCollection = modules.collection(modules.doc(fs, 'users', user.uid), 'sharedChat');
-        const chatQuery = modules.query(chatCollection, modules.orderBy('createdAtMs', 'asc'), modules.limit(120));
-        chatMessagesUnsubscribe = modules.onSnapshot(chatQuery, (snap) => {
-          chatRemoteMessages = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }));
-          renderChatMessages(composeVisibleChatMessages());
-        }, (error) => {
-          const code = String(error?.code || '');
-          if (code.includes('permission-denied') || code.includes('insufficient-permissions')) {
-            chatRealtimeEnabled = false;
-            if (chatMessagesUnsubscribe) {
-              chatMessagesUnsubscribe();
-              chatMessagesUnsubscribe = null;
-            }
-            chatRemoteMessages = [];
-            chatWriteEnabled = false;
-            setChatNotice('Cloud chat is unavailable for this account (Firebase permissions).');
-            return;
-          }
-          console.warn('Shared chat listener failed:', error);
-        });
+        chatRemoteMessages = loadStoredChatMessages();
+        renderChatMessages(composeVisibleChatMessages());
       }
+
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
       accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
@@ -385,6 +366,17 @@ function loadAuthScript() {
 
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
+    authApi.onCloudSnapshotChanged(() => {
+      if (!chatCurrentUser) return;
+      chatRemoteMessages = loadStoredChatMessages();
+      renderChatMessages(composeVisibleChatMessages());
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== CHAT_STORAGE_KEY || !chatCurrentUser) return;
+      chatRemoteMessages = loadStoredChatMessages();
+      renderChatMessages(composeVisibleChatMessages());
+    });
 
     if (chatForm && chatInput) {
       chatForm.addEventListener('submit', async (event) => {
@@ -407,27 +399,27 @@ function loadAuthScript() {
         chatInput.value = '';
 
         try {
-          const modules = window.bilmAuthModules;
-          if (!modules?.addDoc || !modules?.collection || !modules?.doc || !modules?.getFirestore) return;
-          const fs = modules.getFirestore();
-          const chatCollection = modules.collection(modules.doc(fs, 'users', chatCurrentUser.uid), 'sharedChat');
-          await modules.addDoc(chatCollection, {
+          const current = loadStoredChatMessages();
+          current.push({
+            id: `msg-${optimisticMessage.createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
+            key: `chat:${optimisticMessage.createdAtMs}:${Math.random().toString(36).slice(2, 8)}`,
             text,
             author: optimisticMessage.author,
             authorUid: chatCurrentUser.uid,
-            createdAtMs: optimisticMessage.createdAtMs
+            createdAtMs: optimisticMessage.createdAtMs,
+            updatedAt: optimisticMessage.createdAtMs
           });
+          saveStoredChatMessages(current);
           chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
           renderChatMessages(composeVisibleChatMessages());
+          if (window.bilmAuth?.scheduleCloudSave) {
+            window.bilmAuth.scheduleCloudSave('shared-chat').catch(() => {
+              // best effort
+            });
+          }
         } catch (error) {
           chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
-          const code = String(error?.code || '');
-          if (code.includes('permission-denied') || code.includes('insufficient-permissions')) {
-            chatWriteEnabled = false;
-            setChatNotice('Could not send message: Firebase permissions for shared chat are not enabled.');
-          } else {
-            renderChatMessages(composeVisibleChatMessages());
-          }
+          renderChatMessages(composeVisibleChatMessages());
           console.warn('Failed to send shared chat message:', error);
         }
       });

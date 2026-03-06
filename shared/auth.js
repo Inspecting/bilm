@@ -163,6 +163,7 @@
     'bilm-continue-watching',
     'bilm-watch-history',
     'bilm-search-history',
+    'bilm-shared-chat',
     'bilm-history-movies',
     'bilm-history-tv'
   ]);
