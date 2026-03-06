@@ -80,7 +80,6 @@ function loadAuthScript() {
   let chatRemoteMessages = [];
   let chatPendingMessages = [];
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
-  let chatWriteEnabled = true;
 
 
   function setChatNotice(message) {
@@ -156,7 +155,6 @@ function loadAuthScript() {
       del.disabled = Boolean(entry.pending);
       del.addEventListener('click', async () => {
         if (entry.pending) return;
-        if (!chatCurrentUser || !window.bilmAuth?.init) return;
         try {
           const current = loadStoredChatMessages();
           saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
@@ -348,32 +346,20 @@ function loadAuthScript() {
 
     const syncAccountButton = (user) => {
       chatCurrentUser = user || null;
-      if (!user) {
-        chatRemoteMessages = [];
-        chatPendingMessages = [];
-        chatWriteEnabled = true;
-        renderChatMessages([]);
-      } else {
-        chatWriteEnabled = true;
-        chatRemoteMessages = loadStoredChatMessages();
-        renderChatMessages(composeVisibleChatMessages());
-      }
 
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
       accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
     };
 
+    chatRemoteMessages = loadStoredChatMessages();
+    chatPendingMessages = [];
+    renderChatMessages(composeVisibleChatMessages());
+
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
-    authApi.onCloudSnapshotChanged(() => {
-      if (!chatCurrentUser) return;
-      chatRemoteMessages = loadStoredChatMessages();
-      renderChatMessages(composeVisibleChatMessages());
-    });
-
     window.addEventListener('storage', (event) => {
-      if (event.key !== CHAT_STORAGE_KEY || !chatCurrentUser) return;
+      if (event.key !== CHAT_STORAGE_KEY) return;
       chatRemoteMessages = loadStoredChatMessages();
       renderChatMessages(composeVisibleChatMessages());
     });
@@ -382,15 +368,18 @@ function loadAuthScript() {
       chatForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const text = chatInput.value.trim();
-        if (!text || !chatCurrentUser || !chatWriteEnabled) return;
+        if (!text) return;
+
+        const author = chatCurrentUser?.displayName || chatCurrentUser?.email || 'Guest';
+        const authorUid = chatCurrentUser?.uid || 'local';
 
         const optimisticId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const optimisticMessage = {
           id: optimisticId,
           pending: true,
           text,
-          author: chatCurrentUser.displayName || chatCurrentUser.email || 'Account',
-          authorUid: chatCurrentUser.uid,
+          author,
+          authorUid,
           createdAtMs: Date.now()
         };
 
@@ -405,18 +394,13 @@ function loadAuthScript() {
             key: `chat:${optimisticMessage.createdAtMs}:${Math.random().toString(36).slice(2, 8)}`,
             text,
             author: optimisticMessage.author,
-            authorUid: chatCurrentUser.uid,
+            authorUid,
             createdAtMs: optimisticMessage.createdAtMs,
             updatedAt: optimisticMessage.createdAtMs
           });
           saveStoredChatMessages(current);
           chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
           renderChatMessages(composeVisibleChatMessages());
-          if (window.bilmAuth?.scheduleCloudSave) {
-            window.bilmAuth.scheduleCloudSave('shared-chat').catch(() => {
-              // best effort
-            });
-          }
         } catch (error) {
           chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
           renderChatMessages(composeVisibleChatMessages());
