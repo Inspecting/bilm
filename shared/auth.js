@@ -462,6 +462,11 @@
     return cloudUpdatedAtMs > freshnessFloor;
   }
 
+  function getSnapshotUpdatedAtMs(snapshot) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return 0;
+    return Number(snapshot?.meta?.updatedAtMs || 0) || 0;
+  }
+
   async function saveLocalSnapshotToCloud(reason = 'auto') {
     await init();
     const user = auth?.currentUser;
@@ -999,18 +1004,17 @@
         await saveSnapshotToTransferApi(user, userId, payload);
         savedToTransferApi = true;
       } catch (error) {
-        console.warn('Data API save failed, falling back to Firestore:', error);
+        console.warn('Data API save failed (Firestore save will still proceed):', error);
       }
 
-      if (!savedToTransferApi) {
-        await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
-          cloudBackup: {
-            schema: 'bilm-cloud-sync-v1',
-            updatedAt: modules.serverTimestamp(),
-            snapshot: payload
-          }
-        }, { merge: true });
-      }
+      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+        cloudBackup: {
+          schema: 'bilm-cloud-sync-v1',
+          updatedAt: modules.serverTimestamp(),
+          snapshot: payload,
+          transferApiMirrored: savedToTransferApi
+        }
+      }, { merge: true });
 
       writeSyncMeta({
         lastCloudPushAt: Date.now(),
@@ -1020,15 +1024,21 @@
     async getCloudSnapshot() {
       const user = await requireAuth();
       const userId = getTransferUserId(user);
+      let transferSnapshot = null;
       try {
-        const snapshot = await loadSnapshotFromTransferApi(user, userId);
-        if (snapshot) return snapshot;
+        transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
       } catch (error) {
-        console.warn('Data API load failed, falling back to Firestore:', error);
+        console.warn('Data API load failed (falling back to Firestore data):', error);
       }
+
       const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
       const data = docSnap.data() || {};
-      return data.cloudBackup?.snapshot || null;
+      const firestoreSnapshot = data.cloudBackup?.snapshot || null;
+      const mergedSnapshot = mergeSnapshots(firestoreSnapshot, transferSnapshot);
+      if (mergedSnapshot) return mergedSnapshot;
+      return getSnapshotUpdatedAtMs(transferSnapshot) >= getSnapshotUpdatedAtMs(firestoreSnapshot)
+        ? transferSnapshot
+        : firestoreSnapshot;
     },
     async syncFromCloudNow() {
       await init();
