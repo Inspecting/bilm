@@ -29,7 +29,7 @@
     try {
       localStorage.setItem(TRANSFER_API_DISABLE_KEY, '1');
     } catch {}
-    console.warn(`Data API disabled for this browser session (${reason}). Cloud sync is unavailable until refresh.`);
+    console.warn(`Data API disabled for this browser session (${reason}). Using Firestore fallback.`);
   }
 
   function shouldDisableTransferApi(error) {
@@ -139,7 +139,6 @@
   let analytics;
   let currentUser = null;
   let cloudSnapshotUnsubscribe = null;
-  let cloudSnapshotPollInterval = null;
   let lastCloudSnapshotEvent = null;
   const cloudSubscribers = new Set();
   let autosyncInterval = null;
@@ -654,27 +653,32 @@
       cloudSnapshotUnsubscribe();
     }
     cloudSnapshotUnsubscribe = null;
-    if (cloudSnapshotPollInterval) {
-      window.clearInterval(cloudSnapshotPollInterval);
-      cloudSnapshotPollInterval = null;
-    }
   }
 
-  async function pollCloudSnapshot(user) {
-    if (!user || !isSyncEnabled()) return;
-    try {
-      const snapshot = await api.getCloudSnapshot();
+  function startCloudSnapshotListener(user) {
+    stopCloudSnapshotListener();
+    snapshotListenerReady = false;
+    if (!user || !modules?.onSnapshot || !firestore) {
+      emitCloudSnapshotEvent({ snapshot: null, updatedAtMs: null, user: null });
+      return;
+    }
+
+    const userDocRef = modules.doc(firestore, 'users', user.uid);
+    cloudSnapshotUnsubscribe = modules.onSnapshot(userDocRef, { includeMetadataChanges: false }, (docSnap) => {
+      const data = docSnap.data() || {};
+      const cloudBackup = data.cloudBackup || {};
       const event = {
-        snapshot,
-        updatedAtMs: getSnapshotUpdatedAtMs(snapshot) || null,
-        hasPendingWrites: false,
-        fromCache: false,
-        sourceDeviceId: String(snapshot?.meta?.deviceId || '').trim() || null,
+        snapshot: cloudBackup.snapshot || null,
+        updatedAtMs: cloudBackup.updatedAt?.toMillis?.() || null,
+        hasPendingWrites: docSnap.metadata?.hasPendingWrites === true,
+        fromCache: docSnap.metadata?.fromCache === true,
+        sourceDeviceId: String(cloudBackup?.snapshot?.meta?.deviceId || '').trim() || null,
         user
       };
+      snapshotListenerReady = true;
       emitCloudSnapshotEvent(event);
 
-      if (!event.snapshot) return;
+      if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
       const signature = snapshotSignature(event.snapshot);
       if (!signature || signature === lastAppliedCloudSignature) return;
 
@@ -690,30 +694,17 @@
         const mergedSnapshot = mergeSnapshots(event.snapshot, localSnapshot);
         if (mergedSnapshot) {
           applyRemoteSnapshot(mergedSnapshot);
-          await api.saveCloudSnapshot(mergedSnapshot);
+          api.saveCloudSnapshot(mergedSnapshot).catch((error) => {
+            console.warn('Listener merge save failed:', error);
+          });
         }
         return;
       }
       applyRemoteSnapshot(event.snapshot);
       lastAppliedCloudSignature = signature;
-    } catch (error) {
-      console.warn('Cloud snapshot poll failed:', error);
-    }
-  }
-
-  function startCloudSnapshotListener(user) {
-    stopCloudSnapshotListener();
-    snapshotListenerReady = false;
-    if (!user) {
-      emitCloudSnapshotEvent({ snapshot: null, updatedAtMs: null, user: null });
-      return;
-    }
-
-    snapshotListenerReady = true;
-    pollCloudSnapshot(user);
-    cloudSnapshotPollInterval = window.setInterval(() => {
-      pollCloudSnapshot(user);
-    }, 15000);
+    }, (error) => {
+      console.warn('Cloud snapshot listener failed:', error);
+    });
   }
 
 
@@ -733,9 +724,17 @@
 
   async function resolveEmailFromIdentifier(identifier) {
     const cleaned = String(identifier || '').trim();
-    if (!cleaned) throw new Error('Email is required.');
+    if (!cleaned) throw new Error('Email or username is required.');
     if (cleaned.includes('@')) return cleaned;
-    throw new Error('Username login is unavailable in API-only mode. Sign in with your email and password.');
+    const usernameKey = normalizeUsername(cleaned);
+    if (!usernameKey) throw new Error('Email or username is required.');
+    const usernameDoc = await modules.getDoc(modules.doc(firestore, 'usernames', usernameKey));
+    const mappedUid = String(usernameDoc.data()?.uid || '').trim();
+    if (!mappedUid) throw new Error('Email or password is incorrect.');
+    const userDoc = await modules.getDoc(modules.doc(firestore, 'users', mappedUid));
+    const email = String(userDoc.data()?.profile?.email || '').trim();
+    if (!email) throw new Error('Email or password is incorrect.');
+    return email;
   }
 
   async function loadFirebaseModules() {
@@ -906,6 +905,12 @@
       if (cleanedUsername) {
         await api.setUsername(cleanedUsername);
       }
+      await modules.setDoc(modules.doc(firestore, 'users', credential.user.uid), {
+        profile: {
+          email: cleanedEmail,
+          updatedAt: modules.serverTimestamp()
+        }
+      }, { merge: true });
       return credential;
     },
     async signIn(email, password) {
@@ -923,6 +928,20 @@
       const cleaned = String(username || '').trim();
       if (cleaned.length > 30) throw new Error('Username must be 30 characters or fewer.');
       await modules.updateProfile(user, { displayName: cleaned || null });
+      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+        profile: {
+          username: cleaned || null,
+          email: user.email || null,
+          updatedAt: modules.serverTimestamp()
+        }
+      }, { merge: true });
+      if (cleaned) {
+        await modules.setDoc(modules.doc(firestore, 'usernames', normalizeUsername(cleaned)), {
+          uid: user.uid,
+          username: cleaned,
+          updatedAt: modules.serverTimestamp()
+        }, { merge: true });
+      }
       currentUser = { ...user, displayName: cleaned || null };
       notifySubscribers(auth.currentUser || currentUser);
       return cleaned;
@@ -938,6 +957,11 @@
       const user = await requireAuth();
       if (!password) throw new Error('Password is required to delete your account.');
       await api.reauthenticate(password);
+      const usernameKey = normalizeUsername(user.displayName);
+      await modules.deleteDoc(modules.doc(firestore, 'users', user.uid));
+      if (usernameKey) {
+        await modules.deleteDoc(modules.doc(firestore, 'usernames', usernameKey));
+      }
       await modules.deleteUser(user);
     },
     async signOut() {
@@ -975,7 +999,22 @@
       lastUploadedCloudSignature = signature;
 
       const userId = getTransferUserId(user);
-      await saveSnapshotToTransferApi(user, userId, payload);
+      let savedToTransferApi = false;
+      try {
+        await saveSnapshotToTransferApi(user, userId, payload);
+        savedToTransferApi = true;
+      } catch (error) {
+        console.warn('Data API save failed (Firestore save will still proceed):', error);
+      }
+
+      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+        cloudBackup: {
+          schema: 'bilm-cloud-sync-v1',
+          updatedAt: modules.serverTimestamp(),
+          snapshot: payload,
+          transferApiMirrored: savedToTransferApi
+        }
+      }, { merge: true });
 
       writeSyncMeta({
         lastCloudPushAt: Date.now(),
@@ -985,7 +1024,21 @@
     async getCloudSnapshot() {
       const user = await requireAuth();
       const userId = getTransferUserId(user);
-      return loadSnapshotFromTransferApi(user, userId);
+      let transferSnapshot = null;
+      try {
+        transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
+      } catch (error) {
+        console.warn('Data API load failed (falling back to Firestore data):', error);
+      }
+
+      const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
+      const data = docSnap.data() || {};
+      const firestoreSnapshot = data.cloudBackup?.snapshot || null;
+      const mergedSnapshot = mergeSnapshots(firestoreSnapshot, transferSnapshot);
+      if (mergedSnapshot) return mergedSnapshot;
+      return getSnapshotUpdatedAtMs(transferSnapshot) >= getSnapshotUpdatedAtMs(firestoreSnapshot)
+        ? transferSnapshot
+        : firestoreSnapshot;
     },
     async syncFromCloudNow() {
       await init();
