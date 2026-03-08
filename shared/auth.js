@@ -173,6 +173,9 @@
     /^tmdb-/,
     /^theme-/
   ];
+  const LOCAL_ONLY_LOCAL_STORAGE_KEYS = new Set([
+    'bilm-global-message-dismissed-migrating-data'
+  ]);
   const BACKUP_SESSION_ALLOWLIST = [
     /^bilm-/,
     /^tmdb-/
@@ -345,6 +348,28 @@
     return allowlist.some((pattern) => pattern.test(String(key || '')));
   }
 
+  function isLocalOnlyStorageKey(key) {
+    return LOCAL_ONLY_LOCAL_STORAGE_KEYS.has(String(key || ''));
+  }
+
+  function captureLocalOnlyStorageState() {
+    const captured = {};
+    LOCAL_ONLY_LOCAL_STORAGE_KEYS.forEach((key) => {
+      const value = localStorage.getItem(key);
+      if (value !== null) {
+        captured[key] = value;
+      }
+    });
+    return captured;
+  }
+
+  function restoreLocalOnlyStorageState(capturedState = {}) {
+    Object.entries(capturedState).forEach(([key, value]) => {
+      if (typeof value === 'undefined' || value === null) return;
+      localStorage.setItem(key, value);
+    });
+  }
+
   function readStorage(storage, allowlist = []) {
     return Object.entries(storage).reduce((all, [key, value]) => {
       if (allowlist.length && !shouldIncludeStorageKey(key, allowlist)) {
@@ -361,6 +386,9 @@
     delete localState[SYNC_ENABLED_KEY];
     delete localState[SYNC_META_KEY];
     delete localState[SYNC_DEVICE_ID_KEY];
+    LOCAL_ONLY_LOCAL_STORAGE_KEYS.forEach((key) => {
+      delete localState[key];
+    });
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
@@ -408,6 +436,7 @@
       const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
       const syncMetaRaw = localStorage.getItem(SYNC_META_KEY);
       const deviceIdRaw = localStorage.getItem(SYNC_DEVICE_ID_KEY);
+      const localOnlyState = captureLocalOnlyStorageState();
       localStorage.clear();
       sessionStorage.clear();
 
@@ -424,6 +453,7 @@
 
       if (syncMetaRaw) localStorage.setItem(SYNC_META_KEY, syncMetaRaw);
       if (deviceIdRaw) localStorage.setItem(SYNC_DEVICE_ID_KEY, deviceIdRaw);
+      restoreLocalOnlyStorageState(localOnlyState);
 
       writeSyncMeta({
         lastCloudPullAt: Date.now(),
@@ -443,15 +473,28 @@
   }
 
   function hasMeaningfulLocalData() {
-    const localKeys = Object.keys(localStorage).filter((key) => ![SYNC_ENABLED_KEY, SYNC_META_KEY, SYNC_DEVICE_ID_KEY].includes(key));
+    const localKeys = Object.keys(localStorage).filter((key) => (
+      ![SYNC_ENABLED_KEY, SYNC_META_KEY, SYNC_DEVICE_ID_KEY].includes(key)
+      && !isLocalOnlyStorageKey(key)
+    ));
     if (localKeys.length > 0) return true;
     if (sessionStorage.length > 0) return true;
     return String(document.cookie || '').trim().length > 0;
   }
 
+  function hasLocalMergeableData() {
+    for (const storageKey of MERGEABLE_LIST_KEYS) {
+      if (localStorage.getItem(storageKey) === null) continue;
+      const list = readJsonArray(localStorage.getItem(storageKey));
+      if (list.length > 0) return true;
+    }
+    return false;
+  }
+
   function shouldApplyRemoteSnapshot(snapshot) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return false;
     if (!hasMeaningfulLocalData()) return true;
+    if (hasLocalMergeableData()) return false;
 
     const cloudUpdatedAtMs = Number(snapshot?.meta?.updatedAtMs || 0);
     if (!cloudUpdatedAtMs) return false;
@@ -471,10 +514,11 @@
   async function saveLocalSnapshotToCloud(reason = 'auto') {
     await init();
     const user = auth?.currentUser;
-    if (!user || !isSyncEnabled() || pendingAutosync || !snapshotListenerReady) return false;
+    const forceReasons = new Set(['manual', 'pagehide', 'visibility-hidden']);
+    if (!user || !isSyncEnabled() || pendingAutosync) return false;
+    if (!snapshotListenerReady && !forceReasons.has(reason)) return false;
 
     const now = Date.now();
-    const forceReasons = new Set(['manual', 'pagehide', 'visibility-hidden']);
     if (!forceReasons.has(reason) && now - lastSaveAttemptAt < MIN_SAVE_INTERVAL_MS) return false;
 
     const snapshot = collectBackupData();

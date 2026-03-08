@@ -7,31 +7,26 @@
 }
 
 .global-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1002;
-  min-height: 34px;
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 24px));
+  z-index: 1301;
+  min-height: 42px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 10px;
-  padding: 6px 16px;
-  background: color-mix(in srgb, var(--surface-3) 90%, var(--accent-soft));
-  border-bottom: 1px solid var(--border);
+  padding: 10px 44px 10px 14px;
+  background: color-mix(in srgb, var(--surface-3) 90%, var(--accent-soft) 10%);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 12px;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--bg-main) 55%, transparent);
   color: var(--text-primary);
 }
 
-:host(.has-global-banner) header {
-  margin-top: 34px;
-}
-
-:host(.has-global-banner) .shared-chat-widget {
-  top: 102px;
-}
-
-:host(.has-global-banner) .global-banner[hidden] {
+.global-banner[hidden] {
   display: none !important;
 }
 
@@ -39,16 +34,22 @@
   margin: 0;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.3;
 }
 
 .global-banner-close {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
   border: 0;
-  background: transparent;
+  border: 1px solid transparent;
+  background: var(--surface-input-soft);
   color: var(--text-muted);
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
@@ -58,7 +59,8 @@
 
 .global-banner-close:hover {
   color: var(--text-primary);
-  background: var(--surface-input-soft);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-soft) 65%, transparent);
 }
 
 #navbarContainer,
@@ -288,8 +290,11 @@ nav button.active {
 
 
   .global-banner {
-    min-height: 36px;
-    padding: 8px 12px;
+    top: 8px;
+    width: calc(100vw - 16px);
+    min-height: 40px;
+    padding: 8px 42px 8px 12px;
+    border-radius: 10px;
   }
 
   .global-banner-text {
@@ -619,10 +624,6 @@ nav button.active {
 @media (max-width: 768px) {
   .shared-chat-widget {
     top: 8px;
-  }
-
-  :host(.has-global-banner) .shared-chat-widget {
-    top: 44px;
   }
 
   .shared-chat-toggle {
