@@ -12,6 +12,8 @@
 
 
   const DATA_API_BASE = 'https://data-api.watchbilm.org';
+  const LIST_SYNC_PUSH_PATH = '/sync/lists/push';
+  const LIST_SYNC_PULL_PATH = '/sync/lists/pull';
   const TRANSFER_API_DISABLE_KEY = 'bilm-transfer-api-disabled';
 
   let transferApiDisabled = localStorage.getItem(TRANSFER_API_DISABLE_KEY) === '1';
@@ -130,6 +132,70 @@
     return snapshot;
   }
 
+  async function pushListOperationsToTransferApi(user, userId, operations) {
+    if (transferApiDisabled) return null;
+    if (!Array.isArray(operations) || operations.length === 0) {
+      return { ok: true, processed: 0, cursorMs: 0 };
+    }
+
+    const url = `${DATA_API_BASE}${LIST_SYNC_PUSH_PATH}`;
+    const authorization = await getTransferAuthHeader(user);
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization
+        },
+        body: JSON.stringify({
+          userId,
+          deviceId: getOrCreateDeviceId(),
+          operations
+        })
+      });
+    } catch (error) {
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on list push');
+      throw error;
+    }
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`List sync push failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+    }
+    return await response.json();
+  }
+
+  async function pullListOperationsFromTransferApi(user, userId, sinceMs = 0, limit = 250) {
+    if (transferApiDisabled) return null;
+    const pullUrl = new URL(`${DATA_API_BASE}${LIST_SYNC_PULL_PATH}`);
+    pullUrl.searchParams.set('userId', userId);
+    pullUrl.searchParams.set('since', String(Math.max(0, Number(sinceMs || 0) || 0)));
+    pullUrl.searchParams.set('limit', String(Math.max(1, Math.min(500, Number(limit || 250) || 250))));
+    const authorization = await getTransferAuthHeader(user);
+
+    let response;
+    try {
+      response = await fetch(pullUrl.toString(), {
+        method: 'GET',
+        headers: {
+          accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
+          authorization
+        }
+      });
+    } catch (error) {
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on list pull');
+      throw error;
+    }
+
+    if (response.status === 404) return { ok: true, operations: [], cursorMs: sinceMs };
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`List sync pull failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+    }
+    return await response.json();
+  }
+
   const subscribers = new Set();
   let initPromise;
   let modules;
@@ -144,8 +210,10 @@
   let autosyncInterval = null;
   let autosyncFlushBound = false;
   let pendingAutosync = false;
+  let pendingListSync = false;
   let mutationObserverInstalled = false;
   let autosyncDebounceTimer = null;
+  let listSyncDebounceTimer = null;
   let suppressMutationHook = false;
   let lastUploadedCloudSignature = '';
   let lastLocalSnapshotSignature = '';
@@ -154,6 +222,8 @@
 
   const MIN_SAVE_INTERVAL_MS = 15000;
   const AUTOSYNC_HEARTBEAT_MS = 15000;
+  const LIST_SYNC_DEBOUNCE_MS = 500;
+  const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -181,6 +251,7 @@
     /^tmdb-/
   ];
   let lastAppliedCloudSignature = '';
+  const pendingListOperations = new Map();
 
   function readJsonArray(raw) {
     try {
@@ -220,6 +291,103 @@
 
   function getItemUpdatedAt(item) {
     return Number(item?.updatedAt || item?.createdAtMs || item?.timestamp || item?.savedAt || 0) || 0;
+  }
+
+  function normalizeOperationUpdatedAt(value, fallback = Date.now()) {
+    const parsed = Number(value || 0);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.floor(parsed);
+  }
+
+  function normalizeListOperationPayload(payload, updatedAtMs) {
+    if (!payload || typeof payload !== 'object') return null;
+    const normalized = { ...payload };
+    if (!getItemUpdatedAt(normalized)) {
+      normalized.updatedAt = updatedAtMs;
+    }
+    return normalized;
+  }
+
+  function buildListMapFromRaw(raw) {
+    const list = readJsonArray(raw);
+    const map = new Map();
+    list.forEach((entry) => {
+      const itemKey = getListItemKey(entry);
+      if (!itemKey) return;
+      map.set(itemKey, entry);
+    });
+    return map;
+  }
+
+  function buildListOperationsFromRaw(storageKey, beforeRaw, afterRaw, nowMs = Date.now()) {
+    if (!MERGEABLE_LIST_KEYS.has(storageKey)) return [];
+    const beforeMap = buildListMapFromRaw(beforeRaw);
+    const afterMap = buildListMapFromRaw(afterRaw);
+    const operations = [];
+
+    afterMap.forEach((entry, itemKey) => {
+      const beforeEntry = beforeMap.get(itemKey);
+      const updatedAtMs = normalizeOperationUpdatedAt(getItemUpdatedAt(entry), nowMs);
+      const beforeUpdatedAtMs = normalizeOperationUpdatedAt(getItemUpdatedAt(beforeEntry), 0);
+      if (!beforeEntry || beforeUpdatedAtMs !== updatedAtMs || JSON.stringify(beforeEntry) !== JSON.stringify(entry)) {
+        const payload = normalizeListOperationPayload(entry, updatedAtMs);
+        if (!payload) return;
+        operations.push({
+          listKey: storageKey,
+          itemKey,
+          deleted: false,
+          updatedAtMs,
+          payload
+        });
+      }
+    });
+
+    beforeMap.forEach((entry, itemKey) => {
+      if (afterMap.has(itemKey)) return;
+      const deletedAtMs = normalizeOperationUpdatedAt(Math.max(nowMs, getItemUpdatedAt(entry)), nowMs);
+      operations.push({
+        listKey: storageKey,
+        itemKey,
+        deleted: true,
+        updatedAtMs: deletedAtMs
+      });
+    });
+
+    return operations;
+  }
+
+  function enqueueListOperations(operations = []) {
+    operations.forEach((operation) => {
+      if (!operation || !MERGEABLE_LIST_KEYS.has(operation.listKey)) return;
+      const itemKey = String(operation.itemKey || '').trim();
+      if (!itemKey) return;
+      const normalized = {
+        listKey: operation.listKey,
+        itemKey,
+        deleted: operation.deleted === true,
+        updatedAtMs: normalizeOperationUpdatedAt(operation.updatedAtMs),
+        payload: operation.deleted === true ? undefined : normalizeListOperationPayload(operation.payload, operation.updatedAtMs)
+      };
+      if (!normalized.deleted && !normalized.payload) return;
+
+      const queueKey = `${normalized.listKey}|${normalized.itemKey}`;
+      const current = pendingListOperations.get(queueKey);
+      if (!current || normalized.updatedAtMs >= normalizeOperationUpdatedAt(current.updatedAtMs, 0)) {
+        pendingListOperations.set(queueKey, normalized);
+      }
+    });
+  }
+
+  function getListSyncCursorMs() {
+    const meta = readSyncMeta();
+    return normalizeOperationUpdatedAt(meta?.[LIST_SYNC_CURSOR_META_KEY], 0);
+  }
+
+  function setListSyncCursorMs(nextCursorMs) {
+    const current = getListSyncCursorMs();
+    const next = Math.max(current, normalizeOperationUpdatedAt(nextCursorMs, 0));
+    writeSyncMeta({ [LIST_SYNC_CURSOR_META_KEY]: next });
+    return next;
   }
 
   function mergeTombstoneMaps(...maps) {
@@ -546,18 +714,153 @@
     }
   }
 
+  function applyListOperationsToLocalStorage(operations = []) {
+    if (!Array.isArray(operations) || operations.length === 0) return false;
+    const grouped = new Map();
+    operations.forEach((operation) => {
+      const listKey = String(operation?.listKey || '').trim();
+      if (!MERGEABLE_LIST_KEYS.has(listKey)) return;
+      if (!grouped.has(listKey)) grouped.set(listKey, []);
+      grouped.get(listKey).push(operation);
+    });
+    if (!grouped.size) return false;
+
+    suppressMutationHook = true;
+    try {
+      grouped.forEach((ops, listKey) => {
+        const byKey = new Map();
+        readJsonArray(localStorage.getItem(listKey)).forEach((entry) => {
+          const itemKey = getListItemKey(entry);
+          if (!itemKey) return;
+          byKey.set(itemKey, entry);
+        });
+
+        ops.forEach((operation) => {
+          const itemKey = String(operation?.itemKey || '').trim();
+          if (!itemKey) return;
+          const updatedAtMs = normalizeOperationUpdatedAt(operation?.updatedAtMs, 0);
+          const existing = byKey.get(itemKey);
+          const existingUpdatedAtMs = normalizeOperationUpdatedAt(getItemUpdatedAt(existing), 0);
+          if (operation?.deleted === true) {
+            if (!existing || existingUpdatedAtMs <= updatedAtMs) {
+              byKey.delete(itemKey);
+            }
+            return;
+          }
+
+          const payload = normalizeListOperationPayload(operation?.payload, updatedAtMs);
+          if (!payload) return;
+          if (!existing || existingUpdatedAtMs <= updatedAtMs) {
+            byKey.set(itemKey, payload);
+          }
+        });
+
+        const nextList = [...byKey.values()]
+          .sort((left, right) => getItemUpdatedAt(right) - getItemUpdatedAt(left))
+          .slice(0, 120);
+        localStorage.setItem(listKey, JSON.stringify(nextList));
+      });
+    } finally {
+      suppressMutationHook = false;
+    }
+
+    writeSyncMeta({ lastCloudPullAt: Date.now() });
+    return true;
+  }
+
+  function scheduleListSyncFlush(reason = 'list-mutation') {
+    if (!isSyncEnabled()) return;
+    clearTimeout(listSyncDebounceTimer);
+    listSyncDebounceTimer = window.setTimeout(() => {
+      flushPendingListOperationsToCloud(reason).catch((error) => {
+        console.warn('List sync push failed:', error);
+      });
+    }, LIST_SYNC_DEBOUNCE_MS);
+  }
+
+  async function flushPendingListOperationsToCloud(reason = 'list-mutation') {
+    await init();
+    const user = auth?.currentUser;
+    if (!user || !isSyncEnabled() || pendingListSync || transferApiDisabled) return false;
+    if (pendingListOperations.size === 0) return false;
+
+    const batchEntries = [...pendingListOperations.entries()];
+    const operations = batchEntries.map(([, operation]) => operation);
+    if (!operations.length) return false;
+
+    pendingListSync = true;
+    try {
+      const userId = getTransferUserId(user);
+      const response = await pushListOperationsToTransferApi(user, userId, operations);
+      batchEntries.forEach(([key, operation]) => {
+        if (pendingListOperations.get(key) === operation) {
+          pendingListOperations.delete(key);
+        }
+      });
+      const maxUpdatedAt = operations.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0);
+      const cursorMs = Math.max(
+        normalizeOperationUpdatedAt(response?.cursorMs, 0),
+        maxUpdatedAt
+      );
+      if (cursorMs > 0) {
+        setListSyncCursorMs(cursorMs);
+      }
+      writeSyncMeta({
+        lastListSyncPushAt: Date.now(),
+        lastListSyncPushReason: reason
+      });
+      return true;
+    } finally {
+      pendingListSync = false;
+    }
+  }
+
+  async function syncListsFromCloudNow() {
+    await init();
+    const user = auth?.currentUser;
+    if (!user || !isSyncEnabled() || transferApiDisabled) return false;
+
+    const userId = getTransferUserId(user);
+    let sinceMs = getListSyncCursorMs();
+    let pages = 0;
+    let applied = false;
+
+    while (pages < 4) {
+      pages += 1;
+      const response = await pullListOperationsFromTransferApi(user, userId, sinceMs, 250);
+      if (!response || !Array.isArray(response.operations)) break;
+      const operations = response.operations;
+      const cursorMs = normalizeOperationUpdatedAt(response.cursorMs, sinceMs);
+      if (operations.length > 0) {
+        const didApply = applyListOperationsToLocalStorage(operations);
+        applied = applied || didApply;
+      }
+      sinceMs = Math.max(sinceMs, cursorMs);
+      setListSyncCursorMs(sinceMs);
+      if (operations.length < 250) break;
+    }
+
+    return applied;
+  }
+
   function ensureAutosyncFlushBindings() {
     if (autosyncFlushBound) return;
     autosyncFlushBound = true;
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'hidden') return;
+      flushPendingListOperationsToCloud('visibility-hidden').catch((error) => {
+        console.warn('Visibility list sync push failed:', error);
+      });
       saveLocalSnapshotToCloud('visibility-hidden').catch((error) => {
         console.warn('Visibility autosync save failed:', error);
       });
     });
 
     window.addEventListener('pagehide', () => {
+      flushPendingListOperationsToCloud('pagehide').catch(() => {
+        // best effort
+      });
       saveLocalSnapshotToCloud('pagehide').catch(() => {
         // best effort
       });
@@ -568,6 +871,10 @@
     if (!isSyncEnabled()) return;
     clearTimeout(autosyncDebounceTimer);
     autosyncDebounceTimer = window.setTimeout(() => {
+      flushPendingListOperationsToCloud(reason).catch((error) => {
+        console.warn('Mutation list sync push failed:', error);
+      });
+      if (String(reason).startsWith('list-')) return;
       saveLocalSnapshotToCloud(reason).catch((error) => {
         console.warn('Mutation autosync save failed:', error);
       });
@@ -590,6 +897,7 @@
         const result = originalSetItem.apply(this, args);
         if (suppressMutationHook) return result;
         if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return result;
+        let listMutation = false;
         if (MERGEABLE_LIST_KEYS.has(key)) {
           const afterRaw = this.getItem(key);
           const beforeList = readJsonArray(beforeRaw);
@@ -612,23 +920,34 @@
             }
           });
           writeSyncMeta({ listTombstones: tombstones });
+          enqueueListOperations(buildListOperationsFromRaw(key, beforeRaw, afterRaw, now));
+          scheduleListSyncFlush('storage-set-list');
+          listMutation = true;
         }
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-set' });
-        scheduleAutosyncFromMutation('storage-set');
+        scheduleAutosyncFromMutation(listMutation ? 'list-storage-set' : 'storage-set');
         return result;
       };
       localProto.removeItem = function wrappedRemoveItem(...args) {
+        const key = String(args?.[0] || '');
+        const beforeRaw = key ? this.getItem(key) : null;
         const result = originalRemoveItem.apply(this, args);
         if (suppressMutationHook) return result;
-        const key = String(args?.[0] || '');
         if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return result;
+        let listMutation = false;
+        if (MERGEABLE_LIST_KEYS.has(key) && beforeRaw !== null) {
+          enqueueListOperations(buildListOperationsFromRaw(key, beforeRaw, '[]', Date.now()));
+          scheduleListSyncFlush('storage-remove-list');
+          listMutation = true;
+        }
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-remove' });
-        scheduleAutosyncFromMutation('storage-remove');
+        scheduleAutosyncFromMutation(listMutation ? 'list-storage-remove' : 'storage-remove');
         return result;
       };
       localProto.clear = function wrappedClear(...args) {
         const result = originalClear.apply(this, args);
         if (suppressMutationHook) return result;
+        pendingListOperations.clear();
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-clear' });
         scheduleAutosyncFromMutation('storage-clear');
         return result;
@@ -648,6 +967,9 @@
     ensureAutosyncFlushBindings();
     autosyncInterval = window.setInterval(() => {
       if (!isSyncEnabled() || !auth?.currentUser || pendingAutosync) return;
+      syncListsFromCloudNow().catch((error) => {
+        console.warn('Autosync list pull failed:', error);
+      });
       const snapshot = collectBackupData();
       const signature = snapshotSignature(snapshot);
       if (!signature || signature === lastLocalSnapshotSignature) return;
@@ -667,8 +989,15 @@
   }
 
   async function syncFromCloudNow() {
+    let listSyncApplied = false;
+    try {
+      listSyncApplied = await syncListsFromCloudNow();
+    } catch (error) {
+      console.warn('Incremental list sync failed (continuing with snapshot sync):', error);
+    }
+
     const snapshot = await api.getCloudSnapshot();
-    if (!snapshot) return false;
+    if (!snapshot) return listSyncApplied;
     if (!shouldApplyRemoteSnapshot(snapshot)) {
       const localSnapshot = collectBackupData();
       const mergedSnapshot = mergeSnapshots(snapshot, localSnapshot);
@@ -676,7 +1005,7 @@
         applyRemoteSnapshot(mergedSnapshot);
         await api.saveCloudSnapshot(mergedSnapshot);
       }
-      return false;
+      return listSyncApplied;
     }
     applyRemoteSnapshot(snapshot);
     return true;

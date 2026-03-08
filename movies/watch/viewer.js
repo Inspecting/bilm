@@ -13,6 +13,7 @@ const navbarContainer = document.getElementById('navbarContainer');
 const closeBtn = document.getElementById('closeBtn');
 const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
+const playerStatus = document.getElementById('playerStatus');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const watchLaterBtn = document.getElementById('watchLaterBtn');
 const playbackNoteHoursInput = document.getElementById('playbackNoteHours');
@@ -57,7 +58,8 @@ function toSlug(value) {
 }
 
 let imdbId = null;
-let iframeRefreshToken = 0;
+let iframeLoadRequestId = 0;
+const EMBED_LOAD_TIMEOUTS_MS = [10000, 12000];
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
@@ -197,23 +199,111 @@ function buildMovieUrl(server) {
   }
 }
 
-
-
-function buildReloadableUrl(url) {
-  return `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
+function setPlayerStatus(message = '', tone = 'info') {
+  if (!playerStatus) return;
+  playerStatus.textContent = message;
+  playerStatus.classList.remove('is-warning', 'is-error');
+  if (tone === 'warning') playerStatus.classList.add('is-warning');
+  if (tone === 'error') playerStatus.classList.add('is-error');
 }
 
-function refreshIframe(url) {
-  const token = ++iframeRefreshToken;
-  iframe.removeAttribute('sandbox');
-  iframe.src = 'about:blank';
+function getServerLabel(server) {
+  const item = visibleServerItems.find((entry) => entry.getAttribute('data-server') === server);
+  return String(item?.textContent || server || 'server').trim();
+}
 
-  window.setTimeout(() => {
-    if (token !== iframeRefreshToken) return;
-    const reloadUrl = buildReloadableUrl(url);
+function resolveMovieEmbedRequest() {
+  let server = currentServer;
+  let url = buildMovieUrl(server);
+
+  if (!url && server === 'godrive' && !imdbId) {
+    const fallbackServer = normalizeServer('vidsrc');
+    setActiveServer(fallbackServer);
+    server = fallbackServer;
+    url = buildMovieUrl(server);
+    console.info('[player] deterministic fallback', {
+      context: 'movie',
+      reason: 'godrive_missing_imdb',
+      selectedServer: 'godrive',
+      fallbackServer
+    });
+    setPlayerStatus('GoDrive requires IMDb ID here. Switched to VidSrc for this title.', 'warning');
+  }
+
+  if (!url) {
+    const fallbackServer = normalizeServer('vidsrc');
+    if (fallbackServer !== server) {
+      setActiveServer(fallbackServer);
+      server = fallbackServer;
+      url = buildMovieUrl(server);
+      console.info('[player] deterministic fallback', {
+        context: 'movie',
+        reason: 'empty_url',
+        selectedServer: currentServer,
+        fallbackServer
+      });
+    }
+  }
+
+  return { server, url };
+}
+
+async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
+  const loader = window.BilmIframeLoader;
+  if (!loader?.loadWithRetry) {
     iframe.removeAttribute('sandbox');
-    iframe.src = reloadUrl;
-  }, 60);
+    iframe.src = url;
+    return;
+  }
+
+  const serverLabel = getServerLabel(server);
+  const result = await loader.loadWithRetry({
+    iframe,
+    url,
+    timeoutScheduleMs: EMBED_LOAD_TIMEOUTS_MS,
+    isCancelled: () => requestId !== iframeLoadRequestId,
+    onAttempt: ({ attempt, timeoutMs }) => {
+      console.info('[player] load attempt', {
+        context: 'movie',
+        server,
+        attempt,
+        timeoutMs
+      });
+      setPlayerStatus(`Loading ${serverLabel} (attempt ${attempt}/${EMBED_LOAD_TIMEOUTS_MS.length})…`);
+    },
+    onSuccess: ({ attempt }) => {
+      console.info('[player] load success', {
+        context: 'movie',
+        server,
+        attempt
+      });
+    },
+    onFailure: ({ attempt, reason, timeoutMs }) => {
+      console.warn('[player] load failure', {
+        context: 'movie',
+        server,
+        attempt,
+        reason,
+        timeoutMs
+      });
+    }
+  });
+
+  if (requestId !== iframeLoadRequestId || result?.cancelled) return;
+  if (result?.ok) {
+    setPlayerStatus('');
+    return;
+  }
+
+  setPlayerStatus(
+    `We couldn't load ${serverLabel}. Retry or choose another server.`,
+    'error'
+  );
+  console.error('[player] load exhausted', {
+    context: 'movie',
+    server,
+    attempts: EMBED_LOAD_TIMEOUTS_MS.length
+  });
 }
 
 function updateIframe() {
@@ -221,18 +311,21 @@ function updateIframe() {
     console.warn('No id parameter provided.');
     iframe.removeAttribute('sandbox');
     iframe.src = '';
+    setPlayerStatus('Missing title ID. Open this title again from the catalog.', 'error');
     return;
   }
-  let url = buildMovieUrl(currentServer);
+
+  const { server, url } = resolveMovieEmbedRequest();
   if (!url) {
-    if (currentServer === 'godrive' && !imdbId) {
-      return;
-    }
-    const fallbackServer = normalizeServer('vidsrc');
-    setActiveServer(fallbackServer);
-    url = buildMovieUrl(fallbackServer);
+    iframe.removeAttribute('sandbox');
+    iframe.src = '';
+    setPlayerStatus('No playable URL for this title on the selected server.', 'error');
+    return;
   }
-  refreshIframe(url);
+
+  const requestId = ++iframeLoadRequestId;
+  void loadMovieEmbedUrlWithRetry({ requestId, url, server });
+
   if (continueWatchingReady) {
     updateContinueWatching();
   }

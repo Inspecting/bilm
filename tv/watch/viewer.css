@@ -220,6 +220,21 @@ main {
   letter-spacing: 0.02em;
 }
 
+.player-status {
+  min-height: 1.1em;
+  font-size: 0.82rem;
+  color: var(--text-subtle);
+  text-align: left;
+}
+
+.player-status.is-warning {
+  color: #fbbf24;
+}
+
+.player-status.is-error {
+  color: #f87171;
+}
+
 #playerContainer {
   width: 100%;
   aspect-ratio: 16 / 9;

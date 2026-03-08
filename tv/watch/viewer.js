@@ -13,6 +13,7 @@ const playerContainer = document.getElementById('playerContainer');
 const navbarContainer = document.getElementById('navbarContainer');
 const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
+const playerStatus = document.getElementById('playerStatus');
 const favoriteBtn = document.getElementById('favoriteBtn');
 const watchLaterBtn = document.getElementById('watchLaterBtn');
 const playbackNoteHoursInput = document.getElementById('playbackNoteHours');
@@ -103,7 +104,8 @@ let seasonCooldownTimer = null;
 let episodeCooldownTimer = null;
 
 let imdbId = null;
-let iframeRefreshToken = 0;
+let iframeLoadRequestId = 0;
+const EMBED_LOAD_TIMEOUTS_MS = [10000, 12000];
 let similarPage = 1;
 let similarLoading = false;
 let similarEnded = false;
@@ -711,23 +713,111 @@ function buildTvUrl(server) {
   }
 }
 
-
-
-function buildReloadableUrl(url) {
-  return `${url}${url.includes('?') ? '&' : '?'}bilm_refresh=${Date.now()}`;
+function setPlayerStatus(message = '', tone = 'info') {
+  if (!playerStatus) return;
+  playerStatus.textContent = message;
+  playerStatus.classList.remove('is-warning', 'is-error');
+  if (tone === 'warning') playerStatus.classList.add('is-warning');
+  if (tone === 'error') playerStatus.classList.add('is-error');
 }
 
-function refreshIframe(url) {
-  const token = ++iframeRefreshToken;
-  iframe.removeAttribute('sandbox');
-  iframe.src = 'about:blank';
+function getServerLabel(server) {
+  const item = visibleServerItems.find((entry) => entry.getAttribute('data-server') === server);
+  return String(item?.textContent || server || 'server').trim();
+}
 
-  window.setTimeout(() => {
-    if (token !== iframeRefreshToken) return;
-    const reloadUrl = buildReloadableUrl(url);
+function resolveTvEmbedRequest() {
+  let server = currentServer;
+  let url = buildTvUrl(server);
+
+  if (!url && server === 'godrive' && !tmdbId) {
+    const fallbackServer = normalizeServer('vidsrc');
+    setActiveServer(fallbackServer);
+    server = fallbackServer;
+    url = buildTvUrl(server);
+    console.info('[player] deterministic fallback', {
+      context: 'tv',
+      reason: 'godrive_missing_tmdb',
+      selectedServer: 'godrive',
+      fallbackServer
+    });
+    setPlayerStatus('GoDrive requires TMDB ID here. Switched to VidSrc for this episode.', 'warning');
+  }
+
+  if (!url) {
+    const fallbackServer = normalizeServer('vidsrc');
+    if (fallbackServer !== server) {
+      setActiveServer(fallbackServer);
+      server = fallbackServer;
+      url = buildTvUrl(server);
+      console.info('[player] deterministic fallback', {
+        context: 'tv',
+        reason: 'empty_url',
+        selectedServer: currentServer,
+        fallbackServer
+      });
+    }
+  }
+
+  return { server, url };
+}
+
+async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
+  const loader = window.BilmIframeLoader;
+  if (!loader?.loadWithRetry) {
     iframe.removeAttribute('sandbox');
-    iframe.src = reloadUrl;
-  }, 60);
+    iframe.src = url;
+    return;
+  }
+
+  const serverLabel = getServerLabel(server);
+  const result = await loader.loadWithRetry({
+    iframe,
+    url,
+    timeoutScheduleMs: EMBED_LOAD_TIMEOUTS_MS,
+    isCancelled: () => requestId !== iframeLoadRequestId,
+    onAttempt: ({ attempt, timeoutMs }) => {
+      console.info('[player] load attempt', {
+        context: 'tv',
+        server,
+        attempt,
+        timeoutMs
+      });
+      setPlayerStatus(`Loading ${serverLabel} (attempt ${attempt}/${EMBED_LOAD_TIMEOUTS_MS.length})…`);
+    },
+    onSuccess: ({ attempt }) => {
+      console.info('[player] load success', {
+        context: 'tv',
+        server,
+        attempt
+      });
+    },
+    onFailure: ({ attempt, reason, timeoutMs }) => {
+      console.warn('[player] load failure', {
+        context: 'tv',
+        server,
+        attempt,
+        reason,
+        timeoutMs
+      });
+    }
+  });
+
+  if (requestId !== iframeLoadRequestId || result?.cancelled) return;
+  if (result?.ok) {
+    setPlayerStatus('');
+    return;
+  }
+
+  setPlayerStatus(
+    `We couldn't load ${serverLabel}. Retry or choose another server.`,
+    'error'
+  );
+  console.error('[player] load exhausted', {
+    context: 'tv',
+    server,
+    attempts: EMBED_LOAD_TIMEOUTS_MS.length
+  });
 }
 
 function updateIframe() {
@@ -739,15 +829,20 @@ function updateIframe() {
     console.warn('No valid ID for embed URL.');
     iframe.removeAttribute('sandbox');
     iframe.src = '';
+    setPlayerStatus('Missing episode ID. Open this show again from the catalog.', 'error');
     return;
   }
 
-  let url = buildTvUrl(currentServer);
+  const { server, url } = resolveTvEmbedRequest();
   if (!url) {
-    setActiveServer('vidsrc');
-    url = buildTvUrl('vidsrc');
+    iframe.removeAttribute('sandbox');
+    iframe.src = '';
+    setPlayerStatus('No playable URL for this episode on the selected server.', 'error');
+    return;
   }
-  refreshIframe(url);
+
+  const requestId = ++iframeLoadRequestId;
+  void loadTvEmbedUrlWithRetry({ requestId, url, server });
 
   if (continueWatchingReady) {
     updateContinueWatching();
