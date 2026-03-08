@@ -98,9 +98,6 @@ function loadAuthScript() {
   let chatCurrentUser = null;
   let chatRemoteMessages = [];
   let chatPendingMessages = [];
-  let authApiInstance = null;
-  let chatCloudSaveTimer = null;
-  const CHAT_CLOUD_SAVE_DEBOUNCE_MS = 250;
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
 
 
@@ -147,17 +144,6 @@ function loadAuthScript() {
     const normalized = normalizeChatMessages(messages).slice(-120);
     storage.setJSON(CHAT_STORAGE_KEY, normalized);
     chatRemoteMessages = normalized;
-    scheduleChatCloudSave();
-  }
-
-  function scheduleChatCloudSave() {
-    if (!authApiInstance || !chatCurrentUser || typeof authApiInstance.scheduleCloudSave !== 'function') return;
-    window.clearTimeout(chatCloudSaveTimer);
-    chatCloudSaveTimer = window.setTimeout(() => {
-      authApiInstance.scheduleCloudSave('manual').catch((error) => {
-        console.warn('Shared chat cloud save failed:', error);
-      });
-    }, CHAT_CLOUD_SAVE_DEBOUNCE_MS);
   }
 
   function refreshChatMessages() {
@@ -301,8 +287,8 @@ function loadAuthScript() {
   function dismissGlobalBanner() {
     if (globalBanner) {
       globalBanner.hidden = true;
-      globalBanner.setAttribute('aria-hidden', 'true');
     }
+    container.classList.remove('has-global-banner');
     try {
       localStorage.setItem(GLOBAL_BANNER_DISMISS_KEY, '1');
     } catch {
@@ -312,17 +298,15 @@ function loadAuthScript() {
 
   function setupGlobalBanner() {
     if (!globalBanner) return;
-    const dismissed = isGlobalBannerDismissed();
-    globalBanner.hidden = dismissed;
-    globalBanner.setAttribute('aria-hidden', dismissed ? 'true' : 'false');
-
-    if (!dismissed && globalBannerCloseBtn && globalBannerCloseBtn.dataset.bound !== '1') {
-      globalBannerCloseBtn.dataset.bound = '1';
-      globalBannerCloseBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        dismissGlobalBanner();
-      });
+    if (isGlobalBannerDismissed()) {
+      globalBanner.hidden = true;
+      container.classList.remove('has-global-banner');
+      return;
+    }
+    globalBanner.hidden = false;
+    container.classList.add('has-global-banner');
+    if (globalBannerCloseBtn) {
+      globalBannerCloseBtn.addEventListener('click', dismissGlobalBanner);
     }
   }
 
@@ -429,7 +413,6 @@ function loadAuthScript() {
 
   const accountBtn = shadow.getElementById('navbarAccountBtn');
   loadAuthScript().then(async (authApi) => {
-    authApiInstance = authApi;
     await authApi.init();
 
     if (chatWidget) {
@@ -449,9 +432,6 @@ function loadAuthScript() {
 
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
-    authApi.onCloudSnapshotChanged(() => {
-      refreshChatMessages();
-    });
     window.addEventListener('storage', (event) => {
       if (event.key !== CHAT_STORAGE_KEY) return;
       refreshChatMessages();

@@ -13,18 +13,8 @@
 
   const DATA_API_BASE = 'https://data-api.watchbilm.org';
   const TRANSFER_API_DISABLE_KEY = 'bilm-transfer-api-disabled';
-  const TRANSFER_API_BACKOFF_BASE_MS = 3000;
-  const TRANSFER_API_BACKOFF_MAX_MS = 120000;
 
-  let transferApiFailureCount = 0;
-  let transferApiRetryAtMs = 0;
-
-  // Old flag cleanup: API disable is now temporary backoff, not permanent.
-  try {
-    localStorage.removeItem(TRANSFER_API_DISABLE_KEY);
-  } catch {
-    // ignore storage issues
-  }
+  let transferApiDisabled = localStorage.getItem(TRANSFER_API_DISABLE_KEY) === '1';
 
   function getTransferUserId(user) {
     const uid = String(user?.uid || '').trim();
@@ -33,57 +23,18 @@
     return uid.replace(/^user-/i, '');
   }
 
-  function createTransferApiError(message, {
-    status = 0,
-    reason = 'unknown',
-    fallbackEligible = false
-  } = {}) {
-    const error = new Error(message);
-    error.name = 'TransferApiError';
-    error.status = Number(status || 0) || 0;
-    error.reason = String(reason || 'unknown');
-    error.fallbackEligible = Boolean(fallbackEligible);
-    return error;
+  function disableTransferApi(reason) {
+    if (transferApiDisabled) return;
+    transferApiDisabled = true;
+    try {
+      localStorage.setItem(TRANSFER_API_DISABLE_KEY, '1');
+    } catch {}
+    console.warn(`Data API disabled for this browser session (${reason}). Using Firestore fallback.`);
   }
 
-  function classifyTransferApiStatus(status) {
-    const code = Number(status || 0) || 0;
-    if (code === 401 || code === 403) {
-      return { reason: 'auth', fallbackEligible: true };
-    }
-    if (code === 408 || code === 429 || code >= 500) {
-      return { reason: 'server', fallbackEligible: true };
-    }
-    return { reason: 'client', fallbackEligible: false };
-  }
-
-  function isTransferApiFallbackError(error) {
-    return Boolean(error?.fallbackEligible);
-  }
-
-  function clearTransferApiBackoff() {
-    transferApiFailureCount = 0;
-    transferApiRetryAtMs = 0;
-  }
-
-  function increaseTransferApiBackoff(reason) {
-    transferApiFailureCount += 1;
-    const backoffMs = Math.min(
-      TRANSFER_API_BACKOFF_MAX_MS,
-      TRANSFER_API_BACKOFF_BASE_MS * (2 ** Math.min(transferApiFailureCount - 1, 7))
-    );
-    transferApiRetryAtMs = Date.now() + backoffMs;
-    console.warn(`Data API temporary backoff (${reason}). Retrying in ${Math.ceil(backoffMs / 1000)}s.`);
-  }
-
-  function ensureTransferApiReady() {
-    if (Date.now() < transferApiRetryAtMs) {
-      const waitMs = Math.max(0, transferApiRetryAtMs - Date.now());
-      throw createTransferApiError(
-        `Data API is in retry backoff (${Math.ceil(waitMs / 1000)}s remaining).`,
-        { reason: 'backoff', fallbackEligible: true }
-      );
-    }
+  function shouldDisableTransferApi(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return error instanceof TypeError || message.includes('failed to fetch') || message.includes('networkerror');
   }
 
   async function getTransferAuthHeader(user) {
@@ -112,7 +63,7 @@
   }
 
   async function saveSnapshotToTransferApi(user, userId, snapshot) {
-    ensureTransferApiReady();
+    if (transferApiDisabled) return false;
     const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
     const authorization = await getTransferAuthHeader(user);
     const normalizedSnapshot = snapshot && typeof snapshot === 'object' ? snapshot : null;
@@ -133,34 +84,19 @@
     try {
       response = await fetch(url, { method: 'POST', headers, body });
     } catch (error) {
-      increaseTransferApiBackoff('network failure on save');
-      throw createTransferApiError(
-        `Data API save network failure: ${error?.message || 'unknown error'}`,
-        { reason: 'network', fallbackEligible: true }
-      );
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on save');
+      throw error;
     }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      const classification = classifyTransferApiStatus(response.status);
-      if (classification.fallbackEligible) {
-        increaseTransferApiBackoff(`save response ${response.status}`);
-      }
-      throw createTransferApiError(
-        `Data API save failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`,
-        {
-          status: response.status,
-          reason: classification.reason,
-          fallbackEligible: classification.fallbackEligible
-        }
-      );
+      throw new Error(`Data API save failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
     }
-    clearTransferApiBackoff();
     return true;
   }
 
   async function loadSnapshotFromTransferApi(user, userId) {
-    ensureTransferApiReady();
+    if (transferApiDisabled) return null;
     const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}`;
     const authorization = await getTransferAuthHeader(user);
     let response;
@@ -173,98 +109,25 @@
         }
       });
     } catch (error) {
-      increaseTransferApiBackoff('network failure on load');
-      throw createTransferApiError(
-        `Data API load network failure: ${error?.message || 'unknown error'}`,
-        { reason: 'network', fallbackEligible: true }
-      );
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on load');
+      throw error;
     }
 
-    if (response.status === 404) {
-      clearTransferApiBackoff();
-      return null;
-    }
+    if (response.status === 404) return null;
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      const classification = classifyTransferApiStatus(response.status);
-      if (classification.fallbackEligible) {
-        increaseTransferApiBackoff(`load response ${response.status}`);
-      }
-      throw createTransferApiError(
-        `Data API load failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`,
-        {
-          status: response.status,
-          reason: classification.reason,
-          fallbackEligible: classification.fallbackEligible
-        }
-      );
+      throw new Error(`Data API load failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
     }
 
     const text = await response.text();
     const parsed = safeParse(text, null);
-    if (!parsed && !text.trim()) {
-      clearTransferApiBackoff();
-      return null;
-    }
+    if (!parsed && !text.trim()) return null;
     const snapshot = extractSnapshotFromApiPayload(parsed || text);
     if (!snapshot && text) {
       const second = safeParse(String(text), null);
-      clearTransferApiBackoff();
       return second?.schema === 'bilm-backup-v1' ? second : null;
     }
-    clearTransferApiBackoff();
     return snapshot;
-  }
-
-  async function loadSnapshotMetaFromTransferApi(user, userId) {
-    ensureTransferApiReady();
-    const url = `${DATA_API_BASE}/?userId=${encodeURIComponent(userId)}&meta=true`;
-    const authorization = await getTransferAuthHeader(user);
-    let response;
-    try {
-      response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          accept: 'application/json',
-          authorization
-        }
-      });
-    } catch (error) {
-      increaseTransferApiBackoff('network failure on meta');
-      throw createTransferApiError(
-        `Data API meta load network failure: ${error?.message || 'unknown error'}`,
-        { reason: 'network', fallbackEligible: true }
-      );
-    }
-
-    if (response.status === 404) {
-      clearTransferApiBackoff();
-      return { exists: false, updatedAtMs: null, deviceId: null, source: 'api' };
-    }
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      const classification = classifyTransferApiStatus(response.status);
-      if (classification.fallbackEligible) {
-        increaseTransferApiBackoff(`meta response ${response.status}`);
-      }
-      throw createTransferApiError(
-        `Data API meta failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`,
-        {
-          status: response.status,
-          reason: classification.reason,
-          fallbackEligible: classification.fallbackEligible
-        }
-      );
-    }
-
-    const payload = await response.json().catch(() => null);
-    clearTransferApiBackoff();
-    return {
-      exists: payload?.exists !== false,
-      updatedAtMs: Number(payload?.updatedAtMs || 0) || null,
-      deviceId: String(payload?.deviceId || '').trim() || null,
-      source: 'api'
-    };
   }
 
   const subscribers = new Set();
@@ -275,9 +138,7 @@
   let firestore;
   let analytics;
   let currentUser = null;
-  let cloudSnapshotPollTimer = null;
-  let cloudSnapshotPollInFlight = false;
-  let lastPolledCloudUpdatedAtMs = 0;
+  let cloudSnapshotUnsubscribe = null;
   let lastCloudSnapshotEvent = null;
   const cloudSubscribers = new Set();
   let autosyncInterval = null;
@@ -312,9 +173,6 @@
     /^tmdb-/,
     /^theme-/
   ];
-  const LOCAL_ONLY_LOCAL_STORAGE_KEYS = new Set([
-    'bilm-global-message-dismissed-migrating-data'
-  ]);
   const BACKUP_SESSION_ALLOWLIST = [
     /^bilm-/,
     /^tmdb-/
@@ -487,28 +345,6 @@
     return allowlist.some((pattern) => pattern.test(String(key || '')));
   }
 
-  function isLocalOnlyStorageKey(key) {
-    return LOCAL_ONLY_LOCAL_STORAGE_KEYS.has(String(key || ''));
-  }
-
-  function captureLocalOnlyStorageState() {
-    const captured = {};
-    LOCAL_ONLY_LOCAL_STORAGE_KEYS.forEach((key) => {
-      const value = localStorage.getItem(key);
-      if (value !== null) {
-        captured[key] = value;
-      }
-    });
-    return captured;
-  }
-
-  function restoreLocalOnlyStorageState(capturedState = {}) {
-    Object.entries(capturedState).forEach(([key, value]) => {
-      if (typeof value === 'undefined' || value === null) return;
-      localStorage.setItem(key, value);
-    });
-  }
-
   function readStorage(storage, allowlist = []) {
     return Object.entries(storage).reduce((all, [key, value]) => {
       if (allowlist.length && !shouldIncludeStorageKey(key, allowlist)) {
@@ -525,9 +361,6 @@
     delete localState[SYNC_ENABLED_KEY];
     delete localState[SYNC_META_KEY];
     delete localState[SYNC_DEVICE_ID_KEY];
-    LOCAL_ONLY_LOCAL_STORAGE_KEYS.forEach((key) => {
-      delete localState[key];
-    });
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
@@ -575,7 +408,6 @@
       const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
       const syncMetaRaw = localStorage.getItem(SYNC_META_KEY);
       const deviceIdRaw = localStorage.getItem(SYNC_DEVICE_ID_KEY);
-      const localOnlyState = captureLocalOnlyStorageState();
       localStorage.clear();
       sessionStorage.clear();
 
@@ -592,7 +424,6 @@
 
       if (syncMetaRaw) localStorage.setItem(SYNC_META_KEY, syncMetaRaw);
       if (deviceIdRaw) localStorage.setItem(SYNC_DEVICE_ID_KEY, deviceIdRaw);
-      restoreLocalOnlyStorageState(localOnlyState);
 
       writeSyncMeta({
         lastCloudPullAt: Date.now(),
@@ -612,28 +443,15 @@
   }
 
   function hasMeaningfulLocalData() {
-    const localKeys = Object.keys(localStorage).filter((key) => (
-      ![SYNC_ENABLED_KEY, SYNC_META_KEY, SYNC_DEVICE_ID_KEY].includes(key)
-      && !isLocalOnlyStorageKey(key)
-    ));
+    const localKeys = Object.keys(localStorage).filter((key) => ![SYNC_ENABLED_KEY, SYNC_META_KEY, SYNC_DEVICE_ID_KEY].includes(key));
     if (localKeys.length > 0) return true;
     if (sessionStorage.length > 0) return true;
     return String(document.cookie || '').trim().length > 0;
   }
 
-  function hasLocalMergeableData() {
-    for (const storageKey of MERGEABLE_LIST_KEYS) {
-      if (localStorage.getItem(storageKey) === null) continue;
-      const list = readJsonArray(localStorage.getItem(storageKey));
-      if (list.length > 0) return true;
-    }
-    return false;
-  }
-
   function shouldApplyRemoteSnapshot(snapshot) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return false;
     if (!hasMeaningfulLocalData()) return true;
-    if (hasLocalMergeableData()) return false;
 
     const cloudUpdatedAtMs = Number(snapshot?.meta?.updatedAtMs || 0);
     if (!cloudUpdatedAtMs) return false;
@@ -653,11 +471,10 @@
   async function saveLocalSnapshotToCloud(reason = 'auto') {
     await init();
     const user = auth?.currentUser;
-    const forceReasons = new Set(['manual', 'pagehide', 'visibility-hidden']);
-    if (!user || !isSyncEnabled() || pendingAutosync) return false;
-    if (!snapshotListenerReady && !forceReasons.has(reason)) return false;
+    if (!user || !isSyncEnabled() || pendingAutosync || !snapshotListenerReady) return false;
 
     const now = Date.now();
+    const forceReasons = new Set(['manual', 'pagehide', 'visibility-hidden']);
     if (!forceReasons.has(reason) && now - lastSaveAttemptAt < MIN_SAVE_INTERVAL_MS) return false;
 
     const snapshot = collectBackupData();
@@ -671,17 +488,14 @@
     pendingAutosync = true;
     lastSaveAttemptAt = now;
     try {
-      const saved = await api.saveCloudSnapshot(snapshot);
+      await api.saveCloudSnapshot(snapshot);
       writeSyncMeta({
         lastCloudPushAt: Date.now(),
         lastLocalChangeAt: Date.now(),
-        lastPushReason: reason,
-        lastCloudPushMode: saved ? 'api' : 'firestore-fallback'
+        lastPushReason: reason
       });
-      if (saved) {
-        lastUploadedCloudSignature = signature;
-        lastLocalSnapshotSignature = signature;
-      }
+      lastUploadedCloudSignature = signature;
+      lastLocalSnapshotSignature = signature;
       return true;
     } finally {
       pendingAutosync = false;
@@ -793,6 +607,7 @@
       const snapshot = collectBackupData();
       const signature = snapshotSignature(snapshot);
       if (!signature || signature === lastLocalSnapshotSignature) return;
+      lastLocalSnapshotSignature = signature;
       writeSyncMeta({ lastLocalChangeAt: Date.now() });
       saveLocalSnapshotToCloud('interval').catch((error) => {
         console.warn('Autosync interval save failed:', error);
@@ -834,124 +649,63 @@
     });
   }
 
-  async function getFirestoreSnapshot(user) {
-    if (!user || !modules?.getDoc || !modules?.doc || !firestore) return null;
-    const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
-    const data = docSnap.data() || {};
-    return data.cloudBackup?.snapshot || null;
-  }
-
-  async function getFirestoreSnapshotMeta(user) {
-    const snapshot = await getFirestoreSnapshot(user);
-    const updatedAtMs = Number(snapshot?.meta?.updatedAtMs || 0) || null;
-    return {
-      exists: Boolean(snapshot),
-      updatedAtMs,
-      deviceId: String(snapshot?.meta?.deviceId || '').trim() || null,
-      source: 'firestore'
-    };
-  }
-
-  async function fetchCloudSnapshotMeta(user) {
-    const targetUser = user || auth?.currentUser;
-    if (!targetUser) {
-      return { exists: false, updatedAtMs: null, deviceId: null, source: 'none' };
-    }
-    const userId = getTransferUserId(targetUser);
-    try {
-      return await loadSnapshotMetaFromTransferApi(targetUser, userId);
-    } catch (error) {
-      if (!isTransferApiFallbackError(error)) throw error;
-      console.warn('Data API meta failed (falling back to Firestore meta):', error);
-      return getFirestoreSnapshotMeta(targetUser);
-    }
-  }
-
-  async function pollCloudSnapshot(user, { force = false } = {}) {
-    if (!user || cloudSnapshotPollInFlight) return;
-    cloudSnapshotPollInFlight = true;
-    try {
-      const meta = await fetchCloudSnapshotMeta(user);
-      snapshotListenerReady = true;
-      const updatedAtMs = Number(meta?.updatedAtMs || 0) || 0;
-      const baseEvent = {
-        snapshot: null,
-        updatedAtMs: updatedAtMs || null,
-        hasPendingWrites: false,
-        fromCache: meta?.source === 'firestore',
-        sourceDeviceId: String(meta?.deviceId || '').trim() || null,
-        user
-      };
-      emitCloudSnapshotEvent(baseEvent);
-
-      if (!isSyncEnabled() || !meta?.exists || !updatedAtMs) return;
-      if (!force && updatedAtMs <= lastPolledCloudUpdatedAtMs) return;
-      lastPolledCloudUpdatedAtMs = updatedAtMs;
-
-      const snapshot = await api.getCloudSnapshot();
-      if (!snapshot) return;
-
-      const signature = snapshotSignature(snapshot);
-      const sourceDeviceId = String(snapshot?.meta?.deviceId || meta?.deviceId || '').trim() || null;
-      emitCloudSnapshotEvent({
-        ...baseEvent,
-        snapshot,
-        sourceDeviceId
-      });
-
-      if (!signature || signature === lastAppliedCloudSignature) return;
-
-      const localDeviceId = getOrCreateDeviceId();
-      if (sourceDeviceId && sourceDeviceId === localDeviceId) {
-        lastAppliedCloudSignature = signature;
-        return;
-      }
-
-      if (!shouldApplyRemoteSnapshot(snapshot)) {
-        const localSnapshot = collectBackupData();
-        const mergedSnapshot = mergeSnapshots(snapshot, localSnapshot);
-        if (mergedSnapshot) {
-          applyRemoteSnapshot(mergedSnapshot);
-          await api.saveCloudSnapshot(mergedSnapshot);
-        }
-        return;
-      }
-
-      applyRemoteSnapshot(snapshot);
-      lastAppliedCloudSignature = signature;
-    } catch (error) {
-      snapshotListenerReady = true;
-      console.warn('Cloud snapshot poll failed:', error);
-    } finally {
-      cloudSnapshotPollInFlight = false;
-    }
-  }
-
   function stopCloudSnapshotListener() {
-    if (cloudSnapshotPollTimer) {
-      window.clearInterval(cloudSnapshotPollTimer);
+    if (typeof cloudSnapshotUnsubscribe === 'function') {
+      cloudSnapshotUnsubscribe();
     }
-    cloudSnapshotPollTimer = null;
-    cloudSnapshotPollInFlight = false;
+    cloudSnapshotUnsubscribe = null;
   }
 
   function startCloudSnapshotListener(user) {
     stopCloudSnapshotListener();
     snapshotListenerReady = false;
-    lastPolledCloudUpdatedAtMs = Number(readSyncMeta()?.lastCloudSnapshotAt || 0) || 0;
-    if (!user) {
+    if (!user || !modules?.onSnapshot || !firestore) {
       emitCloudSnapshotEvent({ snapshot: null, updatedAtMs: null, user: null });
       return;
     }
 
-    pollCloudSnapshot(user, { force: true }).catch((error) => {
-      console.warn('Initial cloud snapshot poll failed:', error);
+    const userDocRef = modules.doc(firestore, 'users', user.uid);
+    cloudSnapshotUnsubscribe = modules.onSnapshot(userDocRef, { includeMetadataChanges: false }, (docSnap) => {
+      const data = docSnap.data() || {};
+      const cloudBackup = data.cloudBackup || {};
+      const event = {
+        snapshot: cloudBackup.snapshot || null,
+        updatedAtMs: cloudBackup.updatedAt?.toMillis?.() || null,
+        hasPendingWrites: docSnap.metadata?.hasPendingWrites === true,
+        fromCache: docSnap.metadata?.fromCache === true,
+        sourceDeviceId: String(cloudBackup?.snapshot?.meta?.deviceId || '').trim() || null,
+        user
+      };
+      snapshotListenerReady = true;
+      emitCloudSnapshotEvent(event);
+
+      if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
+      const signature = snapshotSignature(event.snapshot);
+      if (!signature || signature === lastAppliedCloudSignature) return;
+
+      const localDeviceId = getOrCreateDeviceId();
+      const sourceDeviceId = String(event.snapshot?.meta?.deviceId || '').trim();
+      if (sourceDeviceId && sourceDeviceId === localDeviceId) {
+        lastAppliedCloudSignature = signature;
+        return;
+      }
+
+      if (!shouldApplyRemoteSnapshot(event.snapshot)) {
+        const localSnapshot = collectBackupData();
+        const mergedSnapshot = mergeSnapshots(event.snapshot, localSnapshot);
+        if (mergedSnapshot) {
+          applyRemoteSnapshot(mergedSnapshot);
+          api.saveCloudSnapshot(mergedSnapshot).catch((error) => {
+            console.warn('Listener merge save failed:', error);
+          });
+        }
+        return;
+      }
+      applyRemoteSnapshot(event.snapshot);
+      lastAppliedCloudSignature = signature;
+    }, (error) => {
+      console.warn('Cloud snapshot listener failed:', error);
     });
-    cloudSnapshotPollTimer = window.setInterval(() => {
-      pollCloudSnapshot(user).catch((error) => {
-        console.warn('Cloud snapshot interval poll failed:', error);
-      });
-    }, AUTOSYNC_HEARTBEAT_MS);
   }
 
 
@@ -1267,10 +1021,6 @@
       if (lastCloudSnapshotEvent) callback(lastCloudSnapshotEvent);
       return () => cloudSubscribers.delete(callback);
     },
-    async getCloudSnapshotMeta() {
-      const user = await requireAuth();
-      return fetchCloudSnapshotMeta(user);
-    },
     async saveCloudSnapshot(snapshot) {
       const user = await requireAuth();
       const cloudSnapshot = await api.getCloudSnapshot();
@@ -1285,6 +1035,8 @@
         }
       };
       const signature = snapshotSignature(payload);
+      lastAppliedCloudSignature = signature;
+      lastUploadedCloudSignature = signature;
 
       const userId = getTransferUserId(user);
       let savedToTransferApi = false;
@@ -1292,10 +1044,7 @@
         await saveSnapshotToTransferApi(user, userId, payload);
         savedToTransferApi = true;
       } catch (error) {
-        if (!isTransferApiFallbackError(error)) {
-          throw error;
-        }
-        console.warn('Data API save failed (Firestore mirror write still proceeding):', error);
+        console.warn('Data API save failed (Firestore save will still proceed):', error);
       }
 
       await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
@@ -1307,59 +1056,24 @@
         }
       }, { merge: true });
 
-      if (savedToTransferApi) {
-        lastAppliedCloudSignature = signature;
-        lastUploadedCloudSignature = signature;
-        lastPolledCloudUpdatedAtMs = Number(payload?.meta?.updatedAtMs || 0) || lastPolledCloudUpdatedAtMs;
-      }
-
       writeSyncMeta({
         lastCloudPushAt: Date.now(),
-        lastLocalChangeAt: Date.now(),
-        lastCloudPushMode: savedToTransferApi ? 'api' : 'firestore-fallback'
+        lastLocalChangeAt: Date.now()
       });
-      return savedToTransferApi;
     },
     async getCloudSnapshot() {
       const user = await requireAuth();
       const userId = getTransferUserId(user);
       let transferSnapshot = null;
-      let apiLoadFailed = false;
       try {
         transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
       } catch (error) {
-        if (!isTransferApiFallbackError(error)) {
-          throw error;
-        }
-        apiLoadFailed = true;
         console.warn('Data API load failed (falling back to Firestore data):', error);
       }
 
-      if (!apiLoadFailed) {
-        const firestoreSnapshot = await getFirestoreSnapshot(user);
-        const mergedSnapshot = mergeSnapshots(firestoreSnapshot, transferSnapshot);
-        const preferredSnapshot = mergedSnapshot || (
-          getSnapshotUpdatedAtMs(transferSnapshot) >= getSnapshotUpdatedAtMs(firestoreSnapshot)
-          ? transferSnapshot
-          : firestoreSnapshot
-        );
-
-        const preferredSignature = snapshotSignature(preferredSnapshot);
-        const transferSignature = snapshotSignature(transferSnapshot);
-        if (preferredSnapshot && preferredSignature && preferredSignature !== transferSignature) {
-          saveSnapshotToTransferApi(user, userId, preferredSnapshot).catch((error) => {
-            if (isTransferApiFallbackError(error)) {
-              console.warn('Transfer API self-heal skipped (temporary API issue):', error);
-              return;
-            }
-            console.warn('Transfer API self-heal failed:', error);
-          });
-        }
-
-        return preferredSnapshot;
-      }
-
-      const firestoreSnapshot = await getFirestoreSnapshot(user);
+      const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
+      const data = docSnap.data() || {};
+      const firestoreSnapshot = data.cloudBackup?.snapshot || null;
       const mergedSnapshot = mergeSnapshots(firestoreSnapshot, transferSnapshot);
       if (mergedSnapshot) return mergedSnapshot;
       return getSnapshotUpdatedAtMs(transferSnapshot) >= getSnapshotUpdatedAtMs(firestoreSnapshot)
