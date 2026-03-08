@@ -67,9 +67,9 @@ function esc(value) {
 
 const builtInServers = [
   {
-    key: 'viking',
-    label: 'Viking',
-    template: 'https://vembed.stream/play/{id}'
+    key: 'vidsrc',
+    label: 'VidSrc',
+    template: 'https://vidsrc-embed.ru/embed/movie/{imdbOrId}'
   },
   {
     key: 'embedmaster',
@@ -77,9 +77,9 @@ const builtInServers = [
     template: 'https://embedmaster.link/movie/{id}'
   },
   {
-    key: 'vidsrc',
-    label: 'VidSrc',
-    template: 'https://vidsrc-embed.ru/embed/movie/{imdbOrId}'
+    key: 'viking',
+    label: 'Viking',
+    template: 'https://vembed.stream/play/{id}'
   }
 ];
 
@@ -146,3 +146,4 @@ window.TestMovieApp = {
   removeCustomServer,
   buildServerUrl
 };
+

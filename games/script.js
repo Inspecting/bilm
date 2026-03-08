@@ -215,7 +215,7 @@ const fetchCatalog = async (url) => {
 };
 
 const loadGames = async () => {
-  const sources = [catalogUrl, fallbackCatalogUrl];
+  const sources = [fallbackCatalogUrl, catalogUrl];
   let lastError = null;
 
   for (const source of sources) {
@@ -224,7 +224,7 @@ const loadGames = async () => {
       const entries = normalizeGames(data).map(normalizeEntry).filter((game) => game.title);
       if (entries.length) {
         state.games = entries;
-        const label = source === catalogUrl ? 'Live catalog' : 'Backup catalog';
+        const label = source === fallbackCatalogUrl ? 'Local catalog' : 'Live catalog';
         setStatus(`${entries.length} games loaded · ${label}`);
         applySearch();
         return;
@@ -243,3 +243,4 @@ const loadGames = async () => {
 
 wireSearch();
 loadGames();
+

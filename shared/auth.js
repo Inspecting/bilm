@@ -153,6 +153,7 @@
   let snapshotListenerReady = false;
 
   const MIN_SAVE_INTERVAL_MS = 15000;
+  const AUTOSYNC_HEARTBEAT_MS = 15000;
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -611,7 +612,7 @@
       saveLocalSnapshotToCloud('interval').catch((error) => {
         console.warn('Autosync interval save failed:', error);
       });
-    }, 3000);
+    }, AUTOSYNC_HEARTBEAT_MS);
   }
 
   function stopAutosyncLoop() {
@@ -927,6 +928,20 @@
       const user = await requireAuth();
       const cleaned = String(username || '').trim();
       if (cleaned.length > 30) throw new Error('Username must be 30 characters or fewer.');
+
+      const normalizedNext = normalizeUsername(cleaned);
+      const normalizedPrev = normalizeUsername(user.displayName);
+      const nextRef = normalizedNext ? modules.doc(firestore, 'usernames', normalizedNext) : null;
+      const prevRef = normalizedPrev ? modules.doc(firestore, 'usernames', normalizedPrev) : null;
+
+      if (nextRef && normalizedNext !== normalizedPrev) {
+        const takenDoc = await modules.getDoc(nextRef);
+        const existingUid = String(takenDoc.data()?.uid || '').trim();
+        if (existingUid && existingUid !== user.uid) {
+          throw new Error('That username is already taken. Please choose another.');
+        }
+      }
+
       await modules.updateProfile(user, { displayName: cleaned || null });
       await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
         profile: {
@@ -935,13 +950,27 @@
           updatedAt: modules.serverTimestamp()
         }
       }, { merge: true });
-      if (cleaned) {
-        await modules.setDoc(modules.doc(firestore, 'usernames', normalizeUsername(cleaned)), {
+
+      if (prevRef && normalizedPrev !== normalizedNext) {
+        try {
+          const previousDoc = await modules.getDoc(prevRef);
+          const previousUid = String(previousDoc.data()?.uid || '').trim();
+          if (previousUid === user.uid) {
+            await modules.deleteDoc(prevRef);
+          }
+        } catch (error) {
+          console.warn('Previous username cleanup skipped:', error);
+        }
+      }
+
+      if (nextRef) {
+        await modules.setDoc(nextRef, {
           uid: user.uid,
           username: cleaned,
           updatedAt: modules.serverTimestamp()
         }, { merge: true });
       }
+
       currentUser = { ...user, displayName: cleaned || null };
       notifySubscribers(auth.currentUser || currentUser);
       return cleaned;
@@ -957,10 +986,21 @@
       const user = await requireAuth();
       if (!password) throw new Error('Password is required to delete your account.');
       await api.reauthenticate(password);
+
       const usernameKey = normalizeUsername(user.displayName);
+      const usernameRef = usernameKey ? modules.doc(firestore, 'usernames', usernameKey) : null;
+
       await modules.deleteDoc(modules.doc(firestore, 'users', user.uid));
-      if (usernameKey) {
-        await modules.deleteDoc(modules.doc(firestore, 'usernames', usernameKey));
+      if (usernameRef) {
+        try {
+          const usernameDoc = await modules.getDoc(usernameRef);
+          const mappedUid = String(usernameDoc.data()?.uid || '').trim();
+          if (mappedUid === user.uid) {
+            await modules.deleteDoc(usernameRef);
+          }
+        } catch (error) {
+          console.warn('Username cleanup during delete skipped:', error);
+        }
       }
       await modules.deleteUser(user);
     },
@@ -1069,3 +1109,4 @@
 
   window.bilmAuth = api;
 })();
+

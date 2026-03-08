@@ -21,11 +21,12 @@ function detectBasePath() {
   return '';
 }
 
+const BASE_PATH = detectBasePath();
+
 function withBase(path) {
   const normalized = path.startsWith('/') ? path : `/${path}`;
-  return `${detectBasePath()}${normalized}`;
+  return `${BASE_PATH}${normalized}`;
 }
-
 function loadAuthScript() {
   return new Promise((resolve, reject) => {
     if (window.bilmAuth) {
@@ -56,17 +57,32 @@ function loadAuthScript() {
 
   document.body.classList.add('has-fixed-navbar');
 
-  const shadow = container.attachShadow({ mode: 'open' });
+  const shadow = container.shadowRoot || container.attachShadow({ mode: 'open' });
 
-  const [htmlRes, cssRes] = await Promise.all([
-    fetch(withBase('/shared/navbar.html')),
-    fetch(withBase('/shared/navbar.css'))
-  ]);
+  let html = '';
+  let css = '';
+  try {
+    const [htmlRes, cssRes] = await Promise.all([
+      fetch(withBase('/shared/navbar.html')),
+      fetch(withBase('/shared/navbar.css'))
+    ]);
 
-  const html = await htmlRes.text();
-  const css = await cssRes.text();
+    if (!htmlRes.ok || !cssRes.ok) {
+      throw new Error(`Navbar assets failed to load (html=${htmlRes.status}, css=${cssRes.status})`);
+    }
+
+    html = await htmlRes.text();
+    css = await cssRes.text();
+  } catch (error) {
+    console.error('Failed to load navbar assets:', error);
+    document.body.classList.remove('has-fixed-navbar');
+    return;
+  }
 
   shadow.innerHTML = `<style>${css}</style>${html}`;
+
+  const globalBanner = shadow.getElementById('globalBanner');
+  const globalBannerCloseBtn = shadow.getElementById('globalBannerCloseBtn');
 
 
   const chatWidget = shadow.getElementById('sharedChatWidget');
@@ -257,6 +273,43 @@ function loadAuthScript() {
     }
   };
 
+
+  const GLOBAL_BANNER_DISMISS_KEY = 'bilm-global-message-dismissed-migrating-data';
+
+  function isGlobalBannerDismissed() {
+    try {
+      return localStorage.getItem(GLOBAL_BANNER_DISMISS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function dismissGlobalBanner() {
+    if (globalBanner) {
+      globalBanner.hidden = true;
+    }
+    container.classList.remove('has-global-banner');
+    try {
+      localStorage.setItem(GLOBAL_BANNER_DISMISS_KEY, '1');
+    } catch {
+      // If storage is blocked, keep UI behavior without crashing.
+    }
+  }
+
+  function setupGlobalBanner() {
+    if (!globalBanner) return;
+    if (isGlobalBannerDismissed()) {
+      globalBanner.hidden = true;
+      container.classList.remove('has-global-banner');
+      return;
+    }
+    globalBanner.hidden = false;
+    container.classList.add('has-global-banner');
+    if (globalBannerCloseBtn) {
+      globalBannerCloseBtn.addEventListener('click', dismissGlobalBanner);
+    }
+  }
+
   function loadList(key) {
     const list = storage.getJSON(key, []);
     return Array.isArray(list) ? list : [];
@@ -322,6 +375,8 @@ function loadAuthScript() {
       : trimmedQuery;
     window.location.href = `${withBase('/search/')}?q=${encodeURIComponent(outgoingQuery)}`;
   }
+
+  setupGlobalBanner();
 
   // Desktop nav buttons
   const buttons = shadow.querySelectorAll('nav.navbar button[data-page]');
@@ -509,3 +564,4 @@ function loadAuthScript() {
     });
   }
 })();
+
