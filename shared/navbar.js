@@ -236,31 +236,25 @@ function loadAuthScript() {
     if (!deps) return;
 
     const { modules, firestore } = deps;
-    const chatCollectionRef = modules.collection(firestore, 'users', chatCurrentUser.uid, 'sharedChat');
-    const chatQuery = modules.query(
-      chatCollectionRef,
-      modules.orderBy('createdAtMs', 'asc'),
-      modules.limit(120)
-    );
+    const userDocRef = modules.doc(firestore, 'users', chatCurrentUser.uid);
 
-    chatFirestoreUnsubscribe = modules.onSnapshot(chatQuery, (snapshot) => {
+    chatFirestoreUnsubscribe = modules.onSnapshot(userDocRef, (docSnap) => {
       chatFirestoreLive = true;
       chatFirestoreFailed = false;
 
-      const fromFirestore = normalizeChatMessages(
-        snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() || {};
-          return {
-            ...data,
-            id: docSnap.id,
-            firebase: true,
-            text: String(data.text || ''),
-            author: String(data.author || 'Account'),
-            createdAtMs: Number(data.createdAtMs || data.updatedAt || Date.now()) || Date.now(),
-            updatedAt: Number(data.updatedAt || data.createdAtMs || Date.now()) || Date.now()
-          };
-        })
-      );
+      const data = docSnap.data() || {};
+      const rawMessages = Array.isArray(data?.sharedChat?.messages)
+        ? data.sharedChat.messages
+        : [];
+      const fromFirestore = normalizeChatMessages(rawMessages.map((entry) => ({
+        ...entry,
+        firebase: true,
+        id: String(entry?.id || entry?.key || '').trim() || `msg-${Number(entry?.createdAtMs || Date.now())}`,
+        text: String(entry?.text || ''),
+        author: String(entry?.author || 'Account'),
+        createdAtMs: Number(entry?.createdAtMs || entry?.updatedAt || Date.now()) || Date.now(),
+        updatedAt: Number(entry?.updatedAt || entry?.createdAtMs || Date.now()) || Date.now()
+      })));
 
       chatRemoteMessages = fromFirestore;
       chatPendingMessages = chatPendingMessages.filter((pending) => (
@@ -268,7 +262,7 @@ function loadAuthScript() {
       ));
 
       // Keep local/API backup in sync while Firebase drives realtime UI.
-      saveStoredChatMessages(fromFirestore, { syncCloud: true });
+      saveStoredChatMessages(fromFirestore, { syncCloud: false });
       renderChatMessages(composeVisibleChatMessages());
     }, (error) => {
       chatFirestoreLive = false;
@@ -280,33 +274,82 @@ function loadAuthScript() {
     });
   }
 
-  async function sendChatMessageToFirestore(message) {
+  async function updateFirebaseChatMessages(mutator) {
     if (!chatCurrentUser) return false;
     const deps = getChatFirestoreDeps();
     if (!deps) return false;
 
     const { modules, firestore } = deps;
-    const chatCollectionRef = modules.collection(firestore, 'users', chatCurrentUser.uid, 'sharedChat');
-    await modules.addDoc(chatCollectionRef, {
+    const userDocRef = modules.doc(firestore, 'users', chatCurrentUser.uid);
+
+    const applyMutation = (existingMessages = []) => {
+      const safeExisting = Array.isArray(existingMessages) ? existingMessages : [];
+      const next = normalizeChatMessages(mutator(normalizeChatMessages(safeExisting))).slice(-120);
+      return next.map((entry) => ({
+        id: String(entry.id || '').trim() || `msg-${Number(entry.createdAtMs || Date.now())}-${Math.random().toString(36).slice(2, 6)}`,
+        key: String(entry.key || '').trim() || `chat:${Number(entry.createdAtMs || Date.now())}:${Math.random().toString(36).slice(2, 8)}`,
+        text: String(entry.text || ''),
+        author: String(entry.author || 'Account'),
+        authorUid: String(entry.authorUid || ''),
+        createdAtMs: Number(entry.createdAtMs || Date.now()) || Date.now(),
+        updatedAt: Number(entry.updatedAt || entry.createdAtMs || Date.now()) || Date.now()
+      }));
+    };
+
+    if (typeof modules.runTransaction === 'function') {
+      await modules.runTransaction(firestore, async (transaction) => {
+        const snap = await transaction.get(userDocRef);
+        const data = snap.data() || {};
+        const existingMessages = data?.sharedChat?.messages || [];
+        const nextMessages = applyMutation(existingMessages);
+        transaction.set(userDocRef, {
+          sharedChat: {
+            messages: nextMessages,
+            updatedAtMs: Date.now(),
+            version: 1
+          }
+        }, { merge: true });
+      });
+      return true;
+    }
+
+    const snap = await modules.getDoc(userDocRef);
+    const data = snap.data() || {};
+    const existingMessages = data?.sharedChat?.messages || [];
+    const nextMessages = applyMutation(existingMessages);
+    await modules.setDoc(userDocRef, {
+      sharedChat: {
+        messages: nextMessages,
+        updatedAtMs: Date.now(),
+        version: 1
+      }
+    }, { merge: true });
+    return true;
+  }
+
+  async function sendChatMessageToFirestore(message) {
+    const nextMessage = {
+      id: String(message?.id || '').trim() || `msg-${Number(message?.createdAtMs || Date.now())}-${Math.random().toString(36).slice(2, 6)}`,
+      key: String(message?.key || ''),
       text: String(message?.text || ''),
       author: String(message?.author || 'Account'),
-      authorUid: String(message?.authorUid || chatCurrentUser.uid || ''),
+      authorUid: String(message?.authorUid || chatCurrentUser?.uid || ''),
       createdAtMs: Number(message?.createdAtMs || Date.now()) || Date.now(),
-      updatedAt: Number(message?.updatedAt || message?.createdAtMs || Date.now()) || Date.now(),
-      key: String(message?.key || '')
-    });
-    return true;
+      updatedAt: Number(message?.updatedAt || message?.createdAtMs || Date.now()) || Date.now()
+    };
+    const updated = await updateFirebaseChatMessages((existing) => mergeChatMessages(existing, [nextMessage]));
+    if (updated) scheduleChatCloudSave();
+    return updated;
   }
 
   async function deleteChatMessage(entry) {
     if (!entry || entry.pending) return;
-    const isFirebaseEntry = Boolean(entry.firebase);
-
-    if (isFirebaseEntry && chatCurrentUser) {
-      const deps = getChatFirestoreDeps();
-      if (deps) {
-        const { modules, firestore } = deps;
-        await modules.deleteDoc(modules.doc(firestore, 'users', chatCurrentUser.uid, 'sharedChat', entry.id));
+    if (chatCurrentUser) {
+      const removed = await updateFirebaseChatMessages((existing) => (
+        existing.filter((message) => getChatMessageKey(message) !== getChatMessageKey(entry))
+      ));
+      if (removed) {
+        scheduleChatCloudSave();
         return;
       }
     }

@@ -1385,11 +1385,15 @@
         collection: modules.collection,
         deleteDoc: modules.deleteDoc,
         doc: modules.doc,
+        getDoc: modules.getDoc,
         getFirestore: () => firestore,
         limit: modules.limit,
         onSnapshot: modules.onSnapshot,
         orderBy: modules.orderBy,
-        query: modules.query
+        query: modules.query,
+        runTransaction: modules.runTransaction,
+        serverTimestamp: modules.serverTimestamp,
+        setDoc: modules.setDoc
       };
     }
   });
