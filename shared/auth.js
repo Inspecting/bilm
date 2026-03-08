@@ -293,6 +293,7 @@
 
   const MIN_SAVE_INTERVAL_MS = 15000;
   const AUTOSYNC_HEARTBEAT_MS = 15000;
+  const CLOUD_REMOTE_POLL_MS = 60000;
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -951,7 +952,7 @@
       pollCloudSnapshot(user).catch((error) => {
         console.warn('Cloud snapshot interval poll failed:', error);
       });
-    }, AUTOSYNC_HEARTBEAT_MS);
+    }, CLOUD_REMOTE_POLL_MS);
   }
 
 

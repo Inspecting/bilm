@@ -101,6 +101,10 @@ function loadAuthScript() {
   let authApiInstance = null;
   let chatCloudSaveTimer = null;
   const CHAT_CLOUD_SAVE_DEBOUNCE_MS = 250;
+  const CHAT_REALTIME_POLL_MS = 2000;
+  let chatRealtimeTimer = null;
+  let chatRealtimeInFlight = false;
+  let lastChatCloudUpdatedAtMs = 0;
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
 
 
@@ -134,6 +138,50 @@ function loadAuthScript() {
       .sort((a, b) => a.createdAtMs - b.createdAtMs);
   }
 
+  function getChatMessageKey(entry) {
+    if (!entry || typeof entry !== 'object') return '';
+    const id = String(entry.id || '').trim();
+    if (id) return `id:${id}`;
+    const explicitKey = String(entry.key || '').trim();
+    if (explicitKey) return `key:${explicitKey}`;
+    const createdAtMs = Number(entry.createdAtMs || entry.updatedAt || 0) || 0;
+    const text = String(entry.text || '').trim().toLowerCase();
+    const authorUid = String(entry.authorUid || entry.author || '').trim().toLowerCase();
+    return text ? `fallback:${createdAtMs}:${authorUid}:${text}` : '';
+  }
+
+  function getChatMessageUpdatedAt(entry) {
+    return Number(entry?.updatedAt || entry?.createdAtMs || 0) || 0;
+  }
+
+  function mergeChatMessages(...lists) {
+    const byKey = new Map();
+    lists
+      .flat()
+      .forEach((entry) => {
+        const normalizedEntry = normalizeChatMessages([entry])[0];
+        if (!normalizedEntry) return;
+        const key = getChatMessageKey(normalizedEntry);
+        if (!key) return;
+        const existing = byKey.get(key);
+        if (!existing || getChatMessageUpdatedAt(normalizedEntry) >= getChatMessageUpdatedAt(existing)) {
+          byKey.set(key, normalizedEntry);
+        }
+      });
+    return normalizeChatMessages([...byKey.values()]).slice(-120);
+  }
+
+  function parseChatMessagesFromSnapshot(snapshot) {
+    const raw = snapshot?.localStorage?.[CHAT_STORAGE_KEY];
+    if (typeof raw !== 'string') return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? normalizeChatMessages(parsed) : [];
+    } catch {
+      return [];
+    }
+  }
+
   function composeVisibleChatMessages() {
     return normalizeChatMessages([...(chatRemoteMessages || []), ...(chatPendingMessages || [])]);
   }
@@ -143,11 +191,11 @@ function loadAuthScript() {
     return normalizeChatMessages(Array.isArray(stored) ? stored : []);
   }
 
-  function saveStoredChatMessages(messages) {
+  function saveStoredChatMessages(messages, { syncCloud = true } = {}) {
     const normalized = normalizeChatMessages(messages).slice(-120);
     storage.setJSON(CHAT_STORAGE_KEY, normalized);
     chatRemoteMessages = normalized;
-    scheduleChatCloudSave();
+    if (syncCloud) scheduleChatCloudSave();
   }
 
   function scheduleChatCloudSave() {
@@ -163,6 +211,69 @@ function loadAuthScript() {
   function refreshChatMessages() {
     chatRemoteMessages = loadStoredChatMessages();
     renderChatMessages(composeVisibleChatMessages());
+  }
+
+  function stopChatRealtimeLoop() {
+    if (chatRealtimeTimer) {
+      window.clearInterval(chatRealtimeTimer);
+      chatRealtimeTimer = null;
+    }
+    chatRealtimeInFlight = false;
+  }
+
+  async function syncChatFromCloudNow({ force = false } = {}) {
+    if (!authApiInstance || !chatCurrentUser || chatRealtimeInFlight) return false;
+    if (!force && document.visibilityState === 'hidden') return false;
+    if (typeof authApiInstance.getCloudSnapshotMeta !== 'function' || typeof authApiInstance.getCloudSnapshot !== 'function') {
+      return false;
+    }
+
+    chatRealtimeInFlight = true;
+    try {
+      const meta = await authApiInstance.getCloudSnapshotMeta();
+      const updatedAtMs = Number(meta?.updatedAtMs || 0) || 0;
+      if (!meta?.exists || !updatedAtMs) return false;
+      if (!force && updatedAtMs <= lastChatCloudUpdatedAtMs) return false;
+      lastChatCloudUpdatedAtMs = updatedAtMs;
+
+      const snapshot = await authApiInstance.getCloudSnapshot();
+      const remoteMessages = parseChatMessagesFromSnapshot(snapshot);
+      const localMessages = loadStoredChatMessages();
+      const mergedMessages = mergeChatMessages(localMessages, remoteMessages);
+      saveStoredChatMessages(mergedMessages, { syncCloud: false });
+      renderChatMessages(composeVisibleChatMessages());
+      return true;
+    } catch (error) {
+      console.warn('Shared chat realtime sync failed:', error);
+      return false;
+    } finally {
+      chatRealtimeInFlight = false;
+    }
+  }
+
+  function startChatRealtimeLoop() {
+    stopChatRealtimeLoop();
+    if (!chatCurrentUser || !authApiInstance) return;
+    syncChatFromCloudNow({ force: true }).catch((error) => {
+      console.warn('Initial shared chat realtime sync failed:', error);
+    });
+    chatRealtimeTimer = window.setInterval(() => {
+      syncChatFromCloudNow().catch((error) => {
+        console.warn('Shared chat realtime interval failed:', error);
+      });
+    }, CHAT_REALTIME_POLL_MS);
+  }
+
+  function shouldRunChatRealtimeLoop() {
+    return Boolean(chatCurrentUser && chatPanel && chatPanel.hidden === false);
+  }
+
+  function updateChatRealtimeLoopState() {
+    if (shouldRunChatRealtimeLoop()) {
+      startChatRealtimeLoop();
+      return;
+    }
+    stopChatRealtimeLoop();
   }
 
   function setChatRefreshCooldown() {
@@ -231,7 +342,13 @@ function loadAuthScript() {
     const open = Boolean(nextOpen);
     chatPanel.hidden = !open;
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open && chatInput) chatInput.focus();
+    updateChatRealtimeLoopState();
+    if (open) {
+      syncChatFromCloudNow({ force: true }).catch((error) => {
+        console.warn('Shared chat open sync failed:', error);
+      });
+      if (chatInput) chatInput.focus();
+    }
   }
 
   // Always start collapsed on a fresh page load.
@@ -438,6 +555,10 @@ function loadAuthScript() {
 
     const syncAccountButton = (user) => {
       chatCurrentUser = user || null;
+      if (!chatCurrentUser) {
+        lastChatCloudUpdatedAtMs = 0;
+      }
+      updateChatRealtimeLoopState();
 
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
@@ -449,8 +570,24 @@ function loadAuthScript() {
 
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
-    authApi.onCloudSnapshotChanged(() => {
-      refreshChatMessages();
+    authApi.onCloudSnapshotChanged((event) => {
+      if (!event?.snapshot) return;
+      const eventUpdatedAtMs = Number(event.updatedAtMs || event.snapshot?.meta?.updatedAtMs || 0) || 0;
+      if (eventUpdatedAtMs > lastChatCloudUpdatedAtMs) {
+        lastChatCloudUpdatedAtMs = eventUpdatedAtMs;
+      }
+      const remoteMessages = parseChatMessagesFromSnapshot(event.snapshot);
+      const localMessages = loadStoredChatMessages();
+      const mergedMessages = mergeChatMessages(localMessages, remoteMessages);
+      saveStoredChatMessages(mergedMessages, { syncCloud: false });
+      renderChatMessages(composeVisibleChatMessages());
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!shouldRunChatRealtimeLoop()) return;
+      syncChatFromCloudNow({ force: true }).catch((error) => {
+        console.warn('Shared chat visibility sync failed:', error);
+      });
     });
     window.addEventListener('storage', (event) => {
       if (event.key !== CHAT_STORAGE_KEY) return;
@@ -458,9 +595,10 @@ function loadAuthScript() {
     });
 
     if (chatRefreshBtn) {
-      chatRefreshBtn.addEventListener('click', () => {
+      chatRefreshBtn.addEventListener('click', async () => {
         if (Date.now() < chatRefreshCooldownUntil) return;
         chatRefreshBtn.setAttribute('aria-busy', 'true');
+        await syncChatFromCloudNow({ force: true });
         refreshChatMessages();
         setChatRefreshCooldown();
       });
