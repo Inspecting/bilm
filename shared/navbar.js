@@ -101,9 +101,6 @@ function loadAuthScript() {
   let authApiInstance = null;
   let chatCloudSaveTimer = null;
   const CHAT_CLOUD_SAVE_DEBOUNCE_MS = 250;
-  let chatFirestoreUnsubscribe = null;
-  let chatFirestoreLive = false;
-  let chatFirestoreFailed = false;
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
 
 
@@ -137,50 +134,6 @@ function loadAuthScript() {
       .sort((a, b) => a.createdAtMs - b.createdAtMs);
   }
 
-  function getChatMessageKey(entry) {
-    if (!entry || typeof entry !== 'object') return '';
-    const id = String(entry.id || '').trim();
-    if (id) return `id:${id}`;
-    const explicitKey = String(entry.key || '').trim();
-    if (explicitKey) return `key:${explicitKey}`;
-    const createdAtMs = Number(entry.createdAtMs || entry.updatedAt || 0) || 0;
-    const text = String(entry.text || '').trim().toLowerCase();
-    const authorUid = String(entry.authorUid || entry.author || '').trim().toLowerCase();
-    return text ? `fallback:${createdAtMs}:${authorUid}:${text}` : '';
-  }
-
-  function getChatMessageUpdatedAt(entry) {
-    return Number(entry?.updatedAt || entry?.createdAtMs || 0) || 0;
-  }
-
-  function mergeChatMessages(...lists) {
-    const byKey = new Map();
-    lists
-      .flat()
-      .forEach((entry) => {
-        const normalizedEntry = normalizeChatMessages([entry])[0];
-        if (!normalizedEntry) return;
-        const key = getChatMessageKey(normalizedEntry);
-        if (!key) return;
-        const existing = byKey.get(key);
-        if (!existing || getChatMessageUpdatedAt(normalizedEntry) >= getChatMessageUpdatedAt(existing)) {
-          byKey.set(key, normalizedEntry);
-        }
-      });
-    return normalizeChatMessages([...byKey.values()]).slice(-120);
-  }
-
-  function parseChatMessagesFromSnapshot(snapshot) {
-    const raw = snapshot?.localStorage?.[CHAT_STORAGE_KEY];
-    if (typeof raw !== 'string') return [];
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? normalizeChatMessages(parsed) : [];
-    } catch {
-      return [];
-    }
-  }
-
   function composeVisibleChatMessages() {
     return normalizeChatMessages([...(chatRemoteMessages || []), ...(chatPendingMessages || [])]);
   }
@@ -190,11 +143,11 @@ function loadAuthScript() {
     return normalizeChatMessages(Array.isArray(stored) ? stored : []);
   }
 
-  function saveStoredChatMessages(messages, { syncCloud = true } = {}) {
+  function saveStoredChatMessages(messages) {
     const normalized = normalizeChatMessages(messages).slice(-120);
     storage.setJSON(CHAT_STORAGE_KEY, normalized);
     chatRemoteMessages = normalized;
-    if (syncCloud) scheduleChatCloudSave();
+    scheduleChatCloudSave();
   }
 
   function scheduleChatCloudSave() {
@@ -210,161 +163,6 @@ function loadAuthScript() {
   function refreshChatMessages() {
     chatRemoteMessages = loadStoredChatMessages();
     renderChatMessages(composeVisibleChatMessages());
-  }
-
-  function getChatFirestoreDeps() {
-    const modules = window.bilmAuthModules;
-    const firestore = modules?.getFirestore?.();
-    if (!modules || !firestore) return null;
-    return { modules, firestore };
-  }
-
-  function stopChatFirestoreListener() {
-    if (typeof chatFirestoreUnsubscribe === 'function') {
-      chatFirestoreUnsubscribe();
-    }
-    chatFirestoreUnsubscribe = null;
-    chatFirestoreLive = false;
-    chatFirestoreFailed = false;
-  }
-
-  function startChatFirestoreListener() {
-    stopChatFirestoreListener();
-    if (!chatCurrentUser) return;
-
-    const deps = getChatFirestoreDeps();
-    if (!deps) return;
-
-    const { modules, firestore } = deps;
-    const userDocRef = modules.doc(firestore, 'users', chatCurrentUser.uid);
-
-    chatFirestoreUnsubscribe = modules.onSnapshot(userDocRef, (docSnap) => {
-      chatFirestoreLive = true;
-      chatFirestoreFailed = false;
-
-      const data = docSnap.data() || {};
-      const rawMessages = Array.isArray(data?.sharedChat?.messages)
-        ? data.sharedChat.messages
-        : [];
-      const fromFirestore = normalizeChatMessages(rawMessages.map((entry) => ({
-        ...entry,
-        firebase: true,
-        id: String(entry?.id || entry?.key || '').trim() || `msg-${Number(entry?.createdAtMs || Date.now())}`,
-        text: String(entry?.text || ''),
-        author: String(entry?.author || 'Account'),
-        createdAtMs: Number(entry?.createdAtMs || entry?.updatedAt || Date.now()) || Date.now(),
-        updatedAt: Number(entry?.updatedAt || entry?.createdAtMs || Date.now()) || Date.now()
-      })));
-
-      chatRemoteMessages = fromFirestore;
-      chatPendingMessages = chatPendingMessages.filter((pending) => (
-        !fromFirestore.some((entry) => String(entry.key || '') && String(entry.key || '') === String(pending.key || ''))
-      ));
-
-      // Keep local/API backup in sync while Firebase drives realtime UI.
-      saveStoredChatMessages(fromFirestore, { syncCloud: false });
-      renderChatMessages(composeVisibleChatMessages());
-    }, (error) => {
-      chatFirestoreLive = false;
-      chatFirestoreFailed = true;
-      console.warn('Shared chat realtime listener failed:', error);
-      if (chatPanel && chatPanel.hidden === false) {
-        setChatNotice('Live chat unavailable right now. Showing saved chat.');
-      }
-    });
-  }
-
-  async function updateFirebaseChatMessages(mutator) {
-    if (!chatCurrentUser) return false;
-    const deps = getChatFirestoreDeps();
-    if (!deps) return false;
-
-    const { modules, firestore } = deps;
-    const userDocRef = modules.doc(firestore, 'users', chatCurrentUser.uid);
-
-    const applyMutation = (existingMessages = []) => {
-      const safeExisting = Array.isArray(existingMessages) ? existingMessages : [];
-      const next = normalizeChatMessages(mutator(normalizeChatMessages(safeExisting))).slice(-120);
-      return next.map((entry) => ({
-        id: String(entry.id || '').trim() || `msg-${Number(entry.createdAtMs || Date.now())}-${Math.random().toString(36).slice(2, 6)}`,
-        key: String(entry.key || '').trim() || `chat:${Number(entry.createdAtMs || Date.now())}:${Math.random().toString(36).slice(2, 8)}`,
-        text: String(entry.text || ''),
-        author: String(entry.author || 'Account'),
-        authorUid: String(entry.authorUid || ''),
-        createdAtMs: Number(entry.createdAtMs || Date.now()) || Date.now(),
-        updatedAt: Number(entry.updatedAt || entry.createdAtMs || Date.now()) || Date.now()
-      }));
-    };
-
-    if (typeof modules.runTransaction === 'function') {
-      await modules.runTransaction(firestore, async (transaction) => {
-        const snap = await transaction.get(userDocRef);
-        const data = snap.data() || {};
-        const existingMessages = data?.sharedChat?.messages || [];
-        const nextMessages = applyMutation(existingMessages);
-        transaction.set(userDocRef, {
-          sharedChat: {
-            messages: nextMessages,
-            updatedAtMs: Date.now(),
-            version: 1
-          }
-        }, { merge: true });
-      });
-      return true;
-    }
-
-    const snap = await modules.getDoc(userDocRef);
-    const data = snap.data() || {};
-    const existingMessages = data?.sharedChat?.messages || [];
-    const nextMessages = applyMutation(existingMessages);
-    await modules.setDoc(userDocRef, {
-      sharedChat: {
-        messages: nextMessages,
-        updatedAtMs: Date.now(),
-        version: 1
-      }
-    }, { merge: true });
-    return true;
-  }
-
-  async function sendChatMessageToFirestore(message) {
-    const nextMessage = {
-      id: String(message?.id || '').trim() || `msg-${Number(message?.createdAtMs || Date.now())}-${Math.random().toString(36).slice(2, 6)}`,
-      key: String(message?.key || ''),
-      text: String(message?.text || ''),
-      author: String(message?.author || 'Account'),
-      authorUid: String(message?.authorUid || chatCurrentUser?.uid || ''),
-      createdAtMs: Number(message?.createdAtMs || Date.now()) || Date.now(),
-      updatedAt: Number(message?.updatedAt || message?.createdAtMs || Date.now()) || Date.now()
-    };
-    const updated = await updateFirebaseChatMessages((existing) => mergeChatMessages(existing, [nextMessage]));
-    if (updated) scheduleChatCloudSave();
-    return updated;
-  }
-
-  async function deleteChatMessage(entry) {
-    if (!entry || entry.pending) return;
-    if (chatCurrentUser) {
-      const removed = await updateFirebaseChatMessages((existing) => (
-        existing.filter((message) => getChatMessageKey(message) !== getChatMessageKey(entry))
-      ));
-      if (removed) {
-        scheduleChatCloudSave();
-        return;
-      }
-    }
-
-    const current = loadStoredChatMessages();
-    saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
-    renderChatMessages(composeVisibleChatMessages());
-  }
-
-  function updateChatRealtimeLoopState() {
-    if (chatCurrentUser) {
-      startChatFirestoreListener();
-      return;
-    }
-    stopChatFirestoreListener();
   }
 
   function setChatRefreshCooldown() {
@@ -406,8 +204,11 @@ function loadAuthScript() {
       del.textContent = entry.pending ? 'Pending' : 'Delete';
       del.disabled = Boolean(entry.pending);
       del.addEventListener('click', async () => {
+        if (entry.pending) return;
         try {
-          await deleteChatMessage(entry);
+          const current = loadStoredChatMessages();
+          saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
+          renderChatMessages(composeVisibleChatMessages());
         } catch (error) {
           console.warn('Failed to delete chat message:', error);
         }
@@ -430,13 +231,7 @@ function loadAuthScript() {
     const open = Boolean(nextOpen);
     chatPanel.hidden = !open;
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) {
-      if (chatFirestoreFailed) {
-        startChatFirestoreListener();
-      }
-      refreshChatMessages();
-      if (chatInput) chatInput.focus();
-    }
+    if (open && chatInput) chatInput.focus();
   }
 
   // Always start collapsed on a fresh page load.
@@ -643,7 +438,6 @@ function loadAuthScript() {
 
     const syncAccountButton = (user) => {
       chatCurrentUser = user || null;
-      updateChatRealtimeLoopState();
 
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
@@ -655,20 +449,8 @@ function loadAuthScript() {
 
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
-    authApi.onCloudSnapshotChanged((event) => {
-      if (chatFirestoreLive) return;
-      if (!event?.snapshot) return;
-      const remoteMessages = parseChatMessagesFromSnapshot(event.snapshot);
-      const localMessages = loadStoredChatMessages();
-      const mergedMessages = mergeChatMessages(localMessages, remoteMessages);
-      saveStoredChatMessages(mergedMessages, { syncCloud: false });
-      renderChatMessages(composeVisibleChatMessages());
-    });
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
-      if (chatCurrentUser && chatFirestoreFailed) {
-        startChatFirestoreListener();
-      }
+    authApi.onCloudSnapshotChanged(() => {
+      refreshChatMessages();
     });
     window.addEventListener('storage', (event) => {
       if (event.key !== CHAT_STORAGE_KEY) return;
@@ -676,12 +458,9 @@ function loadAuthScript() {
     });
 
     if (chatRefreshBtn) {
-      chatRefreshBtn.addEventListener('click', async () => {
+      chatRefreshBtn.addEventListener('click', () => {
         if (Date.now() < chatRefreshCooldownUntil) return;
         chatRefreshBtn.setAttribute('aria-busy', 'true');
-        if (chatCurrentUser && chatFirestoreFailed) {
-          startChatFirestoreListener();
-        }
         refreshChatMessages();
         setChatRefreshCooldown();
       });
@@ -695,18 +474,15 @@ function loadAuthScript() {
 
         const author = chatCurrentUser?.displayName || chatCurrentUser?.email || 'Guest';
         const authorUid = chatCurrentUser?.uid || 'local';
-        const createdAtMs = Date.now();
-        const messageKey = `chat:${createdAtMs}:${Math.random().toString(36).slice(2, 8)}`;
 
-        const optimisticId = `pending-${createdAtMs}-${Math.random().toString(36).slice(2, 8)}`;
+        const optimisticId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const optimisticMessage = {
           id: optimisticId,
           pending: true,
-          key: messageKey,
           text,
           author,
           authorUid,
-          createdAtMs
+          createdAtMs: Date.now()
         };
 
         chatPendingMessages.push(optimisticMessage);
@@ -714,36 +490,10 @@ function loadAuthScript() {
         chatInput.value = '';
 
         try {
-          const sentToFirestore = await sendChatMessageToFirestore({
-            text,
-            author: optimisticMessage.author,
-            authorUid,
-            createdAtMs: optimisticMessage.createdAtMs,
-            updatedAt: optimisticMessage.createdAtMs,
-            key: messageKey
-          });
-
-          if (!sentToFirestore) {
-            const current = loadStoredChatMessages();
-            current.push({
-              id: `msg-${optimisticMessage.createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
-              key: messageKey,
-              text,
-              author: optimisticMessage.author,
-              authorUid,
-              createdAtMs: optimisticMessage.createdAtMs,
-              updatedAt: optimisticMessage.createdAtMs
-            });
-            saveStoredChatMessages(current);
-            chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
-            renderChatMessages(composeVisibleChatMessages());
-          }
-        } catch (error) {
-          // If Firebase send fails, keep chat functional locally and let API backup carry this message.
           const current = loadStoredChatMessages();
           current.push({
             id: `msg-${optimisticMessage.createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
-            key: messageKey,
+            key: `chat:${optimisticMessage.createdAtMs}:${Math.random().toString(36).slice(2, 8)}`,
             text,
             author: optimisticMessage.author,
             authorUid,
@@ -753,7 +503,10 @@ function loadAuthScript() {
           saveStoredChatMessages(current);
           chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
           renderChatMessages(composeVisibleChatMessages());
-          console.warn('Failed to send shared chat message to Firebase (saved locally instead):', error);
+        } catch (error) {
+          chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
+          renderChatMessages(composeVisibleChatMessages());
+          console.warn('Failed to send shared chat message:', error);
         }
       });
     }
