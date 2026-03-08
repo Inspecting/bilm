@@ -101,10 +101,9 @@ function loadAuthScript() {
   let authApiInstance = null;
   let chatCloudSaveTimer = null;
   const CHAT_CLOUD_SAVE_DEBOUNCE_MS = 250;
-  const CHAT_REALTIME_POLL_MS = 2000;
-  let chatRealtimeTimer = null;
-  let chatRealtimeInFlight = false;
-  let lastChatCloudUpdatedAtMs = 0;
+  let chatFirestoreUnsubscribe = null;
+  let chatFirestoreLive = false;
+  let chatFirestoreFailed = false;
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
 
 
@@ -213,67 +212,116 @@ function loadAuthScript() {
     renderChatMessages(composeVisibleChatMessages());
   }
 
-  function stopChatRealtimeLoop() {
-    if (chatRealtimeTimer) {
-      window.clearInterval(chatRealtimeTimer);
-      chatRealtimeTimer = null;
-    }
-    chatRealtimeInFlight = false;
+  function getChatFirestoreDeps() {
+    const modules = window.bilmAuthModules;
+    const firestore = modules?.getFirestore?.();
+    if (!modules || !firestore) return null;
+    return { modules, firestore };
   }
 
-  async function syncChatFromCloudNow({ force = false } = {}) {
-    if (!authApiInstance || !chatCurrentUser || chatRealtimeInFlight) return false;
-    if (!force && document.visibilityState === 'hidden') return false;
-    if (typeof authApiInstance.getCloudSnapshotMeta !== 'function' || typeof authApiInstance.getCloudSnapshot !== 'function') {
-      return false;
+  function stopChatFirestoreListener() {
+    if (typeof chatFirestoreUnsubscribe === 'function') {
+      chatFirestoreUnsubscribe();
     }
+    chatFirestoreUnsubscribe = null;
+    chatFirestoreLive = false;
+    chatFirestoreFailed = false;
+  }
 
-    chatRealtimeInFlight = true;
-    try {
-      const meta = await authApiInstance.getCloudSnapshotMeta();
-      const updatedAtMs = Number(meta?.updatedAtMs || 0) || 0;
-      if (!meta?.exists || !updatedAtMs) return false;
-      if (!force && updatedAtMs <= lastChatCloudUpdatedAtMs) return false;
-      lastChatCloudUpdatedAtMs = updatedAtMs;
+  function startChatFirestoreListener() {
+    stopChatFirestoreListener();
+    if (!chatCurrentUser) return;
 
-      const snapshot = await authApiInstance.getCloudSnapshot();
-      const remoteMessages = parseChatMessagesFromSnapshot(snapshot);
-      const localMessages = loadStoredChatMessages();
-      const mergedMessages = mergeChatMessages(localMessages, remoteMessages);
-      saveStoredChatMessages(mergedMessages, { syncCloud: false });
+    const deps = getChatFirestoreDeps();
+    if (!deps) return;
+
+    const { modules, firestore } = deps;
+    const chatCollectionRef = modules.collection(firestore, 'users', chatCurrentUser.uid, 'sharedChat');
+    const chatQuery = modules.query(
+      chatCollectionRef,
+      modules.orderBy('createdAtMs', 'asc'),
+      modules.limit(120)
+    );
+
+    chatFirestoreUnsubscribe = modules.onSnapshot(chatQuery, (snapshot) => {
+      chatFirestoreLive = true;
+      chatFirestoreFailed = false;
+
+      const fromFirestore = normalizeChatMessages(
+        snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() || {};
+          return {
+            ...data,
+            id: docSnap.id,
+            firebase: true,
+            text: String(data.text || ''),
+            author: String(data.author || 'Account'),
+            createdAtMs: Number(data.createdAtMs || data.updatedAt || Date.now()) || Date.now(),
+            updatedAt: Number(data.updatedAt || data.createdAtMs || Date.now()) || Date.now()
+          };
+        })
+      );
+
+      chatRemoteMessages = fromFirestore;
+      chatPendingMessages = chatPendingMessages.filter((pending) => (
+        !fromFirestore.some((entry) => String(entry.key || '') && String(entry.key || '') === String(pending.key || ''))
+      ));
+
+      // Keep local/API backup in sync while Firebase drives realtime UI.
+      saveStoredChatMessages(fromFirestore, { syncCloud: true });
       renderChatMessages(composeVisibleChatMessages());
-      return true;
-    } catch (error) {
-      console.warn('Shared chat realtime sync failed:', error);
-      return false;
-    } finally {
-      chatRealtimeInFlight = false;
-    }
-  }
-
-  function startChatRealtimeLoop() {
-    stopChatRealtimeLoop();
-    if (!chatCurrentUser || !authApiInstance) return;
-    syncChatFromCloudNow({ force: true }).catch((error) => {
-      console.warn('Initial shared chat realtime sync failed:', error);
+    }, (error) => {
+      chatFirestoreLive = false;
+      chatFirestoreFailed = true;
+      console.warn('Shared chat realtime listener failed:', error);
+      if (chatPanel && chatPanel.hidden === false) {
+        setChatNotice('Live chat unavailable right now. Showing saved chat.');
+      }
     });
-    chatRealtimeTimer = window.setInterval(() => {
-      syncChatFromCloudNow().catch((error) => {
-        console.warn('Shared chat realtime interval failed:', error);
-      });
-    }, CHAT_REALTIME_POLL_MS);
   }
 
-  function shouldRunChatRealtimeLoop() {
-    return Boolean(chatCurrentUser && chatPanel && chatPanel.hidden === false);
+  async function sendChatMessageToFirestore(message) {
+    if (!chatCurrentUser) return false;
+    const deps = getChatFirestoreDeps();
+    if (!deps) return false;
+
+    const { modules, firestore } = deps;
+    const chatCollectionRef = modules.collection(firestore, 'users', chatCurrentUser.uid, 'sharedChat');
+    await modules.addDoc(chatCollectionRef, {
+      text: String(message?.text || ''),
+      author: String(message?.author || 'Account'),
+      authorUid: String(message?.authorUid || chatCurrentUser.uid || ''),
+      createdAtMs: Number(message?.createdAtMs || Date.now()) || Date.now(),
+      updatedAt: Number(message?.updatedAt || message?.createdAtMs || Date.now()) || Date.now(),
+      key: String(message?.key || '')
+    });
+    return true;
+  }
+
+  async function deleteChatMessage(entry) {
+    if (!entry || entry.pending) return;
+    const isFirebaseEntry = Boolean(entry.firebase);
+
+    if (isFirebaseEntry && chatCurrentUser) {
+      const deps = getChatFirestoreDeps();
+      if (deps) {
+        const { modules, firestore } = deps;
+        await modules.deleteDoc(modules.doc(firestore, 'users', chatCurrentUser.uid, 'sharedChat', entry.id));
+        return;
+      }
+    }
+
+    const current = loadStoredChatMessages();
+    saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
+    renderChatMessages(composeVisibleChatMessages());
   }
 
   function updateChatRealtimeLoopState() {
-    if (shouldRunChatRealtimeLoop()) {
-      startChatRealtimeLoop();
+    if (chatCurrentUser) {
+      startChatFirestoreListener();
       return;
     }
-    stopChatRealtimeLoop();
+    stopChatFirestoreListener();
   }
 
   function setChatRefreshCooldown() {
@@ -315,11 +363,8 @@ function loadAuthScript() {
       del.textContent = entry.pending ? 'Pending' : 'Delete';
       del.disabled = Boolean(entry.pending);
       del.addEventListener('click', async () => {
-        if (entry.pending) return;
         try {
-          const current = loadStoredChatMessages();
-          saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
-          renderChatMessages(composeVisibleChatMessages());
+          await deleteChatMessage(entry);
         } catch (error) {
           console.warn('Failed to delete chat message:', error);
         }
@@ -342,11 +387,11 @@ function loadAuthScript() {
     const open = Boolean(nextOpen);
     chatPanel.hidden = !open;
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    updateChatRealtimeLoopState();
     if (open) {
-      syncChatFromCloudNow({ force: true }).catch((error) => {
-        console.warn('Shared chat open sync failed:', error);
-      });
+      if (chatFirestoreFailed) {
+        startChatFirestoreListener();
+      }
+      refreshChatMessages();
       if (chatInput) chatInput.focus();
     }
   }
@@ -555,9 +600,6 @@ function loadAuthScript() {
 
     const syncAccountButton = (user) => {
       chatCurrentUser = user || null;
-      if (!chatCurrentUser) {
-        lastChatCloudUpdatedAtMs = 0;
-      }
       updateChatRealtimeLoopState();
 
       if (!accountBtn) return;
@@ -571,11 +613,8 @@ function loadAuthScript() {
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
     authApi.onCloudSnapshotChanged((event) => {
+      if (chatFirestoreLive) return;
       if (!event?.snapshot) return;
-      const eventUpdatedAtMs = Number(event.updatedAtMs || event.snapshot?.meta?.updatedAtMs || 0) || 0;
-      if (eventUpdatedAtMs > lastChatCloudUpdatedAtMs) {
-        lastChatCloudUpdatedAtMs = eventUpdatedAtMs;
-      }
       const remoteMessages = parseChatMessagesFromSnapshot(event.snapshot);
       const localMessages = loadStoredChatMessages();
       const mergedMessages = mergeChatMessages(localMessages, remoteMessages);
@@ -584,10 +623,9 @@ function loadAuthScript() {
     });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
-      if (!shouldRunChatRealtimeLoop()) return;
-      syncChatFromCloudNow({ force: true }).catch((error) => {
-        console.warn('Shared chat visibility sync failed:', error);
-      });
+      if (chatCurrentUser && chatFirestoreFailed) {
+        startChatFirestoreListener();
+      }
     });
     window.addEventListener('storage', (event) => {
       if (event.key !== CHAT_STORAGE_KEY) return;
@@ -598,7 +636,9 @@ function loadAuthScript() {
       chatRefreshBtn.addEventListener('click', async () => {
         if (Date.now() < chatRefreshCooldownUntil) return;
         chatRefreshBtn.setAttribute('aria-busy', 'true');
-        await syncChatFromCloudNow({ force: true });
+        if (chatCurrentUser && chatFirestoreFailed) {
+          startChatFirestoreListener();
+        }
         refreshChatMessages();
         setChatRefreshCooldown();
       });
@@ -612,15 +652,18 @@ function loadAuthScript() {
 
         const author = chatCurrentUser?.displayName || chatCurrentUser?.email || 'Guest';
         const authorUid = chatCurrentUser?.uid || 'local';
+        const createdAtMs = Date.now();
+        const messageKey = `chat:${createdAtMs}:${Math.random().toString(36).slice(2, 8)}`;
 
-        const optimisticId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const optimisticId = `pending-${createdAtMs}-${Math.random().toString(36).slice(2, 8)}`;
         const optimisticMessage = {
           id: optimisticId,
           pending: true,
+          key: messageKey,
           text,
           author,
           authorUid,
-          createdAtMs: Date.now()
+          createdAtMs
         };
 
         chatPendingMessages.push(optimisticMessage);
@@ -628,10 +671,36 @@ function loadAuthScript() {
         chatInput.value = '';
 
         try {
+          const sentToFirestore = await sendChatMessageToFirestore({
+            text,
+            author: optimisticMessage.author,
+            authorUid,
+            createdAtMs: optimisticMessage.createdAtMs,
+            updatedAt: optimisticMessage.createdAtMs,
+            key: messageKey
+          });
+
+          if (!sentToFirestore) {
+            const current = loadStoredChatMessages();
+            current.push({
+              id: `msg-${optimisticMessage.createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
+              key: messageKey,
+              text,
+              author: optimisticMessage.author,
+              authorUid,
+              createdAtMs: optimisticMessage.createdAtMs,
+              updatedAt: optimisticMessage.createdAtMs
+            });
+            saveStoredChatMessages(current);
+            chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
+            renderChatMessages(composeVisibleChatMessages());
+          }
+        } catch (error) {
+          // If Firebase send fails, keep chat functional locally and let API backup carry this message.
           const current = loadStoredChatMessages();
           current.push({
             id: `msg-${optimisticMessage.createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
-            key: `chat:${optimisticMessage.createdAtMs}:${Math.random().toString(36).slice(2, 8)}`,
+            key: messageKey,
             text,
             author: optimisticMessage.author,
             authorUid,
@@ -641,10 +710,7 @@ function loadAuthScript() {
           saveStoredChatMessages(current);
           chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
           renderChatMessages(composeVisibleChatMessages());
-        } catch (error) {
-          chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
-          renderChatMessages(composeVisibleChatMessages());
-          console.warn('Failed to send shared chat message:', error);
+          console.warn('Failed to send shared chat message to Firebase (saved locally instead):', error);
         }
       });
     }
