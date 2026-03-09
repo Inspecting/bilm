@@ -285,6 +285,50 @@
       min-height: 1.1em;
     }
 
+    .sync-debug-panel {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--surface-2) 86%, #000000 14%);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .sync-debug-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+    }
+
+    .sync-debug-clear {
+      padding: 6px 10px;
+      font-size: 0.75rem;
+    }
+
+    .sync-debug-message {
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      min-height: 1.1em;
+    }
+
+    .sync-debug-details {
+      margin: 0;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+      background: color-mix(in srgb, var(--surface-1) 70%, #000000 30%);
+      color: var(--text-primary);
+      font-size: 0.75rem;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
     .data-modal {
       position: fixed;
       inset: 0;
@@ -477,6 +521,14 @@
       </div>
 
       <span class="backup-status" id="cloudStatus" aria-live="polite" hidden></span>
+      <div class="sync-debug-panel" id="syncDebugPanel" aria-live="polite">
+        <div class="sync-debug-header">
+          <strong>Sync Debug</strong>
+          <button class="btn btn-outline sync-debug-clear" id="clearSyncDebugBtn" type="button">Clear</button>
+        </div>
+        <p class="sync-debug-message" id="syncDebugMessage">No sync errors detected on this page yet.</p>
+        <pre class="sync-debug-details" id="syncDebugDetails" hidden></pre>
+      </div>
     </section>
 
     <section class="settings-card">
@@ -670,6 +722,10 @@
   const logoutBtn = document.getElementById('logoutBtn');
   const openAccountSettingsBtn = document.getElementById('openAccountSettingsBtn');
   const cloudStatus = document.getElementById('cloudStatus');
+  const clearSyncDebugBtn = document.getElementById('clearSyncDebugBtn');
+  const syncDebugPanel = document.getElementById('syncDebugPanel');
+  const syncDebugMessage = document.getElementById('syncDebugMessage');
+  const syncDebugDetails = document.getElementById('syncDebugDetails');
   const syncToggle = document.getElementById('syncToggle');
   const syncStatusText = document.getElementById('syncStatusText');
   const loginModal = document.getElementById('loginModal');
@@ -923,6 +979,45 @@
     lastUploadedSignature = snapshotSignature(snapshot);
     if (reason !== 'auto') cloudStatus.textContent = 'Save complete. Local data uploaded.';
     return true;
+  }
+
+  function formatSyncTimestamp(atMs) {
+    if (!Number.isFinite(Number(atMs)) || Number(atMs) <= 0) return 'Unknown';
+    try {
+      return new Date(Number(atMs)).toLocaleString();
+    } catch {
+      return 'Unknown';
+    }
+  }
+
+  function resetSyncDebugPanel() {
+    if (!syncDebugMessage || !syncDebugDetails) return;
+    syncDebugMessage.textContent = 'No sync errors detected on this page yet.';
+    syncDebugDetails.textContent = '';
+    syncDebugDetails.hidden = true;
+    syncDebugPanel?.removeAttribute('data-state');
+  }
+
+  function renderSyncIssue(issue) {
+    if (!syncDebugMessage || !syncDebugDetails) return;
+    if (!issue || typeof issue !== 'object') {
+      resetSyncDebugPanel();
+      return;
+    }
+    syncDebugPanel?.setAttribute('data-state', 'error');
+    syncDebugMessage.textContent = String(issue?.message || 'Sync request failed.').trim() || 'Sync request failed.';
+    const lines = [
+      `Code: ${String(issue?.code || 'sync_error')}`,
+      `Status: ${issue?.status ? Number(issue.status) : 'n/a'}`,
+      `Retryable: ${issue?.retryable === false ? 'no' : 'yes'}`,
+      `Request ID: ${String(issue?.requestId || 'n/a')}`,
+      `Scope: ${String(issue?.scope || 'sync')}`,
+      issue?.sectorKey ? `Sector: ${String(issue.sectorKey)}` : '',
+      issue?.listKey ? `List: ${String(issue.listKey)}` : '',
+      `Time: ${formatSyncTimestamp(issue?.atMs)}`
+    ].filter(Boolean);
+    syncDebugDetails.textContent = lines.join('\n');
+    syncDebugDetails.hidden = false;
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -1377,6 +1472,9 @@
         lastUploadedSignature = snapshotSignature(event.snapshot);
         cloudStatus.textContent = 'Cloud update detected. Sync engine will apply only if newer than local data.';
       });
+      window.bilmAuth.onSyncIssue?.((issue) => {
+        renderSyncIssue(issue);
+      });
     } catch (err) {
       accountStatusText.textContent = 'Account tools are unavailable right now. Refresh and try again.';
       cloudStatus.textContent = `Auth setup failed: ${err.message}`;
@@ -1402,7 +1500,12 @@
     updateAccountUi(window.bilmAuth?.getCurrentUser?.() || null);
   });
 
+  clearSyncDebugBtn?.addEventListener('click', () => {
+    resetSyncDebugPanel();
+  });
+
   window.addEventListener('DOMContentLoaded', () => {
+    resetSyncDebugPanel();
     syncUI();
     setSyncEnabled(isSyncEnabled());
     initCloudAuthUi();
