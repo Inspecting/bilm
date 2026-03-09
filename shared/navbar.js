@@ -93,6 +93,8 @@ function loadAuthScript() {
   const chatInput = shadow.getElementById('sharedChatInput');
   const chatRefreshBtn = shadow.getElementById('sharedChatRefreshBtn');
   const CHAT_REFRESH_COOLDOWN_MS = 5000;
+  const CHAT_ACTIVE_POLL_MS = 2000;
+  const CHAT_BACKGROUND_POLL_MS = 10000;
   let chatRefreshCooldownUntil = 0;
   const chatMessages = shadow.getElementById('sharedChatMessages');
   let chatCurrentUser = null;
@@ -100,6 +102,8 @@ function loadAuthScript() {
   let chatPendingMessages = [];
   let authApiInstance = null;
   let chatRetryTimer = null;
+  let chatLivePollTimer = null;
+  let chatLivePollInFlight = false;
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
   const CHAT_MAX_RETRY_DELAY_MS = 30000;
 
@@ -381,6 +385,61 @@ function loadAuthScript() {
     chatPanel.hidden = !open;
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open && chatInput) chatInput.focus();
+    if (open) {
+      triggerLiveChatPull('panel-open');
+    }
+    scheduleLiveChatPoll('panel-toggle');
+  }
+
+  function isChatPanelOpen() {
+    return Boolean(chatPanel && chatPanel.hidden === false);
+  }
+
+  function getChatPollIntervalMs() {
+    if (!chatCurrentUser) return CHAT_BACKGROUND_POLL_MS;
+    const pageVisible = document.visibilityState === 'visible';
+    const focused = document.hasFocus?.() === true;
+    const active = pageVisible && focused && isChatPanelOpen();
+    return active ? CHAT_ACTIVE_POLL_MS : CHAT_BACKGROUND_POLL_MS;
+  }
+
+  async function runLiveChatPull(reason = 'poll') {
+    if (!authApiInstance || !chatCurrentUser || chatLivePollInFlight) return false;
+    if (typeof authApiInstance.pullChatNow !== 'function') return false;
+    chatLivePollInFlight = true;
+    try {
+      await authApiInstance.pullChatNow({ reason, limit: 120 });
+      refreshChatMessages();
+      return true;
+    } catch (error) {
+      console.warn(`Live chat pull failed (${reason}):`, error);
+      return false;
+    } finally {
+      chatLivePollInFlight = false;
+    }
+  }
+
+  function clearLiveChatPoll() {
+    if (!chatLivePollTimer) return;
+    window.clearTimeout(chatLivePollTimer);
+    chatLivePollTimer = null;
+  }
+
+  function scheduleLiveChatPoll(reason = 'poll') {
+    clearLiveChatPoll();
+    if (!chatCurrentUser || !authApiInstance) return;
+    const delayMs = getChatPollIntervalMs();
+    chatLivePollTimer = window.setTimeout(async () => {
+      chatLivePollTimer = null;
+      await runLiveChatPull(reason);
+      scheduleLiveChatPoll('loop');
+    }, delayMs);
+  }
+
+  function triggerLiveChatPull(reason = 'manual') {
+    runLiveChatPull(reason).finally(() => {
+      scheduleLiveChatPoll('after-pull');
+    });
   }
 
   // Always start collapsed on a fresh page load.
@@ -590,6 +649,11 @@ function loadAuthScript() {
       if (chatCurrentUser && chatPendingMessages.some((entry) => entry.pending && entry.failed && entry.retryable !== false)) {
         schedulePendingChatRetry();
       }
+      if (chatCurrentUser) {
+        triggerLiveChatPull('auth-state');
+      } else {
+        clearLiveChatPoll();
+      }
 
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
@@ -613,18 +677,35 @@ function loadAuthScript() {
       if (event.key !== CHAT_STORAGE_KEY) return;
       refreshChatMessages();
     });
+    window.addEventListener('focus', () => {
+      if (!chatCurrentUser) return;
+      triggerLiveChatPull('window-focus');
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!chatCurrentUser) return;
+      if (document.visibilityState === 'visible') {
+        triggerLiveChatPull('visibility-visible');
+      } else {
+        scheduleLiveChatPoll('visibility-hidden');
+      }
+    });
 
     if (chatRefreshBtn) {
       chatRefreshBtn.addEventListener('click', async () => {
         if (Date.now() < chatRefreshCooldownUntil) return;
         chatRefreshBtn.setAttribute('aria-busy', 'true');
         try {
-          await authApi.syncFromCloudNow?.();
+          if (typeof authApi.pullChatNow === 'function') {
+            await authApi.pullChatNow({ reason: 'manual-refresh', limit: 120 });
+          } else {
+            await authApi.syncFromCloudNow?.();
+          }
         } catch (error) {
           console.warn('Manual chat sync refresh failed:', error);
         }
         refreshChatMessages();
         setChatRefreshCooldown();
+        scheduleLiveChatPoll('manual-refresh');
       });
     }
 
@@ -659,6 +740,7 @@ function loadAuthScript() {
         renderChatMessages(composeVisibleChatMessages());
         chatInput.value = '';
         await attemptSendPendingChat(optimisticId);
+        triggerLiveChatPull('send-success');
       });
     }
   }).catch(() => {

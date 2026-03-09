@@ -212,13 +212,23 @@
     return await response.json();
   }
 
-  async function pullListOperationsFromTransferApi(user, userId, sinceMs = 0, limit = 250) {
+  async function pullSectorOperationsFromTransferApi(user, userId, {
+    sinceMs = 0,
+    limit = 250,
+    sectors = ALL_PULL_SECTOR_KEYS,
+    allowLegacyListFallback = false
+  } = {}) {
     if (transferApiDisabled) return null;
     const pullUrl = new URL(`${DATA_API_BASE}${SECTOR_SYNC_PULL_PATH}`);
     pullUrl.searchParams.set('userId', userId);
     pullUrl.searchParams.set('since', String(Math.max(0, Number(sinceMs || 0) || 0)));
     pullUrl.searchParams.set('limit', String(Math.max(1, Math.min(500, Number(limit || 250) || 250))));
-    pullUrl.searchParams.set('sectors', ALL_PULL_SECTOR_KEYS.join(','));
+    const requestedSectors = Array.isArray(sectors)
+      ? [...new Set(sectors.map((sector) => String(sector || '').trim().toLowerCase()).filter(Boolean))]
+      : [];
+    if (requestedSectors.length) {
+      pullUrl.searchParams.set('sectors', requestedSectors.join(','));
+    }
     const authorization = await getTransferAuthHeader(user);
 
     let response;
@@ -235,7 +245,7 @@
       throw error;
     }
 
-    if (response.status === 404) {
+    if (response.status === 404 && allowLegacyListFallback) {
       const legacyPullUrl = new URL(`${DATA_API_BASE}${LIST_SYNC_PULL_PATH}`);
       legacyPullUrl.searchParams.set('userId', userId);
       legacyPullUrl.searchParams.set('since', String(Math.max(0, Number(sinceMs || 0) || 0)));
@@ -260,7 +270,17 @@
       logTransferFailure('pull', parsedError, { userId, endpoint: SECTOR_SYNC_PULL_PATH });
       throw parsedError;
     }
-    const payload = await response.json();
+    return await response.json();
+  }
+
+  async function pullListOperationsFromTransferApi(user, userId, sinceMs = 0, limit = 250) {
+    const payload = await pullSectorOperationsFromTransferApi(user, userId, {
+      sinceMs,
+      limit,
+      sectors: ALL_PULL_SECTOR_KEYS,
+      allowLegacyListFallback: true
+    });
+    if (!payload) return null;
     const rawSectorOperations = Array.isArray(payload?.operations) ? payload.operations : [];
     const converted = rawSectorOperations
       .map((operation) => toListOperation(operation))
@@ -341,6 +361,7 @@
   const AUTOSYNC_HEARTBEAT_MS = 15000;
   const LIST_SYNC_DEBOUNCE_MS = 500;
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
+  const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
   const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
@@ -416,6 +437,8 @@
   let lastAppliedCloudSignature = '';
   const pendingListOperations = new Map();
   const pendingSectorOperations = new Map();
+  let lastChatSyncError = null;
+  let lastChatSyncPullAt = 0;
   const syncIssueSubscribers = new Set();
   const listSyncAppliedSubscribers = new Set();
   let listSyncRetryTimer = null;
@@ -747,6 +770,18 @@
     const current = getListSyncCursorMs();
     const next = Math.max(current, normalizeOperationUpdatedAt(nextCursorMs, 0));
     writeSyncMeta({ [LIST_SYNC_CURSOR_META_KEY]: next });
+    return next;
+  }
+
+  function getChatSyncCursorMs() {
+    const meta = readSyncMeta();
+    return normalizeOperationUpdatedAt(meta?.[CHAT_SYNC_CURSOR_META_KEY], 0);
+  }
+
+  function setChatSyncCursorMs(nextCursorMs) {
+    const current = getChatSyncCursorMs();
+    const next = Math.max(current, normalizeOperationUpdatedAt(nextCursorMs, 0));
+    writeSyncMeta({ [CHAT_SYNC_CURSOR_META_KEY]: next });
     return next;
   }
 
@@ -2032,6 +2067,58 @@
     async syncFromCloudNow() {
       await init();
       return syncFromCloudNow();
+    },
+    async pullChatNow(options = {}) {
+      await init();
+      const user = await requireAuth();
+      const userId = getTransferUserId(user);
+      const sinceMs = normalizeOperationUpdatedAt(options?.sinceMs, getChatSyncCursorMs());
+      const limit = Math.max(1, Math.min(500, Number(options?.limit || 120) || 120));
+      try {
+        const payload = await pullSectorOperationsFromTransferApi(user, userId, {
+          sinceMs,
+          limit,
+          sectors: ['chat_messages'],
+          allowLegacyListFallback: false
+        });
+        const rawOps = Array.isArray(payload?.operations) ? payload.operations : [];
+        const chatOps = rawOps
+          .map((operation) => toListOperation(operation))
+          .filter((operation) => String(operation?.listKey || '').trim() === 'bilm-shared-chat');
+        const applied = chatOps.length ? applyListOperationsToLocalStorage(chatOps) : false;
+        const cursorMs = Math.max(
+          normalizeOperationUpdatedAt(payload?.cursorMs, sinceMs),
+          chatOps.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0)
+        );
+        if (cursorMs > 0) setChatSyncCursorMs(cursorMs);
+        lastChatSyncPullAt = Date.now();
+        lastChatSyncError = null;
+        return {
+          ok: true,
+          applied,
+          operations: chatOps,
+          cursorMs,
+          state: payload?.state || null,
+          requestId: payload?.requestId || null
+        };
+      } catch (error) {
+        lastChatSyncError = {
+          code: String(error?.code || error?.error || 'chat_pull_failed'),
+          message: String(error?.message || 'Chat pull failed.'),
+          status: Number(error?.status || 0) || null,
+          retryable: error?.retryable !== false,
+          requestId: String(error?.requestId || '').trim() || null,
+          atMs: Date.now()
+        };
+        throw error;
+      }
+    },
+    getChatSyncState() {
+      return {
+        cursorMs: getChatSyncCursorMs(),
+        lastPullAt: lastChatSyncPullAt || null,
+        lastError: lastChatSyncError
+      };
     },
     async flushSyncNow(reason = 'manual') {
       return flushPendingListOperationsToCloud(reason);
