@@ -43,7 +43,7 @@ async function fetchJSON(url) {
 
 async function resolveEndpoint() {
   if (staticMap[section]) return staticMap[section];
-  const genresData = await fetchJSON(`https://api.themoviedb.org/3/genre/movie/list?api_key=${TMDB_API_KEY}&language=en-US`);
+  const genresData = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/genre/movie/list?language=en-US`);
   const genres = genresData?.genres || [];
   const genre = genres.find((item) => {
     const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -64,7 +64,7 @@ async function loadMore(itemsToLoad = TMDB_PAGE_SIZE) {
   for (let index = 0; index < pagesToLoad; index += 1) {
     if (ended) break;
 
-    const data = await fetchJSON(`https://api.themoviedb.org/3${endpoint}${join}api_key=${TMDB_API_KEY}&page=${page}`);
+    const data = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb${endpoint}${join}page=${page}`);
     const results = data?.results || [];
     const unique = results.filter((item) => item.id && !seenIds.has(item.id));
 

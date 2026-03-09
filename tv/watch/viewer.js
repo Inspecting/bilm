@@ -250,14 +250,14 @@ function createMoreLikeCard(show) {
 
 async function fetchSimilarShows(page = 1) {
   if (!tmdbId) return [];
-  const url = `https://api.themoviedb.org/3/tv/${tmdbId}/similar?api_key=${TMDB_API_KEY}&page=${page}`;
+  const url = `https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/similar?page=${page}`;
   const data = await fetchJSON(url);
   return data?.results || [];
 }
 
 async function fetchRecommendedShows(page = 1) {
   if (!tmdbId) return [];
-  const url = `https://api.themoviedb.org/3/tv/${tmdbId}/recommendations?api_key=${TMDB_API_KEY}&page=${page}`;
+  const url = `https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/recommendations?page=${page}`;
   const data = await fetchJSON(url);
   return data?.results || [];
 }
@@ -1076,7 +1076,7 @@ async function fetchTMDBData() {
       }
     `;
 
-    const payload = await postJSON('/api/anilist', { query, variables: { id: Number(animeId) } });
+    const payload = await postJSON('https://storage-api.watchbilm.org/media/anilist', { query, variables: { id: Number(animeId) } });
     const details = payload?.data?.Media;
     const title = details?.title?.english || details?.title?.romaji || 'Unknown anime';
     const year = details?.startDate?.year || 'N/A';
@@ -1126,14 +1126,14 @@ async function fetchTMDBData() {
   try {
     // First get external IDs (like imdb_id)
     const [externalData, contentRatings] = await Promise.all([
-      fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/external_ids?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}/content_ratings?api_key=${TMDB_API_KEY}`)
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/external_ids`),
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/content_ratings`)
     ]);
     imdbId = externalData?.imdb_id || null;
     const certification = pickShowCertification(contentRatings?.results);
 
     // Get season info
-    const details = await fetchJSON(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
+    const details = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}`);
     if (!details) {
       mediaTitle.textContent = 'Unknown title';
       mediaMeta.textContent = 'Release date unavailable';

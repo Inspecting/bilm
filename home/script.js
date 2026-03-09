@@ -228,11 +228,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const tmdbId = identity.tmdbId;
       const mediaType = identity.mediaType || expectedType || 'movie';
       if (!tmdbId) return null;
-      const details = await fetchJSON(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
+      const details = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${tmdbId}`);
       const rating = Number(details?.vote_average);
       const source = details?.id ? 'TMDB' : item?.source;
       const endpoint = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
-      const ratingsData = await fetchJSON(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}/${endpoint}?api_key=${TMDB_API_KEY}`);
+      const ratingsData = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${tmdbId}/${endpoint}`);
       const certification = mediaType === 'movie'
         ? pickMovieCertification(ratingsData?.results)
         : pickTvCertification(ratingsData?.results);

@@ -1,5 +1,5 @@
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
-const ANILIST_GRAPHQL_URL = '/api/anilist';
+const ANILIST_GRAPHQL_URL = 'https://storage-api.watchbilm.org/media/anilist';
 const params = new URLSearchParams(window.location.search);
 const API_COOLDOWN_MS = 1000;
 const apiCooldownByHost = new Map();
@@ -111,8 +111,8 @@ function setMoreLikeStatus(message) {
 
 async function fetchMoreLikeCandidates(page = 1) {
   const [similar, recommended] = await Promise.all([
-    fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/similar?api_key=${TMDB_API_KEY}&page=${page}`),
-    fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/recommendations?api_key=${TMDB_API_KEY}&page=${page}`)
+    fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${tmdbId}/similar?page=${page}`),
+    fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${tmdbId}/recommendations?page=${page}`)
   ]);
 
   const merged = [...(similar?.results || []), ...(recommended?.results || [])];
@@ -277,10 +277,10 @@ async function loadMovieDetails() {
 
   try {
     const [details, videos, credits, releaseDates] = await Promise.all([
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/videos?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`),
-      fetchJSON(`https://api.themoviedb.org/3/movie/${tmdbId}/release_dates?api_key=${TMDB_API_KEY}`)
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${tmdbId}`),
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${tmdbId}/videos`),
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${tmdbId}/credits`),
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${tmdbId}/release_dates`)
     ]);
 
     document.getElementById('movieBody').style.display = '';

@@ -15,7 +15,7 @@ function withBase(path) {
 }
 
 async function tmdb(path, params = {}) {
-  const url = new URL(`https://api.themoviedb.org/3${path}`);
+  const url = new URL(`https://storage-api.watchbilm.org/media/tmdb${path}`);
   url.searchParams.set('api_key', TMDB_API_KEY);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {

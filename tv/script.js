@@ -7,7 +7,7 @@ function detectBasePath() {
 }
 
 const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
-const ANILIST_GRAPHQL_URL = '/api/anilist';
+const ANILIST_GRAPHQL_URL = 'https://storage-api.watchbilm.org/media/anilist';
 const BASE_URL = detectBasePath();
 const showsPerLoad = 15;
 const PRIORITY_SECTION_COUNT = 4;
@@ -241,7 +241,7 @@ async function waitForApiCooldown(url, signal) {
 }
 
 async function fetchGenres() {
-  const url = `https://api.themoviedb.org/3/genre/tv/list?api_key=${TMDB_API_KEY}&language=en-US`;
+  const url = `https://storage-api.watchbilm.org/media/tmdb/genre/tv/list?language=en-US`;
   const data = await fetchJSON(url, { maxRetries: SECTION_API_MAX_RETRIES });
   allGenres = data?.genres || [];
   return allGenres;
@@ -276,8 +276,8 @@ function getAnimeTvSections() {
 
 async function fetchShows(endpoint, page = 1) {
   const url = endpoint.includes('?')
-    ? `https://api.themoviedb.org/3${endpoint}&api_key=${TMDB_API_KEY}&page=${page}`
-    : `https://api.themoviedb.org/3${endpoint}?api_key=${TMDB_API_KEY}&page=${page}`;
+    ? `https://storage-api.watchbilm.org/media/tmdb${endpoint}&page=${page}`
+    : `https://storage-api.watchbilm.org/media/tmdb${endpoint}?page=${page}`;
   const data = await fetchJSON(url, { maxRetries: SECTION_API_MAX_RETRIES });
   return data?.results || [];
 }

@@ -378,7 +378,7 @@
     async function resolveMovieTmdbId({ imdbId, title, year }) {
       if (imdbId) {
         try {
-          const found = await fetchJSON(`https://api.themoviedb.org/3/find/${encodeURIComponent(imdbId)}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
+          const found = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/find/${encodeURIComponent(imdbId)}?external_source=imdb_id`);
           const byExternal = found?.movie_results?.[0]?.id;
           if (byExternal) return byExternal;
         } catch {
@@ -388,7 +388,7 @@
       try {
         const query = encodeURIComponent(title || '');
         const yearQuery = year && year !== 'N/A' ? `&year=${encodeURIComponent(year)}` : '';
-        const searchData = await fetchJSON(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${query}${yearQuery}`);
+        const searchData = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/search/movie?query=${query}${yearQuery}`);
         return searchData?.results?.[0]?.id || null;
       } catch {
         return null;
@@ -399,7 +399,7 @@
       try {
         const query = encodeURIComponent(title || '');
         const firstAirDateYear = year && year !== 'N/A' ? `&first_air_date_year=${encodeURIComponent(year)}` : '';
-        const searchData = await fetchJSON(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${query}${firstAirDateYear}`);
+        const searchData = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/search/tv?query=${query}${firstAirDateYear}`);
         return searchData?.results?.[0]?.id || null;
       } catch {
         return null;
@@ -432,7 +432,7 @@
 
     function fetchTvmazeShows(query) {
       if (!query) return Promise.resolve([]);
-      const url = `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`;
+      const url = `https://storage-api.watchbilm.org/media/tvmaze/search/shows?q=${encodeURIComponent(query)}`;
       return waitForApiCooldown(url).then(() => fetch(url))
         .then(res => res.json())
         .then(data => {
@@ -456,9 +456,9 @@
 
     if (queryNormalized) {
       Promise.all([
-        fetchJSON(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(queryNormalized)}`),
-        fetchJSON(`https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(queryNormalized)}`),
-        fetchJSON(`https://www.omdbapi.com/?s=${encodeURIComponent(queryNormalized)}&apikey=${OMDB_API_KEY}&type=movie`),
+        fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/search/movie?query=${encodeURIComponent(queryNormalized)}`),
+        fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/search/tv?query=${encodeURIComponent(queryNormalized)}`),
+        fetchJSON(`https://storage-api.watchbilm.org/media/omdb?s=${encodeURIComponent(queryNormalized)}&type=movie`),
         fetchTvmazeShows(queryNormalized)
       ])
       .then(async ([tmdbMovies, tmdbTV, omdbMovies, tvmazeShows]) => {

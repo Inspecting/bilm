@@ -389,14 +389,14 @@ function createMoreLikeCard(movie) {
 
 async function fetchSimilarMovies(page = 1) {
   if (!contentId) return [];
-  const url = `https://api.themoviedb.org/3/movie/${contentId}/similar?api_key=${TMDB_API_KEY}&page=${page}`;
+  const url = `https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/similar?page=${page}`;
   const data = await fetchJSON(url);
   return data?.results || [];
 }
 
 async function fetchRecommendedMovies(page = 1) {
   if (!contentId) return [];
-  const url = `https://api.themoviedb.org/3/movie/${contentId}/recommendations?api_key=${TMDB_API_KEY}&page=${page}`;
+  const url = `https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/recommendations?page=${page}`;
   const data = await fetchJSON(url);
   return data?.results || [];
 }
@@ -642,7 +642,7 @@ async function loadMovieDetails() {
         }
       }
     `;
-    const payload = await postJSON('/api/anilist', { query, variables: { id: Number(animeId) } });
+    const payload = await postJSON('https://storage-api.watchbilm.org/media/anilist', { query, variables: { id: Number(animeId) } });
     const details = payload?.data?.Media;
     const title = details?.title?.english || details?.title?.romaji || 'Unknown anime';
     const year = details?.startDate?.year || 'N/A';
@@ -678,9 +678,9 @@ async function loadMovieDetails() {
 
   try {
     const [response, externalResponse, releaseDatesResponse] = await Promise.all([
-      fetch(`https://api.themoviedb.org/3/movie/${contentId}?api_key=${TMDB_API_KEY}`),
-      fetch(`https://api.themoviedb.org/3/movie/${contentId}/external_ids?api_key=${TMDB_API_KEY}`),
-      fetch(`https://api.themoviedb.org/3/movie/${contentId}/release_dates?api_key=${TMDB_API_KEY}`)
+      fetch(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}`),
+      fetch(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/external_ids`),
+      fetch(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/release_dates`)
     ]);
     if (!response.ok) {
       throw new Error('Failed to load movie details');
