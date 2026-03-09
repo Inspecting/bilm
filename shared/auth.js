@@ -19,7 +19,10 @@
   const SECTOR_SYNC_BOOTSTRAP_PATH = '/sync/sectors/bootstrap';
   const TRANSFER_API_DISABLE_KEY = 'bilm-transfer-api-disabled';
 
-  let transferApiDisabled = localStorage.getItem(TRANSFER_API_DISABLE_KEY) === '1';
+  let transferApiDisabled = false;
+  try {
+    localStorage.removeItem(TRANSFER_API_DISABLE_KEY);
+  } catch {}
 
   function getTransferUserId(user) {
     const uid = String(user?.uid || '').trim();
@@ -29,12 +32,8 @@
   }
 
   function disableTransferApi(reason) {
-    if (transferApiDisabled) return;
-    transferApiDisabled = true;
-    try {
-      localStorage.setItem(TRANSFER_API_DISABLE_KEY, '1');
-    } catch {}
-    console.warn(`Data API disabled for this browser session (${reason}). Using Firestore fallback.`);
+    transferApiDisabled = false;
+    console.warn(`Data API transient issue (${reason}). Retrying with backoff.`);
   }
 
   function shouldDisableTransferApi(error) {
@@ -173,6 +172,18 @@
 
     if (response.status === 404) {
       // Fallback for older backend deployments during rollout.
+      const legacyOperations = operations
+        .map((operation) => {
+          if (operation?.listKey && MERGEABLE_LIST_KEYS.has(String(operation.listKey || '').trim())) {
+            return operation;
+          }
+          const maybeList = toListOperation(operation);
+          return maybeList && MERGEABLE_LIST_KEYS.has(String(maybeList.listKey || '').trim()) ? maybeList : null;
+        })
+        .filter(Boolean);
+      if (!legacyOperations.length) {
+        return { ok: true, processed: 0, cursorMs: 0, legacy: true };
+      }
       const legacyResponse = await fetch(`${DATA_API_BASE}${LIST_SYNC_PUSH_PATH}`, {
         method: 'POST',
         headers: {
@@ -182,7 +193,7 @@
         body: JSON.stringify({
           userId,
           deviceId: getOrCreateDeviceId(),
-          operations
+          operations: legacyOperations
         })
       });
       if (!legacyResponse.ok) {
@@ -207,7 +218,7 @@
     pullUrl.searchParams.set('userId', userId);
     pullUrl.searchParams.set('since', String(Math.max(0, Number(sinceMs || 0) || 0)));
     pullUrl.searchParams.set('limit', String(Math.max(1, Math.min(500, Number(limit || 250) || 250))));
-    pullUrl.searchParams.set('sectors', Object.values(LIST_KEY_TO_SECTOR_KEY).filter((sector, index, all) => all.indexOf(sector) === index).join(','));
+    pullUrl.searchParams.set('sectors', ALL_PULL_SECTOR_KEYS.join(','));
     const authorization = await getTransferAuthHeader(user);
 
     let response;
@@ -250,12 +261,17 @@
       throw parsedError;
     }
     const payload = await response.json();
-    const converted = Array.isArray(payload?.operations)
-      ? payload.operations.map((operation) => toListOperation(operation)).filter(Boolean)
-      : [];
+    const rawSectorOperations = Array.isArray(payload?.operations) ? payload.operations : [];
+    const converted = rawSectorOperations
+      .map((operation) => toListOperation(operation))
+      .filter(Boolean);
+    const storageOperations = rawSectorOperations
+      .map((operation) => toStorageSectorOperation(operation))
+      .filter(Boolean);
     return {
       ...payload,
-      operations: converted
+      operations: converted,
+      sectorOperations: storageOperations
     };
   }
 
@@ -370,8 +386,36 @@
     search_history: 'bilm-search-history',
     chat_messages: 'bilm-shared-chat'
   });
+  const EXTRA_SYNC_SECTOR_KEYS = Object.freeze({
+    settings_profile: 'settings_profile',
+    playback_notes: 'playback_notes',
+    tv_progress: 'tv_progress',
+    ui_prefs: 'ui_prefs'
+  });
+  const STORAGE_KEY_TO_SECTOR_CONFIG = Object.freeze({
+    'bilm-theme-settings': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.settings_profile, itemKey: 'theme_settings' },
+    'bilm-playback-note': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.playback_notes, itemKey: 'playback_note' },
+    'bilm-history-page-prefs': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.ui_prefs, itemKey: 'history_page_prefs' },
+    bilmDisableLoading: { sectorKey: EXTRA_SYNC_SECTOR_KEYS.ui_prefs, itemKey: 'disable_loading' }
+  });
+  const STORAGE_KEY_PREFIX_TO_SECTOR_CONFIG = Object.freeze([
+    { prefix: 'bilm-tv-progress-', sectorKey: EXTRA_SYNC_SECTOR_KEYS.tv_progress, itemKeyFromKey: (key) => key },
+    { prefix: 'theme-', sectorKey: EXTRA_SYNC_SECTOR_KEYS.settings_profile, itemKeyFromKey: (key) => key }
+  ]);
+  const DEVICE_LOCAL_STORAGE_KEYS = new Set([
+    SYNC_ENABLED_KEY,
+    TRANSFER_API_DISABLE_KEY,
+    'bilm-clear-local-on-logout'
+  ]);
+  const ALL_PULL_SECTOR_KEYS = Object.freeze([
+    ...new Set([
+      ...Object.values(LIST_KEY_TO_SECTOR_KEY),
+      ...Object.values(EXTRA_SYNC_SECTOR_KEYS)
+    ])
+  ]);
   let lastAppliedCloudSignature = '';
   const pendingListOperations = new Map();
+  const pendingSectorOperations = new Map();
   const syncIssueSubscribers = new Set();
   const listSyncAppliedSubscribers = new Set();
   let listSyncRetryTimer = null;
@@ -442,13 +486,33 @@
     return SECTOR_KEY_TO_LIST_KEY[normalized] || '';
   }
 
+  function resolveStorageSectorConfig(storageKey) {
+    const key = String(storageKey || '').trim();
+    if (!key) return null;
+    if (DEVICE_LOCAL_STORAGE_KEYS.has(key)) return null;
+    if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return null;
+    const exact = STORAGE_KEY_TO_SECTOR_CONFIG[key];
+    if (exact) return { ...exact };
+    for (const rule of STORAGE_KEY_PREFIX_TO_SECTOR_CONFIG) {
+      if (key.startsWith(rule.prefix)) {
+        const itemKey = typeof rule.itemKeyFromKey === 'function' ? rule.itemKeyFromKey(key) : key;
+        return {
+          sectorKey: rule.sectorKey,
+          itemKey: String(itemKey || '').trim()
+        };
+      }
+    }
+    return null;
+  }
+
   function createOperationId(prefix = 'op') {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
   function toSectorOperation(operation) {
+    const directSectorKey = String(operation?.sectorKey || '').trim().toLowerCase();
     const listKey = String(operation?.listKey || '').trim();
-    const sectorKey = listKeyToSectorKey(listKey);
+    const sectorKey = directSectorKey || listKeyToSectorKey(listKey);
     if (!sectorKey) return null;
     const itemKey = String(operation?.itemKey || '').trim();
     if (!itemKey) return null;
@@ -460,7 +524,11 @@
       opId: String(operation?.opId || '').trim() || createOperationId('sec')
     };
     if (!normalized.deleted) {
-      const payload = normalizeListOperationPayload(operation?.payload, normalized.updatedAtMs);
+      const payload = sectorKeyToListKey(sectorKey)
+        ? normalizeListOperationPayload(operation?.payload, normalized.updatedAtMs)
+        : (operation?.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload)
+          ? operation.payload
+          : null);
       if (!payload) return null;
       normalized.payload = payload;
     }
@@ -485,6 +553,25 @@
       normalized.payload = payload;
     }
     return normalized;
+  }
+
+  function toStorageSectorOperation(operation) {
+    const sectorKey = String(operation?.sectorKey || '').trim().toLowerCase();
+    if (!Object.values(EXTRA_SYNC_SECTOR_KEYS).includes(sectorKey)) return null;
+    const itemKey = String(operation?.itemKey || '').trim();
+    if (!itemKey) return null;
+    const storageKey = String(operation?.payload?.storageKey || '').trim();
+    const value = operation?.payload?.value;
+    const deleted = operation?.deleted === true;
+    if (!deleted && !storageKey) return null;
+    return {
+      sectorKey,
+      itemKey,
+      deleted,
+      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs, 0),
+      storageKey: deleted ? itemKey : storageKey,
+      value: deleted ? null : (typeof value === 'string' ? value : JSON.stringify(value ?? ''))
+    };
   }
 
   async function parseTransferError(response) {
@@ -595,6 +682,26 @@
     return operations;
   }
 
+  function buildStorageSectorOperationsFromRaw(storageKey, beforeRaw, afterRaw, nowMs = Date.now()) {
+    const config = resolveStorageSectorConfig(storageKey);
+    if (!config) return [];
+    const beforeValue = typeof beforeRaw === 'string' ? beforeRaw : null;
+    const afterValue = typeof afterRaw === 'string' ? afterRaw : null;
+    if (beforeValue === afterValue) return [];
+    return [{
+      sectorKey: config.sectorKey,
+      itemKey: config.itemKey,
+      deleted: afterValue === null,
+      updatedAtMs: normalizeOperationUpdatedAt(nowMs),
+      payload: afterValue === null
+        ? undefined
+        : {
+          storageKey,
+          value: afterValue
+        }
+    }];
+  }
+
   function enqueueListOperations(operations = []) {
     operations.forEach((operation) => {
       if (!operation || !MERGEABLE_LIST_KEYS.has(operation.listKey)) return;
@@ -614,6 +721,19 @@
       const current = pendingListOperations.get(queueKey);
       if (!current || normalized.updatedAtMs >= normalizeOperationUpdatedAt(current.updatedAtMs, 0)) {
         pendingListOperations.set(queueKey, normalized);
+      }
+    });
+  }
+
+  function enqueueSectorOperations(operations = []) {
+    operations.forEach((operation) => {
+      const normalized = toSectorOperation(operation);
+      if (!normalized) return;
+      if (!Object.values(EXTRA_SYNC_SECTOR_KEYS).includes(normalized.sectorKey)) return;
+      const queueKey = `${normalized.sectorKey}|${normalized.itemKey}`;
+      const current = pendingSectorOperations.get(queueKey);
+      if (!current || normalized.updatedAtMs >= normalizeOperationUpdatedAt(current.updatedAtMs, 0)) {
+        pendingSectorOperations.set(queueKey, normalized);
       }
     });
   }
@@ -646,6 +766,23 @@
       operations.push(...built);
     });
     return operations;
+  }
+
+  function storageSectorOperationsFromSnapshot(snapshot, nowMs = Date.now()) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return [];
+    const operations = [];
+    const localEntries = Object.entries(snapshot?.localStorage || {});
+    localEntries.forEach(([storageKey, rawValue]) => {
+      operations.push(...buildStorageSectorOperationsFromRaw(storageKey, null, rawValue, nowMs));
+    });
+    return operations;
+  }
+
+  function sectorBootstrapOperationsFromSnapshot(snapshot, nowMs = Date.now()) {
+    return [
+      ...listOperationsFromSnapshot(snapshot, nowMs),
+      ...storageSectorOperationsFromSnapshot(snapshot, nowMs)
+    ];
   }
 
   async function readFirebaseBackupSnapshot(user) {
@@ -687,12 +824,12 @@
     try {
       const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
       if (transferSnapshot) {
-        operations = listOperationsFromSnapshot(transferSnapshot, nowMs);
+        operations = sectorBootstrapOperationsFromSnapshot(transferSnapshot, nowMs);
         migrationSource = 'd1_snapshot';
       } else {
         const firebaseSnapshot = await readFirebaseBackupSnapshot(user);
         if (firebaseSnapshot) {
-          operations = listOperationsFromSnapshot(firebaseSnapshot, nowMs);
+          operations = sectorBootstrapOperationsFromSnapshot(firebaseSnapshot, nowMs);
           migrationSource = 'firebase_snapshot';
         }
       }
@@ -701,7 +838,7 @@
     }
 
     if (!operations.length) {
-      operations = listOperationsFromSnapshot(collectBackupData(), nowMs);
+      operations = sectorBootstrapOperationsFromSnapshot(collectBackupData(), nowMs);
       migrationSource = 'local_fallback';
     }
 
@@ -1110,6 +1247,42 @@
     return true;
   }
 
+  function applyStorageSectorOperationsToLocalStorage(operations = []) {
+    if (!Array.isArray(operations) || operations.length === 0) return false;
+    const latestByStorageKey = new Map();
+    operations.forEach((operation) => {
+      const normalized = toStorageSectorOperation(operation);
+      if (!normalized) return;
+      const storageKey = String(normalized.storageKey || '').trim();
+      if (!storageKey) return;
+      const queueKey = `${normalized.sectorKey}|${normalized.itemKey}`;
+      const current = latestByStorageKey.get(queueKey);
+      if (!current || normalized.updatedAtMs >= normalizeOperationUpdatedAt(current.updatedAtMs, 0)) {
+        latestByStorageKey.set(queueKey, normalized);
+      }
+    });
+    if (!latestByStorageKey.size) return false;
+
+    suppressMutationHook = true;
+    try {
+      latestByStorageKey.forEach((operation) => {
+        if (operation.deleted) {
+          localStorage.removeItem(operation.storageKey);
+          return;
+        }
+        const nextValue = typeof operation.value === 'string'
+          ? operation.value
+          : JSON.stringify(operation.value ?? '');
+        localStorage.setItem(operation.storageKey, nextValue);
+      });
+    } finally {
+      suppressMutationHook = false;
+    }
+
+    writeSyncMeta({ lastCloudPullAt: Date.now() });
+    return true;
+  }
+
   function clearListSyncRetryTimer() {
     if (listSyncRetryTimer) {
       window.clearTimeout(listSyncRetryTimer);
@@ -1124,7 +1297,10 @@
       : 1200;
     const jitterMs = Math.floor(Math.random() * 450);
     const nextDelay = listSyncRetryDelayMs + jitterMs;
-    const hasChatOperations = operations.some((operation) => String(operation?.listKey || '').trim() === 'bilm-shared-chat');
+    const hasChatOperations = operations.some((operation) => (
+      String(operation?.listKey || '').trim() === 'bilm-shared-chat'
+      || String(operation?.sectorKey || '').trim() === 'chat_messages'
+    ));
     if (hasChatOperations) {
       emitSyncIssue({
         scope: 'chat',
@@ -1159,19 +1335,28 @@
     await init();
     const user = auth?.currentUser;
     if (!user || !isSyncEnabled() || pendingListSync || transferApiDisabled) return false;
-    if (pendingListOperations.size === 0) return false;
+    if (pendingListOperations.size === 0 && pendingSectorOperations.size === 0) return false;
 
-    const batchEntries = [...pendingListOperations.entries()];
-    const operations = batchEntries.map(([, operation]) => operation);
+    const listBatchEntries = [...pendingListOperations.entries()];
+    const sectorBatchEntries = [...pendingSectorOperations.entries()];
+    const operations = [
+      ...listBatchEntries.map(([, operation]) => operation),
+      ...sectorBatchEntries.map(([, operation]) => operation)
+    ];
     if (!operations.length) return false;
 
     pendingListSync = true;
     try {
       const userId = getTransferUserId(user);
       const response = await pushListOperationsToTransferApi(user, userId, operations);
-      batchEntries.forEach(([key, operation]) => {
+      listBatchEntries.forEach(([key, operation]) => {
         if (pendingListOperations.get(key) === operation) {
           pendingListOperations.delete(key);
+        }
+      });
+      sectorBatchEntries.forEach(([key, operation]) => {
+        if (pendingSectorOperations.get(key) === operation) {
+          pendingSectorOperations.delete(key);
         }
       });
       const maxUpdatedAt = operations.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0);
@@ -1212,6 +1397,7 @@
       const response = await pullListOperationsFromTransferApi(user, userId, sinceMs, 250);
       if (!response || !Array.isArray(response.operations)) break;
       const operations = response.operations;
+      const sectorOperations = Array.isArray(response.sectorOperations) ? response.sectorOperations : [];
       const cursorMs = normalizeOperationUpdatedAt(response.cursorMs, sinceMs);
       const migratedAtMs = normalizeOperationUpdatedAt(response?.state?.migratedAtMs, 0);
       if (migratedAtMs > 0) {
@@ -1220,6 +1406,10 @@
       if (operations.length > 0) {
         const didApply = applyListOperationsToLocalStorage(operations);
         applied = applied || didApply;
+      }
+      if (sectorOperations.length > 0) {
+        const didApplyStorage = applyStorageSectorOperationsToLocalStorage(sectorOperations);
+        applied = applied || didApplyStorage;
       }
       sinceMs = Math.max(sinceMs, cursorMs);
       setListSyncCursorMs(sinceMs);
@@ -1299,6 +1489,13 @@
           enqueueListOperations(buildListOperationsFromRaw(key, beforeRaw, afterRaw, now));
           scheduleListSyncFlush('storage-set-list');
           listMutation = true;
+        } else {
+          const afterRaw = this.getItem(key);
+          const storageOps = buildStorageSectorOperationsFromRaw(key, beforeRaw, afterRaw, Date.now());
+          if (storageOps.length) {
+            enqueueSectorOperations(storageOps);
+            scheduleListSyncFlush('storage-set-sector');
+          }
         }
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-set' });
         scheduleAutosyncFromMutation(listMutation ? 'list-storage-set' : 'storage-set');
@@ -1315,6 +1512,12 @@
           enqueueListOperations(buildListOperationsFromRaw(key, beforeRaw, '[]', Date.now()));
           scheduleListSyncFlush('storage-remove-list');
           listMutation = true;
+        } else if (beforeRaw !== null) {
+          const storageOps = buildStorageSectorOperationsFromRaw(key, beforeRaw, null, Date.now());
+          if (storageOps.length) {
+            enqueueSectorOperations(storageOps);
+            scheduleListSyncFlush('storage-remove-sector');
+          }
         }
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-remove' });
         scheduleAutosyncFromMutation(listMutation ? 'list-storage-remove' : 'storage-remove');
@@ -1324,6 +1527,7 @@
         const result = originalClear.apply(this, args);
         if (suppressMutationHook) return result;
         pendingListOperations.clear();
+        pendingSectorOperations.clear();
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-clear' });
         scheduleAutosyncFromMutation('storage-clear');
         return result;
@@ -1836,30 +2040,14 @@
       await init();
       const user = await requireAuth();
       const userId = getTransferUserId(user);
-      const normalizedListOperations = (Array.isArray(operations) ? operations : [])
-        .map((operation) => {
-          if (operation?.listKey) {
-            const listKey = String(operation.listKey || '').trim();
-            const itemKey = String(operation.itemKey || '').trim();
-            if (!listKey || !itemKey) return null;
-            return {
-              listKey,
-              itemKey,
-              deleted: operation?.deleted === true,
-              updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs),
-              payload: operation?.deleted === true
-                ? undefined
-                : normalizeListOperationPayload(operation?.payload, normalizeOperationUpdatedAt(operation?.updatedAtMs))
-            };
-          }
-          return toListOperation(operation);
-        })
+      const normalizedOperations = (Array.isArray(operations) ? operations : [])
+        .map((operation) => toSectorOperation(operation))
         .filter(Boolean);
-      if (!normalizedListOperations.length) {
+      if (!normalizedOperations.length) {
         return { ok: true, processed: 0, cursorMs: getListSyncCursorMs() };
       }
-      const response = await pushListOperationsToTransferApi(user, userId, normalizedListOperations);
-      const maxUpdatedAt = normalizedListOperations.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0);
+      const response = await pushListOperationsToTransferApi(user, userId, normalizedOperations);
+      const maxUpdatedAt = normalizedOperations.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0);
       const cursorMs = Math.max(normalizeOperationUpdatedAt(response?.cursorMs, 0), maxUpdatedAt);
       if (cursorMs > 0) setListSyncCursorMs(cursorMs);
       writeSyncMeta({
