@@ -94,8 +94,9 @@
     }
 
     if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(`Data API save failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+      const parsedError = await parseTransferError(response);
+      logTransferFailure('snapshot-save', parsedError, { userId, endpoint: '/' });
+      throw parsedError;
     }
     return true;
   }
@@ -120,8 +121,9 @@
 
     if (response.status === 404) return null;
     if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(`Data API load failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+      const parsedError = await parseTransferError(response);
+      logTransferFailure('snapshot-load', parsedError, { userId, endpoint: '/' });
+      throw parsedError;
     }
 
     const text = await response.text();
@@ -184,13 +186,17 @@
         })
       });
       if (!legacyResponse.ok) {
-        throw await parseTransferError(legacyResponse);
+        const parsedError = await parseTransferError(legacyResponse);
+        logTransferFailure('push-legacy', parsedError, { userId, endpoint: LIST_SYNC_PUSH_PATH });
+        throw parsedError;
       }
       return await legacyResponse.json();
     }
 
     if (!response.ok) {
-      throw await parseTransferError(response);
+      const parsedError = await parseTransferError(response);
+      logTransferFailure('push', parsedError, { userId, endpoint: SECTOR_SYNC_PUSH_PATH });
+      throw parsedError;
     }
     return await response.json();
   }
@@ -232,12 +238,16 @@
       });
       if (legacyResponse.status === 404) return { ok: true, operations: [], cursorMs: sinceMs, state: null };
       if (!legacyResponse.ok) {
-        throw await parseTransferError(legacyResponse);
+        const parsedError = await parseTransferError(legacyResponse);
+        logTransferFailure('pull-legacy', parsedError, { userId, endpoint: LIST_SYNC_PULL_PATH });
+        throw parsedError;
       }
       return await legacyResponse.json();
     }
     if (!response.ok) {
-      throw await parseTransferError(response);
+      const parsedError = await parseTransferError(response);
+      logTransferFailure('pull', parsedError, { userId, endpoint: SECTOR_SYNC_PULL_PATH });
+      throw parsedError;
     }
     const payload = await response.json();
     const converted = Array.isArray(payload?.operations)
@@ -280,7 +290,9 @@
       return { ok: false, skipped: true, legacy: true };
     }
     if (!response.ok) {
-      throw await parseTransferError(response);
+      const parsedError = await parseTransferError(response);
+      logTransferFailure('bootstrap', parsedError, { userId, endpoint: SECTOR_SYNC_BOOTSTRAP_PATH });
+      throw parsedError;
     }
     return await response.json();
   }
@@ -491,6 +503,17 @@
     wrapped.retryable = retryable;
     wrapped.requestId = requestId;
     return wrapped;
+  }
+
+  function logTransferFailure(scope, error, context = {}) {
+    const status = Number(error?.status || 0) || null;
+    const code = String(error?.code || error?.error || 'sync_error').trim();
+    const requestId = String(error?.requestId || '').trim() || null;
+    console.error(`[sync:${scope}] ${code}${status ? ` (${status})` : ''}: ${error?.message || 'request failed'}`, {
+      requestId,
+      retryable: error?.retryable !== false,
+      ...context
+    });
   }
 
   function emitSyncIssue(issue = {}) {
@@ -1731,7 +1754,7 @@
     },
     async saveCloudSnapshot(snapshot, options = {}) {
       const user = await requireAuth();
-      const mirrorToFirebase = options?.mirrorToFirebase !== false;
+      const mirrorToFirebase = options?.mirrorToFirebase === true;
       const cloudSnapshot = await api.getCloudSnapshot();
       const mergedSnapshot = mergeSnapshots(cloudSnapshot, snapshot || null) || snapshot || null;
       const payload = {
@@ -1749,22 +1772,33 @@
 
       const userId = getTransferUserId(user);
       let savedToTransferApi = false;
+      let lastTransferError = null;
       try {
         await saveSnapshotToTransferApi(user, userId, payload);
         savedToTransferApi = true;
       } catch (error) {
-        console.warn('Data API save failed (Firestore save will still proceed):', error);
+        lastTransferError = error;
+        console.warn('Data API save failed:', error);
       }
 
       if (mirrorToFirebase && modules?.setDoc && modules?.doc && firestore) {
-        await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
-          cloudBackup: {
-            schema: 'bilm-cloud-sync-v1',
-            updatedAt: modules.serverTimestamp(),
-            snapshot: payload,
-            transferApiMirrored: savedToTransferApi
+        try {
+          await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+            cloudBackup: {
+              schema: 'bilm-cloud-sync-v1',
+              updatedAt: modules.serverTimestamp(),
+              snapshot: payload,
+              transferApiMirrored: savedToTransferApi
+            }
+          }, { merge: true });
+        } catch (firebaseError) {
+          console.warn('Firebase backup write failed during cloud snapshot save:', firebaseError);
+          if (!savedToTransferApi) {
+            throw firebaseError;
           }
-        }, { merge: true });
+        }
+      } else if (!savedToTransferApi && lastTransferError) {
+        throw lastTransferError;
       }
 
       writeSyncMeta({
