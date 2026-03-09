@@ -14,6 +14,9 @@
   const DATA_API_BASE = 'https://data-api.watchbilm.org';
   const LIST_SYNC_PUSH_PATH = '/sync/lists/push';
   const LIST_SYNC_PULL_PATH = '/sync/lists/pull';
+  const SECTOR_SYNC_PUSH_PATH = '/sync/sectors/push';
+  const SECTOR_SYNC_PULL_PATH = '/sync/sectors/pull';
+  const SECTOR_SYNC_BOOTSTRAP_PATH = '/sync/sectors/bootstrap';
   const TRANSFER_API_DISABLE_KEY = 'bilm-transfer-api-disabled';
 
   let transferApiDisabled = localStorage.getItem(TRANSFER_API_DISABLE_KEY) === '1';
@@ -138,7 +141,14 @@
       return { ok: true, processed: 0, cursorMs: 0 };
     }
 
-    const url = `${DATA_API_BASE}${LIST_SYNC_PUSH_PATH}`;
+    const sectorOperations = operations
+      .map((operation) => toSectorOperation(operation))
+      .filter(Boolean);
+    if (!sectorOperations.length) {
+      return { ok: true, processed: 0, cursorMs: 0 };
+    }
+
+    const url = `${DATA_API_BASE}${SECTOR_SYNC_PUSH_PATH}`;
     const authorization = await getTransferAuthHeader(user);
     let response;
     try {
@@ -151,27 +161,47 @@
         body: JSON.stringify({
           userId,
           deviceId: getOrCreateDeviceId(),
-          operations
+          operations: sectorOperations
         })
       });
     } catch (error) {
-      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on list push');
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on sector push');
       throw error;
     }
 
+    if (response.status === 404) {
+      // Fallback for older backend deployments during rollout.
+      const legacyResponse = await fetch(`${DATA_API_BASE}${LIST_SYNC_PUSH_PATH}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization
+        },
+        body: JSON.stringify({
+          userId,
+          deviceId: getOrCreateDeviceId(),
+          operations
+        })
+      });
+      if (!legacyResponse.ok) {
+        throw await parseTransferError(legacyResponse);
+      }
+      return await legacyResponse.json();
+    }
+
     if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(`List sync push failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+      throw await parseTransferError(response);
     }
     return await response.json();
   }
 
   async function pullListOperationsFromTransferApi(user, userId, sinceMs = 0, limit = 250) {
     if (transferApiDisabled) return null;
-    const pullUrl = new URL(`${DATA_API_BASE}${LIST_SYNC_PULL_PATH}`);
+    const pullUrl = new URL(`${DATA_API_BASE}${SECTOR_SYNC_PULL_PATH}`);
     pullUrl.searchParams.set('userId', userId);
     pullUrl.searchParams.set('since', String(Math.max(0, Number(sinceMs || 0) || 0)));
     pullUrl.searchParams.set('limit', String(Math.max(1, Math.min(500, Number(limit || 250) || 250))));
+    pullUrl.searchParams.set('sectors', Object.values(LIST_KEY_TO_SECTOR_KEY).filter((sector, index, all) => all.indexOf(sector) === index).join(','));
     const authorization = await getTransferAuthHeader(user);
 
     let response;
@@ -184,14 +214,73 @@
         }
       });
     } catch (error) {
-      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on list pull');
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on sector pull');
       throw error;
     }
 
-    if (response.status === 404) return { ok: true, operations: [], cursorMs: sinceMs };
+    if (response.status === 404) {
+      const legacyPullUrl = new URL(`${DATA_API_BASE}${LIST_SYNC_PULL_PATH}`);
+      legacyPullUrl.searchParams.set('userId', userId);
+      legacyPullUrl.searchParams.set('since', String(Math.max(0, Number(sinceMs || 0) || 0)));
+      legacyPullUrl.searchParams.set('limit', String(Math.max(1, Math.min(500, Number(limit || 250) || 250))));
+      const legacyResponse = await fetch(legacyPullUrl.toString(), {
+        method: 'GET',
+        headers: {
+          accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
+          authorization
+        }
+      });
+      if (legacyResponse.status === 404) return { ok: true, operations: [], cursorMs: sinceMs, state: null };
+      if (!legacyResponse.ok) {
+        throw await parseTransferError(legacyResponse);
+      }
+      return await legacyResponse.json();
+    }
     if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(`List sync pull failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+      throw await parseTransferError(response);
+    }
+    const payload = await response.json();
+    const converted = Array.isArray(payload?.operations)
+      ? payload.operations.map((operation) => toListOperation(operation)).filter(Boolean)
+      : [];
+    return {
+      ...payload,
+      operations: converted
+    };
+  }
+
+  async function bootstrapSectorOperationsToTransferApi(user, userId, operations, migrationSource = 'local_fallback') {
+    if (transferApiDisabled) return null;
+    const sectorOperations = Array.isArray(operations)
+      ? operations.map((operation) => toSectorOperation(operation)).filter(Boolean)
+      : [];
+    const url = `${DATA_API_BASE}${SECTOR_SYNC_BOOTSTRAP_PATH}`;
+    const authorization = await getTransferAuthHeader(user);
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization
+        },
+        body: JSON.stringify({
+          userId,
+          deviceId: getOrCreateDeviceId(),
+          migrationSource,
+          operations: sectorOperations
+        })
+      });
+    } catch (error) {
+      if (shouldDisableTransferApi(error)) disableTransferApi('network/CORS failure on sector bootstrap');
+      throw error;
+    }
+
+    if (response.status === 404) {
+      return { ok: false, skipped: true, legacy: true };
+    }
+    if (!response.ok) {
+      throw await parseTransferError(response);
     }
     return await response.json();
   }
@@ -224,6 +313,7 @@
   const AUTOSYNC_HEARTBEAT_MS = 15000;
   const LIST_SYNC_DEBOUNCE_MS = 500;
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
+  const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -250,8 +340,30 @@
     /^bilm-/,
     /^tmdb-/
   ];
+  const LIST_KEY_TO_SECTOR_KEY = Object.freeze({
+    'bilm-favorites': 'favorites',
+    'bilm-watch-later': 'watch_later',
+    'bilm-continue-watching': 'continue_watching',
+    'bilm-watch-history': 'watch_history',
+    'bilm-search-history': 'search_history',
+    'bilm-shared-chat': 'chat_messages',
+    'bilm-history-movies': 'watch_history',
+    'bilm-history-tv': 'watch_history'
+  });
+  const SECTOR_KEY_TO_LIST_KEY = Object.freeze({
+    favorites: 'bilm-favorites',
+    watch_later: 'bilm-watch-later',
+    continue_watching: 'bilm-continue-watching',
+    watch_history: 'bilm-watch-history',
+    search_history: 'bilm-search-history',
+    chat_messages: 'bilm-shared-chat'
+  });
   let lastAppliedCloudSignature = '';
   const pendingListOperations = new Map();
+  const syncIssueSubscribers = new Set();
+  const listSyncAppliedSubscribers = new Set();
+  let listSyncRetryTimer = null;
+  let listSyncRetryDelayMs = 0;
 
   function readJsonArray(raw) {
     try {
@@ -306,6 +418,110 @@
       normalized.updatedAt = updatedAtMs;
     }
     return normalized;
+  }
+
+  function listKeyToSectorKey(listKey) {
+    const normalized = String(listKey || '').trim().toLowerCase();
+    return LIST_KEY_TO_SECTOR_KEY[normalized] || '';
+  }
+
+  function sectorKeyToListKey(sectorKey) {
+    const normalized = String(sectorKey || '').trim().toLowerCase();
+    return SECTOR_KEY_TO_LIST_KEY[normalized] || '';
+  }
+
+  function createOperationId(prefix = 'op') {
+    return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function toSectorOperation(operation) {
+    const listKey = String(operation?.listKey || '').trim();
+    const sectorKey = listKeyToSectorKey(listKey);
+    if (!sectorKey) return null;
+    const itemKey = String(operation?.itemKey || '').trim();
+    if (!itemKey) return null;
+    const normalized = {
+      sectorKey,
+      itemKey,
+      deleted: operation?.deleted === true,
+      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs),
+      opId: String(operation?.opId || '').trim() || createOperationId('sec')
+    };
+    if (!normalized.deleted) {
+      const payload = normalizeListOperationPayload(operation?.payload, normalized.updatedAtMs);
+      if (!payload) return null;
+      normalized.payload = payload;
+    }
+    return normalized;
+  }
+
+  function toListOperation(operation) {
+    const sectorKey = String(operation?.sectorKey || '').trim();
+    const listKey = sectorKeyToListKey(sectorKey);
+    if (!listKey) return null;
+    const itemKey = String(operation?.itemKey || '').trim();
+    if (!itemKey) return null;
+    const normalized = {
+      listKey,
+      itemKey,
+      deleted: operation?.deleted === true,
+      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)
+    };
+    if (!normalized.deleted) {
+      const payload = normalizeListOperationPayload(operation?.payload, normalized.updatedAtMs);
+      if (!payload) return null;
+      normalized.payload = payload;
+    }
+    return normalized;
+  }
+
+  async function parseTransferError(response) {
+    const status = Number(response?.status || 0) || 0;
+    const fallback = await response.text().catch(() => '');
+    const parsed = safeParse(fallback, null);
+    const error = String(parsed?.error || '').trim() || `request_failed_${status || 'unknown'}`;
+    const code = String(parsed?.code || parsed?.error || '').trim() || error;
+    const message = String(parsed?.message || fallback || `Data API request failed (${status || 'unknown'})`).trim();
+    const retryable = parsed?.retryable === true || status === 429 || status >= 500;
+    const requestId = String(parsed?.requestId || response.headers?.get?.('x-request-id') || '').trim() || null;
+    const wrapped = new Error(message);
+    wrapped.status = status;
+    wrapped.error = error;
+    wrapped.code = code;
+    wrapped.retryable = retryable;
+    wrapped.requestId = requestId;
+    return wrapped;
+  }
+
+  function emitSyncIssue(issue = {}) {
+    const normalized = {
+      scope: String(issue?.scope || 'sync').trim() || 'sync',
+      listKey: String(issue?.listKey || '').trim() || null,
+      sectorKey: String(issue?.sectorKey || '').trim() || null,
+      code: String(issue?.code || '').trim() || 'sync_error',
+      message: String(issue?.message || '').trim() || 'Sync request failed.',
+      retryable: issue?.retryable !== false,
+      status: Number(issue?.status || 0) || null,
+      requestId: String(issue?.requestId || '').trim() || null,
+      atMs: Date.now()
+    };
+    syncIssueSubscribers.forEach((callback) => {
+      try {
+        callback(normalized);
+      } catch (error) {
+        console.warn('Sync issue subscriber failed:', error);
+      }
+    });
+  }
+
+  function emitListSyncApplied(payload = {}) {
+    listSyncAppliedSubscribers.forEach((callback) => {
+      try {
+        callback(payload);
+      } catch (error) {
+        console.warn('List sync apply subscriber failed:', error);
+      }
+    });
   }
 
   function buildListMapFromRaw(raw) {
@@ -366,6 +582,7 @@
         itemKey,
         deleted: operation.deleted === true,
         updatedAtMs: normalizeOperationUpdatedAt(operation.updatedAtMs),
+        opId: String(operation?.opId || '').trim() || createOperationId('lst'),
         payload: operation.deleted === true ? undefined : normalizeListOperationPayload(operation.payload, operation.updatedAtMs)
       };
       if (!normalized.deleted && !normalized.payload) return;
@@ -388,6 +605,104 @@
     const next = Math.max(current, normalizeOperationUpdatedAt(nextCursorMs, 0));
     writeSyncMeta({ [LIST_SYNC_CURSOR_META_KEY]: next });
     return next;
+  }
+
+  function hasSectorMigrationCompleted() {
+    const meta = readSyncMeta();
+    return normalizeOperationUpdatedAt(meta?.[LIST_SYNC_MIGRATED_META_KEY], 0) > 0;
+  }
+
+  function listOperationsFromSnapshot(snapshot, nowMs = Date.now()) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return [];
+    const operations = [];
+    MERGEABLE_LIST_KEYS.forEach((listKey) => {
+      const sourceRaw = snapshot?.localStorage?.[listKey];
+      const snapshotList = readJsonArray(sourceRaw);
+      if (!snapshotList.length) return;
+      const built = buildListOperationsFromRaw(listKey, '[]', JSON.stringify(snapshotList), nowMs);
+      operations.push(...built);
+    });
+    return operations;
+  }
+
+  async function readFirebaseBackupSnapshot(user) {
+    if (!modules?.getDoc || !modules?.doc || !firestore || !user?.uid) return null;
+    try {
+      const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
+      const data = docSnap.data() || {};
+      const snapshot = data.cloudBackup?.snapshot || null;
+      return snapshot && snapshot.schema === 'bilm-backup-v1' ? snapshot : null;
+    } catch (error) {
+      console.warn('Firebase backup snapshot read failed:', error);
+      return null;
+    }
+  }
+
+  async function ensureSectorBootstrapForUser(user) {
+    if (!user || transferApiDisabled || !isSyncEnabled()) return false;
+    if (hasSectorMigrationCompleted()) return false;
+
+    const userId = getTransferUserId(user);
+    let existingState = null;
+    try {
+      const seedPull = await pullListOperationsFromTransferApi(user, userId, 0, 1);
+      existingState = seedPull?.state || null;
+      if (Number(existingState?.migratedAtMs || 0) > 0 || (seedPull?.operations?.length || 0) > 0) {
+        writeSyncMeta({
+          [LIST_SYNC_MIGRATED_META_KEY]: Number(existingState?.migratedAtMs || Date.now()) || Date.now()
+        });
+        return false;
+      }
+    } catch (error) {
+      console.warn('Sector bootstrap preflight failed:', error);
+      return false;
+    }
+
+    const nowMs = Date.now();
+    let migrationSource = 'local_fallback';
+    let operations = [];
+    try {
+      const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
+      if (transferSnapshot) {
+        operations = listOperationsFromSnapshot(transferSnapshot, nowMs);
+        migrationSource = 'd1_snapshot';
+      } else {
+        const firebaseSnapshot = await readFirebaseBackupSnapshot(user);
+        if (firebaseSnapshot) {
+          operations = listOperationsFromSnapshot(firebaseSnapshot, nowMs);
+          migrationSource = 'firebase_snapshot';
+        }
+      }
+    } catch (error) {
+      console.warn('Cloud snapshot bootstrap source unavailable, using local fallback:', error);
+    }
+
+    if (!operations.length) {
+      operations = listOperationsFromSnapshot(collectBackupData(), nowMs);
+      migrationSource = 'local_fallback';
+    }
+
+    try {
+      const response = await bootstrapSectorOperationsToTransferApi(user, userId, operations, migrationSource);
+      if (response?.ok) {
+        writeSyncMeta({
+          [LIST_SYNC_MIGRATED_META_KEY]: Number(response?.state?.migratedAtMs || Date.now()) || Date.now()
+        });
+        if (Number(response?.cursorMs || 0) > 0) setListSyncCursorMs(response.cursorMs);
+        return true;
+      }
+    } catch (error) {
+      emitSyncIssue({
+        scope: 'bootstrap',
+        code: error?.code || error?.error || 'sector_bootstrap_failed',
+        message: error?.message || 'Sector bootstrap failed.',
+        status: error?.status || null,
+        retryable: error?.retryable !== false,
+        requestId: error?.requestId || null
+      });
+      console.warn('Sector bootstrap failed:', error);
+    }
+    return false;
   }
 
   function mergeTombstoneMaps(...maps) {
@@ -765,11 +1080,50 @@
     }
 
     writeSyncMeta({ lastCloudPullAt: Date.now() });
+    emitListSyncApplied({
+      listKeys: [...grouped.keys()],
+      atMs: Date.now()
+    });
     return true;
+  }
+
+  function clearListSyncRetryTimer() {
+    if (listSyncRetryTimer) {
+      window.clearTimeout(listSyncRetryTimer);
+      listSyncRetryTimer = null;
+    }
+  }
+
+  function scheduleListSyncRetry(error, operations = []) {
+    clearListSyncRetryTimer();
+    listSyncRetryDelayMs = listSyncRetryDelayMs > 0
+      ? Math.min(60000, listSyncRetryDelayMs * 2)
+      : 1200;
+    const jitterMs = Math.floor(Math.random() * 450);
+    const nextDelay = listSyncRetryDelayMs + jitterMs;
+    const hasChatOperations = operations.some((operation) => String(operation?.listKey || '').trim() === 'bilm-shared-chat');
+    if (hasChatOperations) {
+      emitSyncIssue({
+        scope: 'chat',
+        listKey: 'bilm-shared-chat',
+        sectorKey: listKeyToSectorKey('bilm-shared-chat'),
+        code: error?.code || error?.error || 'chat_sync_failed',
+        message: error?.message || 'Chat sync failed. We will retry automatically.',
+        status: error?.status || null,
+        retryable: error?.retryable !== false,
+        requestId: error?.requestId || null
+      });
+    }
+    listSyncRetryTimer = window.setTimeout(() => {
+      flushPendingListOperationsToCloud('retry-backoff').catch((retryError) => {
+        console.warn('List sync retry failed:', retryError);
+      });
+    }, nextDelay);
   }
 
   function scheduleListSyncFlush(reason = 'list-mutation') {
     if (!isSyncEnabled()) return;
+    clearListSyncRetryTimer();
     clearTimeout(listSyncDebounceTimer);
     listSyncDebounceTimer = window.setTimeout(() => {
       flushPendingListOperationsToCloud(reason).catch((error) => {
@@ -809,7 +1163,12 @@
         lastListSyncPushAt: Date.now(),
         lastListSyncPushReason: reason
       });
+      listSyncRetryDelayMs = 0;
+      clearListSyncRetryTimer();
       return true;
+    } catch (error) {
+      scheduleListSyncRetry(error, operations);
+      throw error;
     } finally {
       pendingListSync = false;
     }
@@ -831,6 +1190,10 @@
       if (!response || !Array.isArray(response.operations)) break;
       const operations = response.operations;
       const cursorMs = normalizeOperationUpdatedAt(response.cursorMs, sinceMs);
+      const migratedAtMs = normalizeOperationUpdatedAt(response?.state?.migratedAtMs, 0);
+      if (migratedAtMs > 0) {
+        writeSyncMeta({ [LIST_SYNC_MIGRATED_META_KEY]: migratedAtMs });
+      }
       if (operations.length > 0) {
         const didApply = applyListOperationsToLocalStorage(operations);
         applied = applied || didApply;
@@ -852,16 +1215,10 @@
       flushPendingListOperationsToCloud('visibility-hidden').catch((error) => {
         console.warn('Visibility list sync push failed:', error);
       });
-      saveLocalSnapshotToCloud('visibility-hidden').catch((error) => {
-        console.warn('Visibility autosync save failed:', error);
-      });
     });
 
     window.addEventListener('pagehide', () => {
       flushPendingListOperationsToCloud('pagehide').catch(() => {
-        // best effort
-      });
-      saveLocalSnapshotToCloud('pagehide').catch(() => {
         // best effort
       });
     });
@@ -873,10 +1230,6 @@
     autosyncDebounceTimer = window.setTimeout(() => {
       flushPendingListOperationsToCloud(reason).catch((error) => {
         console.warn('Mutation list sync push failed:', error);
-      });
-      if (String(reason).startsWith('list-')) return;
-      saveLocalSnapshotToCloud(reason).catch((error) => {
-        console.warn('Mutation autosync save failed:', error);
       });
     }, 800);
   }
@@ -966,17 +1319,9 @@
     stopAutosyncLoop();
     ensureAutosyncFlushBindings();
     autosyncInterval = window.setInterval(() => {
-      if (!isSyncEnabled() || !auth?.currentUser || pendingAutosync) return;
+      if (!isSyncEnabled() || !auth?.currentUser) return;
       syncListsFromCloudNow().catch((error) => {
         console.warn('Autosync list pull failed:', error);
-      });
-      const snapshot = collectBackupData();
-      const signature = snapshotSignature(snapshot);
-      if (!signature || signature === lastLocalSnapshotSignature) return;
-      lastLocalSnapshotSignature = signature;
-      writeSyncMeta({ lastLocalChangeAt: Date.now() });
-      saveLocalSnapshotToCloud('interval').catch((error) => {
-        console.warn('Autosync interval save failed:', error);
       });
     }, AUTOSYNC_HEARTBEAT_MS);
   }
@@ -989,26 +1334,31 @@
   }
 
   async function syncFromCloudNow() {
+    await init();
+    const user = auth?.currentUser;
+    if (user && isSyncEnabled()) {
+      try {
+        await ensureSectorBootstrapForUser(user);
+      } catch (error) {
+        console.warn('Sector bootstrap check failed:', error);
+      }
+    }
+
     let listSyncApplied = false;
     try {
       listSyncApplied = await syncListsFromCloudNow();
     } catch (error) {
-      console.warn('Incremental list sync failed (continuing with snapshot sync):', error);
+      console.warn('Incremental list sync failed:', error);
+      emitSyncIssue({
+        scope: 'sync',
+        code: error?.code || error?.error || 'sector_pull_failed',
+        message: error?.message || 'Sector pull failed.',
+        status: error?.status || null,
+        retryable: error?.retryable !== false,
+        requestId: error?.requestId || null
+      });
     }
-
-    const snapshot = await api.getCloudSnapshot();
-    if (!snapshot) return listSyncApplied;
-    if (!shouldApplyRemoteSnapshot(snapshot)) {
-      const localSnapshot = collectBackupData();
-      const mergedSnapshot = mergeSnapshots(snapshot, localSnapshot);
-      if (mergedSnapshot) {
-        applyRemoteSnapshot(mergedSnapshot);
-        await api.saveCloudSnapshot(mergedSnapshot);
-      }
-      return listSyncApplied;
-    }
-    applyRemoteSnapshot(snapshot);
-    return true;
+    return listSyncApplied;
   }
 
   function emitCloudSnapshotEvent(event) {
@@ -1051,31 +1401,6 @@
       };
       snapshotListenerReady = true;
       emitCloudSnapshotEvent(event);
-
-      if (!isSyncEnabled() || event.hasPendingWrites || !event.snapshot) return;
-      const signature = snapshotSignature(event.snapshot);
-      if (!signature || signature === lastAppliedCloudSignature) return;
-
-      const localDeviceId = getOrCreateDeviceId();
-      const sourceDeviceId = String(event.snapshot?.meta?.deviceId || '').trim();
-      if (sourceDeviceId && sourceDeviceId === localDeviceId) {
-        lastAppliedCloudSignature = signature;
-        return;
-      }
-
-      if (!shouldApplyRemoteSnapshot(event.snapshot)) {
-        const localSnapshot = collectBackupData();
-        const mergedSnapshot = mergeSnapshots(event.snapshot, localSnapshot);
-        if (mergedSnapshot) {
-          applyRemoteSnapshot(mergedSnapshot);
-          api.saveCloudSnapshot(mergedSnapshot).catch((error) => {
-            console.warn('Listener merge save failed:', error);
-          });
-        }
-        return;
-      }
-      applyRemoteSnapshot(event.snapshot);
-      lastAppliedCloudSignature = signature;
     }, (error) => {
       console.warn('Cloud snapshot listener failed:', error);
     });
@@ -1394,8 +1719,19 @@
       if (lastCloudSnapshotEvent) callback(lastCloudSnapshotEvent);
       return () => cloudSubscribers.delete(callback);
     },
-    async saveCloudSnapshot(snapshot) {
+    onSyncIssue(callback) {
+      if (typeof callback !== 'function') return () => {};
+      syncIssueSubscribers.add(callback);
+      return () => syncIssueSubscribers.delete(callback);
+    },
+    onListSyncApplied(callback) {
+      if (typeof callback !== 'function') return () => {};
+      listSyncAppliedSubscribers.add(callback);
+      return () => listSyncAppliedSubscribers.delete(callback);
+    },
+    async saveCloudSnapshot(snapshot, options = {}) {
       const user = await requireAuth();
+      const mirrorToFirebase = options?.mirrorToFirebase !== false;
       const cloudSnapshot = await api.getCloudSnapshot();
       const mergedSnapshot = mergeSnapshots(cloudSnapshot, snapshot || null) || snapshot || null;
       const payload = {
@@ -1420,14 +1756,16 @@
         console.warn('Data API save failed (Firestore save will still proceed):', error);
       }
 
-      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
-        cloudBackup: {
-          schema: 'bilm-cloud-sync-v1',
-          updatedAt: modules.serverTimestamp(),
-          snapshot: payload,
-          transferApiMirrored: savedToTransferApi
-        }
-      }, { merge: true });
+      if (mirrorToFirebase && modules?.setDoc && modules?.doc && firestore) {
+        await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+          cloudBackup: {
+            schema: 'bilm-cloud-sync-v1',
+            updatedAt: modules.serverTimestamp(),
+            snapshot: payload,
+            transferApiMirrored: savedToTransferApi
+          }
+        }, { merge: true });
+      }
 
       writeSyncMeta({
         lastCloudPushAt: Date.now(),
@@ -1457,8 +1795,47 @@
       await init();
       return syncFromCloudNow();
     },
+    async flushSyncNow(reason = 'manual') {
+      return flushPendingListOperationsToCloud(reason);
+    },
+    async pushSectorOperationsNow(operations = [], reason = 'manual') {
+      await init();
+      const user = await requireAuth();
+      const userId = getTransferUserId(user);
+      const normalizedListOperations = (Array.isArray(operations) ? operations : [])
+        .map((operation) => {
+          if (operation?.listKey) {
+            const listKey = String(operation.listKey || '').trim();
+            const itemKey = String(operation.itemKey || '').trim();
+            if (!listKey || !itemKey) return null;
+            return {
+              listKey,
+              itemKey,
+              deleted: operation?.deleted === true,
+              updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs),
+              payload: operation?.deleted === true
+                ? undefined
+                : normalizeListOperationPayload(operation?.payload, normalizeOperationUpdatedAt(operation?.updatedAtMs))
+            };
+          }
+          return toListOperation(operation);
+        })
+        .filter(Boolean);
+      if (!normalizedListOperations.length) {
+        return { ok: true, processed: 0, cursorMs: getListSyncCursorMs() };
+      }
+      const response = await pushListOperationsToTransferApi(user, userId, normalizedListOperations);
+      const maxUpdatedAt = normalizedListOperations.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0);
+      const cursorMs = Math.max(normalizeOperationUpdatedAt(response?.cursorMs, 0), maxUpdatedAt);
+      if (cursorMs > 0) setListSyncCursorMs(cursorMs);
+      writeSyncMeta({
+        lastListSyncPushAt: Date.now(),
+        lastListSyncPushReason: reason
+      });
+      return response;
+    },
     async scheduleCloudSave(reason = 'manual') {
-      return saveLocalSnapshotToCloud(reason);
+      return flushPendingListOperationsToCloud(reason);
     }
   };
   Object.defineProperty(window, 'bilmAuthModules', {

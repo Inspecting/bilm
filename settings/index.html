@@ -914,8 +914,12 @@
       }
       return false;
     }
+    if (reason === 'auto') {
+      await window.bilmAuth.flushSyncNow?.('settings-auto');
+      return true;
+    }
     const snapshot = collectBackupData();
-    await window.bilmAuth.saveCloudSnapshot(snapshot);
+    await window.bilmAuth.saveCloudSnapshot(snapshot, { mirrorToFirebase: true });
     lastUploadedSignature = snapshotSignature(snapshot);
     if (reason !== 'auto') cloudStatus.textContent = 'Save complete. Local data uploaded.';
     return true;
@@ -1411,7 +1415,7 @@
     if (!isSyncEnabled() || applyingRemoteSync) return;
     try {
       const user = window.bilmAuth?.getCurrentUser?.();
-      if (user) window.bilmAuth.saveCloudSnapshot(collectBackupData());
+      if (user) window.bilmAuth.flushSyncNow?.('settings-pagehide');
     } catch {
       // no-op best effort
     }

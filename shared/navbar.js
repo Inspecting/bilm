@@ -99,9 +99,9 @@ function loadAuthScript() {
   let chatRemoteMessages = [];
   let chatPendingMessages = [];
   let authApiInstance = null;
-  let chatCloudSaveTimer = null;
-  const CHAT_CLOUD_SAVE_DEBOUNCE_MS = 250;
+  let chatRetryTimer = null;
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
+  const CHAT_MAX_RETRY_DELAY_MS = 30000;
 
 
   function setChatNotice(message) {
@@ -147,22 +147,154 @@ function loadAuthScript() {
     const normalized = normalizeChatMessages(messages).slice(-120);
     storage.setJSON(CHAT_STORAGE_KEY, normalized);
     chatRemoteMessages = normalized;
-    scheduleChatCloudSave();
-  }
-
-  function scheduleChatCloudSave() {
-    if (!authApiInstance || !chatCurrentUser || typeof authApiInstance.scheduleCloudSave !== 'function') return;
-    window.clearTimeout(chatCloudSaveTimer);
-    chatCloudSaveTimer = window.setTimeout(() => {
-      authApiInstance.scheduleCloudSave('manual').catch((error) => {
-        console.warn('Shared chat cloud save failed:', error);
-      });
-    }, CHAT_CLOUD_SAVE_DEBOUNCE_MS);
   }
 
   function refreshChatMessages() {
     chatRemoteMessages = loadStoredChatMessages();
     renderChatMessages(composeVisibleChatMessages());
+  }
+
+  function getChatSyncErrorMessage(errorLike) {
+    const code = String(errorLike?.code || errorLike?.error || '').toLowerCase();
+    if (code === 'token_expired') return 'Session expired. Please sign in again.';
+    if (code === 'missing_token' || code === 'forbidden' || code === 'invalid_token') return 'Not authorized. Please sign in again.';
+    if (code === 'chat_message_too_large') return 'Message is too long (max 2000 characters).';
+    if (code === 'chat_rate_limited') return 'Chat is rate limited right now. Retrying soon.';
+    if (code === 'chat_payload_invalid') return 'Message format is invalid.';
+    if (errorLike?.status >= 500) return 'Chat server is having trouble. Retrying...';
+    if (errorLike?.retryable === false) return String(errorLike?.message || 'Chat sync failed.');
+    return String(errorLike?.message || 'Network issue while sending chat. Retrying...');
+  }
+
+  function setPendingChat(nextPending) {
+    const pendingId = String(nextPending?.id || '').trim();
+    if (!pendingId) return;
+    let replaced = false;
+    chatPendingMessages = chatPendingMessages.map((entry) => {
+      if (entry.id !== pendingId) return entry;
+      replaced = true;
+      return { ...entry, ...nextPending };
+    });
+    if (!replaced) {
+      chatPendingMessages.push({ ...nextPending });
+    }
+  }
+
+  function removePendingChat(pendingId) {
+    chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== pendingId);
+  }
+
+  function schedulePendingChatRetry() {
+    if (chatRetryTimer) return;
+    const nextPending = chatPendingMessages.find((entry) => entry.pending && entry.failed && entry.retryable !== false);
+    if (!nextPending) return;
+    const delayMs = Math.min(CHAT_MAX_RETRY_DELAY_MS, Math.max(1200, Number(nextPending.retryDelayMs || 1200)));
+    chatRetryTimer = window.setTimeout(() => {
+      chatRetryTimer = null;
+      attemptSendPendingChat(nextPending.id).catch((error) => {
+        console.warn('Pending chat retry failed:', error);
+      });
+    }, delayMs);
+  }
+
+  async function pushChatOperation(entry) {
+    if (!authApiInstance || typeof authApiInstance.pushSectorOperationsNow !== 'function') {
+      const fallbackError = new Error('Chat sync API is unavailable.');
+      fallbackError.code = 'chat_api_unavailable';
+      fallbackError.retryable = true;
+      throw fallbackError;
+    }
+
+    const itemKey = `chat:${entry.id}`;
+    await authApiInstance.pushSectorOperationsNow([{
+      sectorKey: 'chat_messages',
+      itemKey,
+      deleted: false,
+      updatedAtMs: Number(entry.createdAtMs || Date.now()) || Date.now(),
+      payload: {
+        id: entry.id,
+        key: itemKey,
+        text: String(entry.text || ''),
+        author: String(entry.author || 'Account'),
+        authorUid: String(entry.authorUid || chatCurrentUser?.uid || 'local'),
+        createdAtMs: Number(entry.createdAtMs || Date.now()) || Date.now(),
+        updatedAt: Number(entry.createdAtMs || Date.now()) || Date.now()
+      }
+    }], 'chat-send');
+  }
+
+  async function attemptSendPendingChat(pendingId) {
+    const pendingEntry = chatPendingMessages.find((entry) => entry.id === pendingId);
+    if (!pendingEntry) return false;
+
+    setPendingChat({
+      ...pendingEntry,
+      pending: true,
+      failed: false,
+      errorMessage: '',
+      attemptCount: Number(pendingEntry.attemptCount || 0) + 1
+    });
+    renderChatMessages(composeVisibleChatMessages());
+
+    try {
+      await pushChatOperation(pendingEntry);
+      const current = loadStoredChatMessages();
+      const withoutDupe = current.filter((message) => String(message?.id || '').trim() !== pendingEntry.id);
+      withoutDupe.push({
+        id: pendingEntry.id,
+        key: `chat:${pendingEntry.id}`,
+        text: pendingEntry.text,
+        author: pendingEntry.author,
+        authorUid: pendingEntry.authorUid,
+        createdAtMs: pendingEntry.createdAtMs,
+        updatedAt: pendingEntry.createdAtMs
+      });
+      saveStoredChatMessages(withoutDupe);
+      removePendingChat(pendingEntry.id);
+      renderChatMessages(composeVisibleChatMessages());
+      return true;
+    } catch (error) {
+      const retryable = error?.retryable !== false;
+      const nextDelay = Math.min(
+        CHAT_MAX_RETRY_DELAY_MS,
+        Math.max(1200, Number(pendingEntry.retryDelayMs || 1200) * 2)
+      );
+      setPendingChat({
+        ...pendingEntry,
+        pending: true,
+        failed: true,
+        retryable,
+        retryDelayMs: nextDelay,
+        errorMessage: getChatSyncErrorMessage(error)
+      });
+      renderChatMessages(composeVisibleChatMessages());
+      if (retryable) schedulePendingChatRetry();
+      return false;
+    }
+  }
+
+  function handleChatSyncIssue(issue) {
+    if (!issue) return;
+    const listKey = String(issue.listKey || '').trim();
+    const sectorKey = String(issue.sectorKey || '').trim();
+    if (listKey && listKey !== CHAT_STORAGE_KEY) return;
+    if (sectorKey && sectorKey !== 'chat_messages') return;
+    if (!chatPendingMessages.some((entry) => entry.pending)) return;
+
+    const retryable = issue.retryable !== false;
+    const message = getChatSyncErrorMessage(issue);
+    chatPendingMessages = chatPendingMessages.map((entry) => {
+      if (!entry.pending) return entry;
+      return {
+        ...entry,
+        failed: true,
+        retryable,
+        errorMessage: message,
+        retryDelayMs: Math.min(CHAT_MAX_RETRY_DELAY_MS, Math.max(1200, Number(entry.retryDelayMs || 1200) * 2))
+      };
+    });
+    renderChatMessages(composeVisibleChatMessages());
+    if (retryable) schedulePendingChatRetry();
   }
 
   function setChatRefreshCooldown() {
@@ -201,10 +333,21 @@ function loadAuthScript() {
 
       const del = document.createElement('button');
       del.type = 'button';
-      del.textContent = entry.pending ? 'Pending' : 'Delete';
-      del.disabled = Boolean(entry.pending);
+      if (entry.pending && entry.failed) {
+        del.textContent = entry.retryable === false ? 'Failed' : 'Retry';
+      } else if (entry.pending) {
+        del.textContent = 'Sending';
+      } else {
+        del.textContent = 'Delete';
+      }
+      del.disabled = Boolean(entry.pending && !entry.failed);
       del.addEventListener('click', async () => {
-        if (entry.pending) return;
+        if (entry.pending) {
+          if (entry.failed && entry.retryable !== false) {
+            await attemptSendPendingChat(entry.id);
+          }
+          return;
+        }
         try {
           const current = loadStoredChatMessages();
           saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
@@ -220,6 +363,12 @@ function loadAuthScript() {
       body.textContent = String(entry.text || '');
 
       row.append(meta, body);
+      if (entry.pending && entry.failed && entry.errorMessage) {
+        const errorText = document.createElement('p');
+        errorText.className = 'shared-chat-empty';
+        errorText.textContent = `Failed: ${entry.errorMessage}`;
+        row.appendChild(errorText);
+      }
       chatMessages.appendChild(row);
     });
 
@@ -438,6 +587,9 @@ function loadAuthScript() {
 
     const syncAccountButton = (user) => {
       chatCurrentUser = user || null;
+      if (chatCurrentUser && chatPendingMessages.some((entry) => entry.pending && entry.failed && entry.retryable !== false)) {
+        schedulePendingChatRetry();
+      }
 
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
@@ -449,8 +601,13 @@ function loadAuthScript() {
 
     syncAccountButton(authApi.getCurrentUser());
     authApi.onAuthStateChanged(syncAccountButton);
-    authApi.onCloudSnapshotChanged(() => {
+    authApi.onListSyncApplied?.((event) => {
+      const listKeys = Array.isArray(event?.listKeys) ? event.listKeys : [];
+      if (!listKeys.includes(CHAT_STORAGE_KEY)) return;
       refreshChatMessages();
+    });
+    authApi.onSyncIssue?.((issue) => {
+      handleChatSyncIssue(issue);
     });
     window.addEventListener('storage', (event) => {
       if (event.key !== CHAT_STORAGE_KEY) return;
@@ -458,9 +615,14 @@ function loadAuthScript() {
     });
 
     if (chatRefreshBtn) {
-      chatRefreshBtn.addEventListener('click', () => {
+      chatRefreshBtn.addEventListener('click', async () => {
         if (Date.now() < chatRefreshCooldownUntil) return;
         chatRefreshBtn.setAttribute('aria-busy', 'true');
+        try {
+          await authApi.syncFromCloudNow?.();
+        } catch (error) {
+          console.warn('Manual chat sync refresh failed:', error);
+        }
         refreshChatMessages();
         setChatRefreshCooldown();
       });
@@ -471,43 +633,32 @@ function loadAuthScript() {
         event.preventDefault();
         const text = chatInput.value.trim();
         if (!text) return;
+        if (!chatCurrentUser) {
+          setChatNotice('Sign in to sync and send chat messages.');
+          return;
+        }
 
         const author = chatCurrentUser?.displayName || chatCurrentUser?.email || 'Guest';
         const authorUid = chatCurrentUser?.uid || 'local';
 
-        const optimisticId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const optimisticId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const optimisticMessage = {
           id: optimisticId,
           pending: true,
+          failed: false,
+          retryable: true,
+          retryDelayMs: 1200,
+          attemptCount: 0,
           text,
           author,
           authorUid,
           createdAtMs: Date.now()
         };
 
-        chatPendingMessages.push(optimisticMessage);
+        setPendingChat(optimisticMessage);
         renderChatMessages(composeVisibleChatMessages());
         chatInput.value = '';
-
-        try {
-          const current = loadStoredChatMessages();
-          current.push({
-            id: `msg-${optimisticMessage.createdAtMs}-${Math.random().toString(36).slice(2, 8)}`,
-            key: `chat:${optimisticMessage.createdAtMs}:${Math.random().toString(36).slice(2, 8)}`,
-            text,
-            author: optimisticMessage.author,
-            authorUid,
-            createdAtMs: optimisticMessage.createdAtMs,
-            updatedAt: optimisticMessage.createdAtMs
-          });
-          saveStoredChatMessages(current);
-          chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
-          renderChatMessages(composeVisibleChatMessages());
-        } catch (error) {
-          chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== optimisticId);
-          renderChatMessages(composeVisibleChatMessages());
-          console.warn('Failed to send shared chat message:', error);
-        }
+        await attemptSendPendingChat(optimisticId);
       });
     }
   }).catch(() => {
