@@ -37,7 +37,17 @@
         </button>
         <button type="button" id="desktopSearchClearBtn" class="search-clear" aria-label="Clear search input" hidden>×</button>
       </form>
-      <button type="button" id="navbarAccountBtn" class="account-btn" aria-label="Account">Account</button>
+      <div class="account-menu-wrap" id="navbarAccountMenuWrap">
+        <button type="button" id="navbarAccountBtn" class="account-btn" aria-label="Account" aria-haspopup="menu" aria-expanded="false">Account</button>
+        <div class="account-menu" id="navbarAccountMenu" role="menu" hidden>
+          <button type="button" id="navbarAccountLoginBtn" class="account-menu-item" role="menuitem">Log In</button>
+          <button type="button" id="navbarAccountSignUpBtn" class="account-menu-item" role="menuitem">Sign Up</button>
+          <button type="button" id="navbarAccountSettingsBtn" class="account-menu-item" role="menuitem">Account Settings</button>
+          <button type="button" id="navbarAccountManualSyncBtn" class="account-menu-item" role="menuitem">Manual Sync</button>
+          <button type="button" id="navbarAccountSignOutBtn" class="account-menu-item" role="menuitem" hidden>Sign Out</button>
+          <p id="navbarAccountMenuHint" class="account-menu-hint">Log in for cloud sync.</p>
+        </div>
+      </div>
     </div>
   </nav>
 </header>
@@ -100,6 +110,23 @@
 
     <!-- Clear Search Input Button -->
     <button id="mobileSearchCloseBtn" aria-label="Clear search input">×</button>
+  </div>
+</div>
+
+<div id="navbarAuthModal" class="navbar-auth-modal" hidden>
+  <div class="navbar-auth-panel" role="dialog" aria-modal="true" aria-labelledby="navbarAuthTitle">
+    <button type="button" id="navbarAuthCloseBtn" class="navbar-auth-close" aria-label="Close account modal">×</button>
+    <h3 id="navbarAuthTitle">Log In</h3>
+    <p id="navbarAuthHint">Use your email and password.</p>
+    <form id="navbarAuthForm" class="navbar-auth-form" autocomplete="on">
+      <input id="navbarAuthEmail" name="email" type="email" placeholder="Email" autocomplete="email" required />
+      <input id="navbarAuthPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
+      <p id="navbarAuthStatus" class="navbar-auth-status" aria-live="polite"></p>
+      <div class="navbar-auth-actions">
+        <button type="submit" id="navbarAuthSubmitBtn">Continue</button>
+        <button type="button" id="navbarAuthSwitchBtn" class="navbar-auth-secondary">Create account</button>
+      </div>
+    </form>
   </div>
 </div>
 

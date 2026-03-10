@@ -669,6 +669,7 @@
   </div>
 </div>
 
+<script src="../shared/toast.js" defer></script>
 <script src="../shared/auth.js" defer></script>
 <script src="../shared/navbar.js" defer></script>
 
@@ -758,6 +759,10 @@
   let syncDebounceTimer = null;
   let applyingRemoteSync = false;
   let lastCloudAppliedAt = 0;
+
+  function showToast(message, tone = 'info', duration = 1000) {
+    window.bilmToast?.show?.(message, { tone, duration });
+  }
   let lastUploadedSignature = '';
 
   function shouldIncludeStorageKey(key, allowlist) {
@@ -1355,6 +1360,7 @@
     const raw = await file.text();
     dataCodeField.value = raw;
     backupStatus.textContent = `Loaded ${file.name}. We'll auto-salvage spacing and extra text on import.`;
+    showToast('Upload successful.', 'success');
     importFileInput.value = '';
   });
 
@@ -1363,8 +1369,10 @@
       const clipboardText = await navigator.clipboard.readText();
       dataCodeField.value = clipboardText;
       backupStatus.textContent = 'Backup JSON pasted from clipboard.';
+      showToast('Pasted from clipboard.', 'success');
     } catch (err) {
       backupStatus.textContent = 'Clipboard read blocked. Paste manually into the textbox.';
+      showToast('Clipboard read blocked.', 'error');
     }
   });
 
@@ -1376,8 +1384,10 @@
     try {
       await navigator.clipboard.writeText(dataCodeField.value);
       backupStatus.textContent = 'Backup JSON copied to clipboard.';
+      showToast('Copied.', 'success');
     } catch (err) {
       backupStatus.textContent = 'Clipboard blocked. Manually copy from the textbox.';
+      showToast('Copy failed.', 'error');
     }
   });
 
@@ -1392,6 +1402,7 @@
     link.remove();
     URL.revokeObjectURL(url);
     backupStatus.textContent = 'Backup data downloaded.';
+    showToast('Download started.', 'success');
   });
 
   applyImportBtn?.addEventListener('click', () => {
@@ -1409,17 +1420,20 @@
 
   cloudExportBtn?.addEventListener('click', async () => {
     try {
+      showToast('Exporting...', 'info', 0);
       await runSaveNow('manual');
       backupStatus.textContent = 'Export successful.';
-      alert('Export successful.');
       backupStatus.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
+      showToast('Exported successfully.', 'success');
     } catch (err) {
       backupStatus.textContent = `Cloud export failed: ${err.message}`;
+      showToast('Export failed.', 'error');
     }
   });
 
   cloudImportBtn?.addEventListener('click', async () => {
     try {
+      showToast('Importing from cloud...', 'info', 0);
       await ensureAuthReady();
       const user = window.bilmAuth?.getCurrentUser?.();
       if (!user) {
@@ -1442,8 +1456,10 @@
         mode: 'data-api-first-fallback-firestore'
       });
       backupStatus.textContent = `Cloud backup loaded from ${sourceLabel}. Review the JSON data, then click Apply Import when ready.`;
+      showToast(`Cloud import ready (${sourceLabel}).`, 'success');
     } catch (err) {
       backupStatus.textContent = `Cloud import failed: ${err.message}`;
+      showToast('Cloud import failed.', 'error');
     }
   });
 

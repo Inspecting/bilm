@@ -700,7 +700,7 @@ function buildTvUrl(server) {
         ? (
           canUseLocalSePlayerRoute()
             ? `${appWithBase('/se_player.php')}?video_id=${encodeURIComponent(tmdbId)}&tmdb=1&s=${encodeURIComponent(season)}&e=${encodeURIComponent(episode)}`
-            : `https://embedmaster.link/830gqxyfskjlsnbq/tv/${tmdbId}/${season}/${episode}`
+            : ''
         )
         : '';
     case 'vidsrc': {
@@ -740,7 +740,7 @@ function resolveTvEmbedRequest() {
   let url = buildTvUrl(server);
 
   if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
-    setPlayerStatus('SuperEmbed file route is not available on this host. Using EmbedMaster direct mode.', 'warning');
+    setPlayerStatus('SuperEmbed route is not available on this host. Choose another server manually.', 'warning');
   }
 
   if (!url && server === 'godrive' && !tmdbId) {
@@ -757,7 +757,7 @@ function resolveTvEmbedRequest() {
     setPlayerStatus('GoDrive requires TMDB ID here. Switched to VidSrc for this episode.', 'warning');
   }
 
-  if (!url) {
+  if (!url && server !== 'superembed') {
     const fallbackServer = normalizeServer('vidsrc');
     if (fallbackServer !== server) {
       setActiveServer(fallbackServer);
@@ -822,21 +822,6 @@ async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
     return;
   }
 
-  if (server === 'superembed') {
-    const fallbackServer = normalizeServer('embedmaster');
-    if (fallbackServer !== server) {
-      console.warn('[player] superembed route failed; switching server', {
-        context: 'tv',
-        failedServer: server,
-        fallbackServer
-      });
-      setActiveServer(fallbackServer);
-      setPlayerStatus('SuperEmbed route could not load. Switched to EmbedMaster.', 'warning');
-      updateIframe();
-      return;
-    }
-  }
-
   setPlayerStatus(
     `We couldn't load ${serverLabel}. Retry or choose another server.`,
     'error'
@@ -865,7 +850,11 @@ function updateIframe() {
   if (!url) {
     iframe.removeAttribute('sandbox');
     iframe.src = '';
-    setPlayerStatus('No playable URL for this episode on the selected server.', 'error');
+    if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
+      setPlayerStatus('SuperEmbed route is not available on this host. Choose another server manually.', 'error');
+    } else {
+      setPlayerStatus('No playable URL for this episode on the selected server.', 'error');
+    }
     return;
   }
 

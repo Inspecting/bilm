@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearOnLogoutToggle = document.getElementById('clearOnLogoutToggle');
   const syncToggle = document.getElementById('syncToggle');
   const syncStatusText = document.getElementById('syncStatusText');
+  const lastSyncText = document.getElementById('lastSyncText');
 
   let pendingImportPayload = null;
   let activeImportSlot = null;
@@ -86,8 +87,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const importSlots = { one: null, two: null };
   const CLEAR_ON_LOGOUT_KEY = 'bilm-clear-local-on-logout';
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
+  const SYNC_META_KEY = 'bilm-sync-meta';
   const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^tmdb-/, /^theme-/];
   const BACKUP_SESSION_ALLOWLIST = [/^bilm-/, /^tmdb-/];
+
+  function showToast(message, tone = 'info', duration = 1000) {
+    window.bilmToast?.show?.(message, { tone, duration });
+  }
 
   function openModal(modal) {
     modal?.classList.add('open');
@@ -293,6 +299,41 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'Live sync is on for this device.'
         : 'Live sync is paused on this device.';
     }
+    refreshLastSyncText();
+  }
+
+  function readSyncMeta() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SYNC_META_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function formatSyncAt(atMs) {
+    const value = Number(atMs || 0);
+    if (!Number.isFinite(value) || value <= 0) return 'Never';
+    try {
+      return new Date(value).toLocaleString();
+    } catch {
+      return 'Never';
+    }
+  }
+
+  function getLatestSuccessfulSyncAt(meta = {}) {
+    return Math.max(
+      Number(meta?.lastCloudPullAt || 0) || 0,
+      Number(meta?.lastListSyncPushAt || 0) || 0,
+      Number(meta?.lastCloudPushAt || 0) || 0
+    );
+  }
+
+  function refreshLastSyncText() {
+    if (!lastSyncText) return;
+    const syncMeta = readSyncMeta();
+    const latestAt = getLatestSuccessfulSyncAt(syncMeta);
+    lastSyncText.textContent = `Last successful sync: ${formatSyncAt(latestAt)}`;
   }
 
   async function requestCloudLoginPermission() {
@@ -508,8 +549,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await navigator.clipboard.writeText(dataCodeField.value);
       transferStatusText.textContent = 'Backup JSON copied.';
+      showToast('Copied.', 'success');
     } catch (error) {
       transferStatusText.textContent = 'Clipboard blocked. Copy manually from the text box.';
+      showToast('Copy failed.', 'error');
     }
   });
 
@@ -524,6 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
     link.remove();
     URL.revokeObjectURL(url);
     transferStatusText.textContent = 'Export downloaded.';
+    showToast('Download started.', 'success');
   });
 
   uploadImportBtn?.addEventListener('click', () => {
@@ -535,6 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!file) return;
     dataCodeField.value = await file.text();
     transferStatusText.textContent = `Loaded ${file.name}. We'll auto-salvage spacing and extra text on import.`;
+    showToast('Upload successful.', 'success');
     importFileInput.value = '';
   });
 
@@ -543,25 +588,31 @@ document.addEventListener('DOMContentLoaded', () => {
       const clipboardText = await navigator.clipboard.readText();
       dataCodeField.value = clipboardText;
       transferStatusText.textContent = 'Backup JSON pasted from clipboard.';
+      showToast('Pasted from clipboard.', 'success');
     } catch (error) {
       transferStatusText.textContent = 'Clipboard read blocked. Paste manually into the text box.';
+      showToast('Clipboard read blocked.', 'error');
     }
   });
 
   cloudExportBtn?.addEventListener('click', async () => {
     try {
+      showToast('Exporting...', 'info', 0);
       const canProceed = await requestCloudLoginPermission();
       if (!canProceed) throw new Error('Cloud export cancelled until you choose to log in.');
       await window.bilmAuth.saveCloudSnapshot(collectBackupData());
-      alert('Export successful.');
       transferStatusText.textContent = 'Cloud export successful. Your latest local data is now saved to your account.';
+      refreshLastSyncText();
+      showToast('Exported successfully.', 'success');
     } catch (error) {
       transferStatusText.textContent = `Cloud export failed: ${error.message}`;
+      showToast('Export failed.', 'error');
     }
   });
 
   cloudImportBtn?.addEventListener('click', async () => {
     try {
+      showToast('Importing from cloud...', 'info', 0);
       const canProceed = await requestCloudLoginPermission();
       if (!canProceed) throw new Error('Cloud import cancelled until you choose to log in.');
       const result = await window.bilmAuth.getCloudSnapshot({
@@ -579,8 +630,10 @@ document.addEventListener('DOMContentLoaded', () => {
         mode: 'data-api-first-fallback-firestore'
       });
       transferStatusText.textContent = `Cloud backup loaded from ${sourceLabel}. Review the JSON data, then select Apply Import when ready.`;
+      showToast(`Cloud import ready (${sourceLabel}).`, 'success');
     } catch (error) {
       transferStatusText.textContent = `Cloud import failed: ${error.message}`;
+      showToast('Cloud import failed.', 'error');
     }
   });
 
@@ -729,6 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await ensureAuthReady();
       if (window.bilmAuth.getCurrentUser()) {
         await window.bilmAuth.syncFromCloudNow();
+        refreshLastSyncText();
       }
     } catch (error) {
       statusText.textContent = `Sync refresh failed: ${error.message}`;
@@ -748,15 +802,28 @@ document.addEventListener('DOMContentLoaded', () => {
   toggleLoginPasswordBtn?.addEventListener('click', () => setPasswordVisibility(loginPassword, toggleLoginPasswordBtn));
   toggleSignUpPasswordBtn?.addEventListener('click', () => setPasswordVisibility(signUpPassword, toggleSignUpPasswordBtn));
 
+  window.addEventListener('storage', (event) => {
+    if (event.key !== SYNC_META_KEY) return;
+    refreshLastSyncText();
+  });
+
   (async () => {
     try {
       await ensureAuthReady();
       if (clearOnLogoutToggle) clearOnLogoutToggle.checked = getClearOnLogoutSetting();
       setSyncEnabled(isSyncEnabled());
+      refreshLastSyncText();
       updateMergeUi();
       updateAccountUi(window.bilmAuth.getCurrentUser());
       window.bilmAuth.onAuthStateChanged((user) => {
         updateAccountUi(user);
+        refreshLastSyncText();
+      });
+      window.bilmAuth.onListSyncApplied?.(() => {
+        refreshLastSyncText();
+      });
+      window.bilmAuth.onCloudSnapshotChanged?.(() => {
+        refreshLastSyncText();
       });
     } catch (error) {
       accountStatusText.textContent = 'Account tools unavailable right now. Refresh and try again.';

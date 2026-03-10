@@ -51,6 +51,30 @@ function loadAuthScript() {
   });
 }
 
+function loadToastScript() {
+  return new Promise((resolve, reject) => {
+    if (window.bilmToast?.show) {
+      resolve(window.bilmToast);
+      return;
+    }
+    const src = withBase('/shared/toast.js');
+    const existing = document.querySelector(`script[data-bilm-toast="${src}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.bilmToast), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load toast module.')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.defer = true;
+    script.dataset.bilmToast = src;
+    script.addEventListener('load', () => resolve(window.bilmToast), { once: true });
+    script.addEventListener('error', () => reject(new Error('Failed to load toast module.')), { once: true });
+    document.head.appendChild(script);
+  });
+}
+
 (async () => {
   const container = document.getElementById('navbar-placeholder') || document.getElementById('navbarContainer');
   if (!container) return;
@@ -83,6 +107,32 @@ function loadAuthScript() {
 
   const globalBanner = shadow.getElementById('globalBanner');
   const globalBannerCloseBtn = shadow.getElementById('globalBannerCloseBtn');
+  const accountMenuWrap = shadow.getElementById('navbarAccountMenuWrap');
+  const accountMenu = shadow.getElementById('navbarAccountMenu');
+  const accountLoginBtn = shadow.getElementById('navbarAccountLoginBtn');
+  const accountSignUpBtn = shadow.getElementById('navbarAccountSignUpBtn');
+  const accountSettingsBtn = shadow.getElementById('navbarAccountSettingsBtn');
+  const accountManualSyncBtn = shadow.getElementById('navbarAccountManualSyncBtn');
+  const accountSignOutBtn = shadow.getElementById('navbarAccountSignOutBtn');
+  const accountMenuHint = shadow.getElementById('navbarAccountMenuHint');
+  const authModal = shadow.getElementById('navbarAuthModal');
+  const authModalCloseBtn = shadow.getElementById('navbarAuthCloseBtn');
+  const authForm = shadow.getElementById('navbarAuthForm');
+  const authEmailInput = shadow.getElementById('navbarAuthEmail');
+  const authPasswordInput = shadow.getElementById('navbarAuthPassword');
+  const authStatus = shadow.getElementById('navbarAuthStatus');
+  const authSubmitBtn = shadow.getElementById('navbarAuthSubmitBtn');
+  const authSwitchBtn = shadow.getElementById('navbarAuthSwitchBtn');
+  const authTitle = shadow.getElementById('navbarAuthTitle');
+  const authHint = shadow.getElementById('navbarAuthHint');
+
+  loadToastScript().catch((error) => {
+    console.warn('Toast module unavailable:', error);
+  });
+
+  function showToast(message, tone = 'info', duration = 1000) {
+    window.bilmToast?.show?.(message, { tone, duration });
+  }
 
 
   const chatWidget = shadow.getElementById('sharedChatWidget');
@@ -97,6 +147,8 @@ function loadAuthScript() {
   const CHAT_BACKGROUND_POLL_MS = 10000;
   const CHAT_PAUSED_POLL_MS = 60000;
   const CHAT_MAX_MESSAGES = 20;
+  const CHAT_STICKY_BOTTOM_THRESHOLD_PX = 42;
+  const ACCOUNT_MANUAL_SYNC_COOLDOWN_MS = 5000;
   let chatRefreshCooldownUntil = 0;
   const chatMessages = shadow.getElementById('sharedChatMessages');
   let chatCurrentUser = null;
@@ -106,6 +158,9 @@ function loadAuthScript() {
   let chatRetryTimer = null;
   let chatLivePollTimer = null;
   let chatLivePollInFlight = false;
+  let accountManualSyncCooldownUntil = 0;
+  let accountManualSyncCooldownTimer = null;
+  let authDialogMode = 'login';
   const CHAT_STORAGE_KEY = 'bilm-shared-chat';
   const CHAT_MAX_RETRY_DELAY_MS = 30000;
 
@@ -247,7 +302,7 @@ function loadAuthScript() {
       errorMessage: '',
       attemptCount: Number(pendingEntry.attemptCount || 0) + 1
     });
-    renderChatMessages(composeVisibleChatMessages());
+    renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
 
     try {
       await pushChatOperation(pendingEntry);
@@ -264,7 +319,7 @@ function loadAuthScript() {
       });
       saveStoredChatMessages(withoutDupe);
       removePendingChat(pendingEntry.id);
-      renderChatMessages(composeVisibleChatMessages());
+      renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
       return true;
     } catch (error) {
       const retryable = error?.retryable !== false;
@@ -280,7 +335,7 @@ function loadAuthScript() {
         retryDelayMs: nextDelay,
         errorMessage: getChatSyncErrorMessage(error)
       });
-      renderChatMessages(composeVisibleChatMessages());
+      renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
       if (retryable) schedulePendingChatRetry();
       return false;
     }
@@ -322,14 +377,24 @@ function loadAuthScript() {
     }, CHAT_REFRESH_COOLDOWN_MS);
   }
 
-  function renderChatMessages(messages = []) {
+  function isChatNearBottom() {
+    if (!chatMessages) return true;
+    const distance = chatMessages.scrollHeight - (chatMessages.scrollTop + chatMessages.clientHeight);
+    return distance <= CHAT_STICKY_BOTTOM_THRESHOLD_PX;
+  }
+
+  function renderChatMessages(messages = [], options = {}) {
     if (!chatMessages) return;
+    const forceBottom = options?.forceBottom === true;
+    const shouldStickToBottom = forceBottom || isChatNearBottom();
+    const previousScrollTop = chatMessages.scrollTop;
     chatMessages.innerHTML = '';
     if (!messages.length) {
       const empty = document.createElement('p');
       empty.className = 'shared-chat-empty';
       empty.textContent = 'No messages yet.';
       chatMessages.appendChild(empty);
+      chatMessages.scrollTop = 0;
       return;
     }
 
@@ -385,7 +450,12 @@ function loadAuthScript() {
       chatMessages.appendChild(row);
     });
 
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    if (shouldStickToBottom) {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return;
+    }
+    const maxTop = Math.max(0, chatMessages.scrollHeight - chatMessages.clientHeight);
+    chatMessages.scrollTop = Math.max(0, Math.min(previousScrollTop, maxTop));
   }
 
   function toggleChatPanel(nextOpen) {
@@ -396,6 +466,7 @@ function loadAuthScript() {
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open && chatInput) chatInput.focus();
     if (open) {
+      renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
       triggerLiveChatPull('panel-open');
     }
     scheduleLiveChatPoll('panel-toggle');
@@ -648,6 +719,239 @@ function loadAuthScript() {
 
 
   const accountBtn = shadow.getElementById('navbarAccountBtn');
+  function closeAccountMenu() {
+    if (!accountMenu || !accountBtn) return;
+    accountMenu.hidden = true;
+    accountBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function openAccountMenu() {
+    if (!accountMenu || !accountBtn) return;
+    accountMenu.hidden = false;
+    accountBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function setAuthModalMode(mode = 'login') {
+    const normalized = mode === 'signup' ? 'signup' : 'login';
+    authDialogMode = normalized;
+    if (!authTitle || !authHint || !authSubmitBtn || !authSwitchBtn || !authPasswordInput) return;
+    if (normalized === 'signup') {
+      authTitle.textContent = 'Sign Up';
+      authHint.textContent = 'Create an account with your email and password.';
+      authSubmitBtn.textContent = 'Create Account';
+      authSwitchBtn.textContent = 'Already have an account?';
+      authPasswordInput.autocomplete = 'new-password';
+    } else {
+      authTitle.textContent = 'Log In';
+      authHint.textContent = 'Use your email and password.';
+      authSubmitBtn.textContent = 'Log In';
+      authSwitchBtn.textContent = 'Create account';
+      authPasswordInput.autocomplete = 'current-password';
+    }
+    if (authStatus) authStatus.textContent = '';
+  }
+
+  function openAuthModal(mode = 'login') {
+    if (!authModal) return;
+    setAuthModalMode(mode);
+    authModal.hidden = false;
+    if (authEmailInput) {
+      authEmailInput.focus();
+    }
+  }
+
+  function closeAuthModal() {
+    if (!authModal) return;
+    authModal.hidden = true;
+    if (authStatus) authStatus.textContent = '';
+    if (authPasswordInput) authPasswordInput.value = '';
+  }
+
+  function updateManualSyncCooldownUi() {
+    if (!accountManualSyncBtn) return;
+    const remainingMs = accountManualSyncCooldownUntil - Date.now();
+    if (remainingMs <= 0) {
+      accountManualSyncBtn.disabled = false;
+      accountManualSyncBtn.textContent = 'Manual Sync';
+      return;
+    }
+    const seconds = Math.ceil(remainingMs / 1000);
+    accountManualSyncBtn.disabled = true;
+    accountManualSyncBtn.textContent = `Manual Sync (${seconds}s)`;
+  }
+
+  function startManualSyncCooldown() {
+    accountManualSyncCooldownUntil = Date.now() + ACCOUNT_MANUAL_SYNC_COOLDOWN_MS;
+    if (accountManualSyncCooldownTimer) {
+      window.clearInterval(accountManualSyncCooldownTimer);
+      accountManualSyncCooldownTimer = null;
+    }
+    updateManualSyncCooldownUi();
+    accountManualSyncCooldownTimer = window.setInterval(() => {
+      if (Date.now() < accountManualSyncCooldownUntil) {
+        updateManualSyncCooldownUi();
+        return;
+      }
+      window.clearInterval(accountManualSyncCooldownTimer);
+      accountManualSyncCooldownTimer = null;
+      updateManualSyncCooldownUi();
+    }, 250);
+  }
+
+  async function runNavbarManualSync(authApi) {
+    if (!authApi) {
+      showToast('Sync services unavailable.', 'error');
+      return;
+    }
+    if (Date.now() < accountManualSyncCooldownUntil) return;
+    startManualSyncCooldown();
+    authApi.noteUserActivity?.('navbar-manual-sync');
+    if (!chatCurrentUser) {
+      if (accountMenuHint) accountMenuHint.textContent = 'Log in required for manual sync.';
+      showToast('Log in required.', 'error');
+      return;
+    }
+    showToast('Syncing...', 'info', 0);
+    try {
+      await authApi.syncFromCloudNow?.();
+      await authApi.flushSyncNow?.('navbar-manual-sync');
+      await authApi.pullChatNow?.({ reason: 'navbar-manual-sync', limit: 120 });
+      refreshChatMessages();
+      showToast('Sync complete.', 'success');
+    } catch (error) {
+      console.warn('Navbar manual sync failed:', error);
+      showToast('Manual sync failed.', 'error');
+    }
+  }
+
+  if (accountBtn) {
+    accountBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      authApiInstance?.noteUserActivity?.('account-menu-toggle');
+      const nextOpen = accountMenu?.hidden !== false;
+      if (nextOpen) {
+        openAccountMenu();
+      } else {
+        closeAccountMenu();
+      }
+    });
+  }
+
+  if (accountSettingsBtn) {
+    accountSettingsBtn.addEventListener('click', () => {
+      closeAccountMenu();
+      window.location.href = withBase('/settings/account/');
+    });
+  }
+
+  if (accountLoginBtn) {
+    accountLoginBtn.addEventListener('click', () => {
+      closeAccountMenu();
+      openAuthModal('login');
+    });
+  }
+
+  if (accountSignUpBtn) {
+    accountSignUpBtn.addEventListener('click', () => {
+      closeAccountMenu();
+      openAuthModal('signup');
+    });
+  }
+
+  if (accountManualSyncBtn) {
+    accountManualSyncBtn.addEventListener('click', async () => {
+      await runNavbarManualSync(authApiInstance);
+    });
+  }
+
+  if (accountSignOutBtn) {
+    accountSignOutBtn.addEventListener('click', async () => {
+      if (!authApiInstance) {
+        showToast('Sign out unavailable right now.', 'error');
+        return;
+      }
+      try {
+        await authApiInstance.signOut?.();
+        closeAccountMenu();
+        showToast('Signed out.', 'success');
+      } catch (error) {
+        console.warn('Navbar sign out failed:', error);
+        showToast('Sign out failed.', 'error');
+      }
+    });
+  }
+
+  if (authSwitchBtn) {
+    authSwitchBtn.addEventListener('click', () => {
+      setAuthModalMode(authDialogMode === 'login' ? 'signup' : 'login');
+    });
+  }
+
+  if (authModalCloseBtn) {
+    authModalCloseBtn.addEventListener('click', () => {
+      closeAuthModal();
+    });
+  }
+
+  if (authModal) {
+    authModal.addEventListener('click', (event) => {
+      if (event.target === authModal) {
+        closeAuthModal();
+      }
+    });
+  }
+
+  if (authForm) {
+    authForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!authApiInstance) {
+        if (authStatus) authStatus.textContent = 'Account services are unavailable right now.';
+        showToast('Account services unavailable.', 'error');
+        return;
+      }
+      const email = String(authEmailInput?.value || '').trim();
+      const password = String(authPasswordInput?.value || '');
+      if (!email || !password) {
+        if (authStatus) authStatus.textContent = 'Email and password are required.';
+        return;
+      }
+      if (authStatus) authStatus.textContent = authDialogMode === 'signup' ? 'Creating account...' : 'Signing in...';
+      try {
+        if (authDialogMode === 'signup') {
+          await authApiInstance.signUp?.(email, password);
+          showToast('Account created.', 'success');
+        } else {
+          await authApiInstance.signIn?.(email, password);
+          showToast('Logged in.', 'success');
+        }
+        closeAuthModal();
+        closeAccountMenu();
+      } catch (error) {
+        const message = String(error?.message || 'Authentication failed.');
+        if (authStatus) authStatus.textContent = message;
+        showToast(message, 'error');
+      }
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!accountMenu || accountMenu.hidden) return;
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    if (path.includes(accountMenuWrap)) return;
+    closeAccountMenu();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAccountMenu();
+      closeAuthModal();
+    }
+  });
+
+  setAuthModalMode('login');
+  updateManualSyncCooldownUi();
+
   loadAuthScript().then(async (authApi) => {
     authApiInstance = authApi;
     await authApi.init();
@@ -670,6 +974,14 @@ function loadAuthScript() {
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
       accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
+      if (accountLoginBtn) accountLoginBtn.hidden = Boolean(user);
+      if (accountSignUpBtn) accountSignUpBtn.hidden = Boolean(user);
+      if (accountSignOutBtn) accountSignOutBtn.hidden = !user;
+      if (accountMenuHint) {
+        accountMenuHint.textContent = user
+          ? `Signed in as ${user.displayName || user.email || 'account user'}.`
+          : 'Log in for cloud sync.';
+      }
     };
 
     refreshChatMessages();
@@ -751,18 +1063,26 @@ function loadAuthScript() {
         };
 
         setPendingChat(optimisticMessage);
-        renderChatMessages(composeVisibleChatMessages());
+        renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
         chatInput.value = '';
         await attemptSendPendingChat(optimisticId);
         triggerLiveChatPull('send-success');
       });
     }
-  }).catch(() => {
+    updateManualSyncCooldownUi();
+  }).catch((error) => {
+    console.warn('Auth module unavailable in navbar:', error);
+    closeAccountMenu();
     if (accountBtn) {
       accountBtn.textContent = 'Account';
-      accountBtn.addEventListener('click', () => {
-        window.location.href = withBase('/settings/account/');
-      });
+      accountBtn.title = 'Open account settings';
+    }
+    if (accountLoginBtn) accountLoginBtn.hidden = true;
+    if (accountSignUpBtn) accountSignUpBtn.hidden = true;
+    if (accountSignOutBtn) accountSignOutBtn.hidden = true;
+    if (accountManualSyncBtn) accountManualSyncBtn.disabled = true;
+    if (accountMenuHint) {
+      accountMenuHint.textContent = 'Account services unavailable. Use Account Settings.';
     }
   });
 

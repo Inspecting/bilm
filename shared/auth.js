@@ -1440,13 +1440,17 @@
     }, nextDelay);
   }
 
-  function scheduleListSyncFlush(reason = 'list-mutation') {
-    if (!isSyncEnabled()) return;
-    const syncPaused = isSyncTemporarilyPaused();
-    const pendingOperations = [
+  function collectPendingSyncOperations() {
+    return [
       ...pendingListOperations.values(),
       ...pendingSectorOperations.values()
     ];
+  }
+
+  function scheduleListSyncFlush(reason = 'list-mutation') {
+    if (!isSyncEnabled()) return;
+    const syncPaused = isSyncTemporarilyPaused();
+    const pendingOperations = collectPendingSyncOperations();
     const hasNonDeleteOperation = pendingOperations.some((operation) => operation?.deleted !== true);
     const flushDelayMs = syncPaused
       ? SYNC_PAUSE_RECHECK_MS
@@ -1455,6 +1459,13 @@
           ? LIST_DELETE_SYNC_DEBOUNCE_MS
           : LIST_SYNC_DEBOUNCE_MS
       );
+    console.debug('[sync] schedule list flush', {
+      reason,
+      delayMs: flushDelayMs,
+      pendingCount: pendingOperations.length,
+      deleteOnly: pendingOperations.length > 0 && !hasNonDeleteOperation,
+      paused: syncPaused
+    });
     clearListSyncRetryTimer();
     clearTimeout(listSyncDebounceTimer);
     listSyncDebounceTimer = window.setTimeout(() => {
@@ -1486,9 +1497,15 @@
       ...sectorBatchEntries.map(([, operation]) => operation)
     ];
     if (!operations.length) return false;
+    const hasNonDeleteOperation = operations.some((operation) => operation?.deleted !== true);
 
     pendingListSync = true;
     try {
+      console.debug('[sync] flushing pending operations', {
+        reason,
+        count: operations.length,
+        deleteOnly: !hasNonDeleteOperation
+      });
       const userId = getTransferUserId(user);
       const response = await pushListOperationsToTransferApi(user, userId, operations);
       listBatchEntries.forEach(([key, operation]) => {
@@ -1512,6 +1529,10 @@
       writeSyncMeta({
         lastListSyncPushAt: Date.now(),
         lastListSyncPushReason: reason
+      });
+      console.debug('[sync] flush success', {
+        reason,
+        count: operations.length
       });
       listSyncRetryDelayMs = 0;
       clearListSyncRetryTimer();
@@ -1568,12 +1589,14 @@
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'hidden') return;
+      console.debug('[sync] immediate flush trigger', { reason: 'visibility-hidden' });
       flushPendingListOperationsToCloud('visibility-hidden').catch((error) => {
         console.warn('Visibility list sync push failed:', error);
       });
     });
 
     window.addEventListener('pagehide', () => {
+      console.debug('[sync] immediate flush trigger', { reason: 'pagehide' });
       flushPendingListOperationsToCloud('pagehide').catch(() => {
         // best effort
       });
@@ -1582,6 +1605,16 @@
 
   function scheduleAutosyncFromMutation(reason = 'mutation') {
     if (!isSyncEnabled()) return;
+    const pendingOperations = collectPendingSyncOperations();
+    if (!pendingOperations.length) return;
+    const hasNonDeleteOperation = pendingOperations.some((operation) => operation?.deleted !== true);
+    const debounceMs = hasNonDeleteOperation ? 800 : LIST_DELETE_SYNC_DEBOUNCE_MS;
+    console.debug('[sync] schedule mutation flush', {
+      reason,
+      delayMs: debounceMs,
+      pendingCount: pendingOperations.length,
+      deleteOnly: !hasNonDeleteOperation
+    });
     clearTimeout(autosyncDebounceTimer);
     autosyncDebounceTimer = window.setTimeout(() => {
       if (isSyncTemporarilyPaused()) {
@@ -1591,7 +1624,7 @@
       flushPendingListOperationsToCloud(reason).catch((error) => {
         console.warn('Mutation list sync push failed:', error);
       });
-    }, 800);
+    }, debounceMs);
   }
 
   function installMutationObservers() {

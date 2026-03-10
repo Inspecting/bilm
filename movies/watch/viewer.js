@@ -189,7 +189,7 @@ function buildMovieUrl(server) {
       if (canUseLocalSePlayerRoute()) {
         return `${appWithBase('/se_player.php')}?video_id=${encodeURIComponent(contentId)}&tmdb=1`;
       }
-      return `https://embedmaster.link/830gqxyfskjlsnbq/movie/${contentId}`;
+      return '';
     case 'vidsrc':
       return `https://vidsrc-embed.ru/embed/movie/${imdbId || contentId}`;
     case 'godrive':
@@ -223,7 +223,7 @@ function resolveMovieEmbedRequest() {
   let url = buildMovieUrl(server);
 
   if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
-    setPlayerStatus('SuperEmbed file route is not available on this host. Using EmbedMaster direct mode.', 'warning');
+    setPlayerStatus('SuperEmbed route is not available on this host. Choose another server manually.', 'warning');
   }
 
   if (!url && server === 'godrive' && !imdbId) {
@@ -240,7 +240,7 @@ function resolveMovieEmbedRequest() {
     setPlayerStatus('GoDrive requires IMDb ID here. Switched to VidSrc for this title.', 'warning');
   }
 
-  if (!url) {
+  if (!url && server !== 'superembed') {
     const fallbackServer = normalizeServer('vidsrc');
     if (fallbackServer !== server) {
       setActiveServer(fallbackServer);
@@ -305,21 +305,6 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
     return;
   }
 
-  if (server === 'superembed') {
-    const fallbackServer = normalizeServer('embedmaster');
-    if (fallbackServer !== server) {
-      console.warn('[player] superembed route failed; switching server', {
-        context: 'movie',
-        failedServer: server,
-        fallbackServer
-      });
-      setActiveServer(fallbackServer);
-      setPlayerStatus('SuperEmbed route could not load. Switched to EmbedMaster.', 'warning');
-      updateIframe();
-      return;
-    }
-  }
-
   setPlayerStatus(
     `We couldn't load ${serverLabel}. Retry or choose another server.`,
     'error'
@@ -344,7 +329,11 @@ function updateIframe() {
   if (!url) {
     iframe.removeAttribute('sandbox');
     iframe.src = '';
-    setPlayerStatus('No playable URL for this title on the selected server.', 'error');
+    if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
+      setPlayerStatus('SuperEmbed route is not available on this host. Choose another server manually.', 'error');
+    } else {
+      setPlayerStatus('No playable URL for this title on the selected server.', 'error');
+    }
     return;
   }
 
