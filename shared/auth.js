@@ -360,6 +360,7 @@
   const MIN_SAVE_INTERVAL_MS = 15000;
   const AUTOSYNC_HEARTBEAT_MS = 15000;
   const LIST_SYNC_DEBOUNCE_MS = 500;
+  const LIST_DELETE_SYNC_DEBOUNCE_MS = 15000;
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
   const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
   const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
@@ -1357,13 +1358,21 @@
 
   function scheduleListSyncFlush(reason = 'list-mutation') {
     if (!isSyncEnabled()) return;
+    const pendingOperations = [
+      ...pendingListOperations.values(),
+      ...pendingSectorOperations.values()
+    ];
+    const hasNonDeleteOperation = pendingOperations.some((operation) => operation?.deleted !== true);
+    const flushDelayMs = pendingOperations.length > 0 && !hasNonDeleteOperation
+      ? LIST_DELETE_SYNC_DEBOUNCE_MS
+      : LIST_SYNC_DEBOUNCE_MS;
     clearListSyncRetryTimer();
     clearTimeout(listSyncDebounceTimer);
     listSyncDebounceTimer = window.setTimeout(() => {
       flushPendingListOperationsToCloud(reason).catch((error) => {
         console.warn('List sync push failed:', error);
       });
-    }, LIST_SYNC_DEBOUNCE_MS);
+    }, flushDelayMs);
   }
 
   async function flushPendingListOperationsToCloud(reason = 'list-mutation') {

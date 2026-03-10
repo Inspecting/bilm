@@ -93,7 +93,7 @@ function loadAuthScript() {
   const chatInput = shadow.getElementById('sharedChatInput');
   const chatRefreshBtn = shadow.getElementById('sharedChatRefreshBtn');
   const CHAT_REFRESH_COOLDOWN_MS = 5000;
-  const CHAT_ACTIVE_POLL_MS = 2000;
+  const CHAT_ACTIVE_POLL_MS = 4000;
   const CHAT_BACKGROUND_POLL_MS = 10000;
   let chatRefreshCooldownUntil = 0;
   const chatMessages = shadow.getElementById('sharedChatMessages');

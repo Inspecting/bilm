@@ -521,14 +521,6 @@
       </div>
 
       <span class="backup-status" id="cloudStatus" aria-live="polite" hidden></span>
-      <div class="sync-debug-panel" id="syncDebugPanel" aria-live="polite">
-        <div class="sync-debug-header">
-          <strong>Sync Debug</strong>
-          <button class="btn btn-outline sync-debug-clear" id="clearSyncDebugBtn" type="button">Clear</button>
-        </div>
-        <p class="sync-debug-message" id="syncDebugMessage">No sync errors detected on this page yet.</p>
-        <pre class="sync-debug-details" id="syncDebugDetails" hidden></pre>
-      </div>
     </section>
 
     <section class="settings-card">
@@ -601,6 +593,15 @@
       <div class="actions-row">
         <button class="btn btn-outline" id="resetThemeBtn">Reset Theme</button>
         <button class="btn btn-danger" id="resetDataBtn">Reset Data</button>
+      </div>
+
+      <div class="sync-debug-panel" id="syncDebugPanel" aria-live="polite">
+        <div class="sync-debug-header">
+          <strong>Debug</strong>
+          <button class="btn btn-outline sync-debug-clear" id="clearSyncDebugBtn" type="button">Clear</button>
+        </div>
+        <p class="sync-debug-message" id="syncDebugMessage">No debug issues detected on this page yet.</p>
+        <pre class="sync-debug-details" id="syncDebugDetails" hidden></pre>
       </div>
     </section>
   </div>
@@ -749,6 +750,7 @@
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
   const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
+  const DEBUG_ISSUE_LOCAL_KEY = 'debug-local-issue';
   const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^tmdb-/, /^theme-/];
   const BACKUP_SESSION_ALLOWLIST = [/^bilm-/, /^tmdb-/];
   let pendingImportPayload = null;
@@ -772,6 +774,7 @@
   function collectBackupData() {
     const localState = readStorage(localStorage, BACKUP_LOCAL_ALLOWLIST);
     delete localState[SYNC_ENABLED_KEY];
+    delete localState[DEBUG_ISSUE_LOCAL_KEY];
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
@@ -990,34 +993,122 @@
     }
   }
 
-  function resetSyncDebugPanel() {
+  function readStoredDebugIssue() {
+    try {
+      const raw = localStorage.getItem(DEBUG_ISSUE_LOCAL_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStoredDebugIssue(issue) {
+    try {
+      if (!issue) {
+        localStorage.removeItem(DEBUG_ISSUE_LOCAL_KEY);
+        return;
+      }
+      localStorage.setItem(DEBUG_ISSUE_LOCAL_KEY, JSON.stringify(issue));
+    } catch {
+      // local-only best effort
+    }
+  }
+
+  function normalizeDebugIssue(issue, fallbackType = 'sync') {
+    if (!issue || typeof issue !== 'object') return null;
+    const normalizedType = String(issue?.type || fallbackType || 'sync').trim().toLowerCase() === 'other'
+      ? 'other'
+      : 'sync';
+    const fallbackMessage = normalizedType === 'sync'
+      ? 'Sync request failed.'
+      : 'Unexpected runtime error detected.';
+    const retryable = typeof issue?.retryable === 'boolean' ? issue.retryable : null;
+    return {
+      type: normalizedType,
+      scope: String(issue?.scope || (normalizedType === 'sync' ? 'sync' : 'runtime')).trim() || (normalizedType === 'sync' ? 'sync' : 'runtime'),
+      source: String(issue?.source || (normalizedType === 'sync' ? 'sync-engine' : 'window')).trim() || 'window',
+      code: String(issue?.code || (normalizedType === 'sync' ? 'sync_error' : 'runtime_error')).trim() || 'runtime_error',
+      message: String(issue?.message || fallbackMessage).trim() || fallbackMessage,
+      retryable,
+      status: Number(issue?.status || 0) || null,
+      requestId: String(issue?.requestId || '').trim() || null,
+      sectorKey: String(issue?.sectorKey || '').trim() || null,
+      listKey: String(issue?.listKey || '').trim() || null,
+      atMs: Number(issue?.atMs || Date.now()) || Date.now()
+    };
+  }
+
+  function resetSyncDebugPanel({ clearStored = true } = {}) {
     if (!syncDebugMessage || !syncDebugDetails) return;
-    syncDebugMessage.textContent = 'No sync errors detected on this page yet.';
+    syncDebugMessage.textContent = 'No debug issues detected on this page yet.';
     syncDebugDetails.textContent = '';
     syncDebugDetails.hidden = true;
     syncDebugPanel?.removeAttribute('data-state');
+    if (clearStored) writeStoredDebugIssue(null);
   }
 
-  function renderSyncIssue(issue) {
+  function renderDebugIssue(issue, { persist = true } = {}) {
     if (!syncDebugMessage || !syncDebugDetails) return;
-    if (!issue || typeof issue !== 'object') {
+    const normalized = normalizeDebugIssue(issue, issue?.type || 'sync');
+    if (!normalized) {
       resetSyncDebugPanel();
       return;
     }
     syncDebugPanel?.setAttribute('data-state', 'error');
-    syncDebugMessage.textContent = String(issue?.message || 'Sync request failed.').trim() || 'Sync request failed.';
+    syncDebugMessage.textContent = normalized.message;
     const lines = [
-      `Code: ${String(issue?.code || 'sync_error')}`,
-      `Status: ${issue?.status ? Number(issue.status) : 'n/a'}`,
-      `Retryable: ${issue?.retryable === false ? 'no' : 'yes'}`,
-      `Request ID: ${String(issue?.requestId || 'n/a')}`,
-      `Scope: ${String(issue?.scope || 'sync')}`,
-      issue?.sectorKey ? `Sector: ${String(issue.sectorKey)}` : '',
-      issue?.listKey ? `List: ${String(issue.listKey)}` : '',
-      `Time: ${formatSyncTimestamp(issue?.atMs)}`
+      `Type: ${normalized.type === 'sync' ? 'Sync' : 'Other'}`,
+      `Code: ${normalized.code}`,
+      `Status: ${normalized.status ? normalized.status : 'n/a'}`,
+      `Retryable: ${normalized.retryable === null ? 'n/a' : (normalized.retryable ? 'yes' : 'no')}`,
+      `Request ID: ${normalized.requestId || 'n/a'}`,
+      `Source: ${normalized.source}`,
+      `Scope: ${normalized.scope}`,
+      normalized.sectorKey ? `Sector: ${normalized.sectorKey}` : '',
+      normalized.listKey ? `List: ${normalized.listKey}` : '',
+      `Time: ${formatSyncTimestamp(normalized.atMs)}`
     ].filter(Boolean);
     syncDebugDetails.textContent = lines.join('\n');
     syncDebugDetails.hidden = false;
+    if (persist) writeStoredDebugIssue(normalized);
+  }
+
+  function restoreDebugIssuePanel() {
+    const stored = readStoredDebugIssue();
+    if (!stored) {
+      resetSyncDebugPanel({ clearStored: false });
+      return;
+    }
+    renderDebugIssue(stored, { persist: false });
+  }
+
+  function reportRuntimeDebugIssue(reason, source = 'window') {
+    const errorLike = reason instanceof Error ? reason : null;
+    const message = String(
+      errorLike?.message
+      || reason?.message
+      || reason?.toString?.()
+      || 'Unexpected runtime error detected.'
+    ).trim() || 'Unexpected runtime error detected.';
+    const code = String(
+      errorLike?.name
+      || reason?.code
+      || reason?.error
+      || 'runtime_error'
+    ).trim() || 'runtime_error';
+    renderDebugIssue({
+      type: 'other',
+      scope: 'runtime',
+      source,
+      code,
+      message,
+      retryable: false,
+      status: null,
+      requestId: null,
+      atMs: Date.now()
+    });
   }
 
   async function saveCredentialsForAutofill(email, password) {
@@ -1473,7 +1564,11 @@
         cloudStatus.textContent = 'Cloud update detected. Sync engine will apply only if newer than local data.';
       });
       window.bilmAuth.onSyncIssue?.((issue) => {
-        renderSyncIssue(issue);
+        renderDebugIssue({
+          ...issue,
+          type: 'sync',
+          source: 'sync-engine'
+        });
       });
     } catch (err) {
       accountStatusText.textContent = 'Account tools are unavailable right now. Refresh and try again.';
@@ -1504,8 +1599,17 @@
     resetSyncDebugPanel();
   });
 
+  window.addEventListener('error', (event) => {
+    const runtimeReason = event?.error || { message: event?.message, code: 'window_error' };
+    reportRuntimeDebugIssue(runtimeReason, 'window.error');
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    reportRuntimeDebugIssue(event?.reason, 'unhandledrejection');
+  });
+
   window.addEventListener('DOMContentLoaded', () => {
-    resetSyncDebugPanel();
+    restoreDebugIssuePanel();
     syncUI();
     setSyncEnabled(isSyncEnabled());
     initCloudAuthUi();
