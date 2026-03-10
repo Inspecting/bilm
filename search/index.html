@@ -220,6 +220,11 @@
       padding: 16px;
       border-radius: var(--radius-md);
     }
+    #resultsSentinel {
+      width: 100%;
+      height: 1px;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -244,6 +249,7 @@
       <h2>Results</h2>
       <p class="no-results" id="resultsMessage" hidden></p>
       <div class="results-grid" id="combinedResults"></div>
+      <div id="resultsSentinel" aria-hidden="true"></div>
     </section>
   </main>
 
@@ -284,6 +290,7 @@
     const combinedSection = document.getElementById('combinedSection');
     const resultsMessage = document.getElementById('resultsMessage');
     const combinedResults = document.getElementById('combinedResults');
+    const resultsSentinel = document.getElementById('resultsSentinel');
     const filterButtons = Array.from(document.querySelectorAll('.filter-button'));
     const sortButtons = Array.from(document.querySelectorAll('.sort-button'));
 
@@ -294,8 +301,17 @@
     let cachedAll = [];
     let activeFilter = 'all';
     let activeSort = 'relevance';
-    const API_COOLDOWN_MS = 1000;
+    const API_COOLDOWN_MS = 250;
+    const SEARCH_PAGE_SIZE = 36;
+    const SEARCH_RENDER_CHUNK_SIZE = 10;
+    const SEARCH_RESOLVE_LIMIT = 6;
+    const SEARCH_RESOLVE_CONCURRENCY = 2;
     const apiCooldownByHost = new Map();
+    let renderedResultsCount = 0;
+    let currentVisibleItems = [];
+    let searchRenderToken = 0;
+    let resultsObserver = null;
+    let resultsRenderInProgress = false;
 
     function normalizeTitle(value) {
       return (value || '').trim().toLowerCase();
@@ -406,23 +422,37 @@
       }
     }
 
+    async function mapWithConcurrency(items, concurrency, mapper) {
+      const source = Array.isArray(items) ? items : [];
+      const maxWorkers = Math.max(1, Number(concurrency || 1) || 1);
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(maxWorkers, source.length) }, async () => {
+        while (cursor < source.length) {
+          const currentIndex = cursor;
+          cursor += 1;
+          await mapper(source[currentIndex], currentIndex);
+        }
+      });
+      await Promise.all(workers);
+    }
+
     async function normalizeMovieEntries(entries, limit = 10) {
       const nextEntries = [...entries];
       const unresolved = nextEntries.filter(item => !item.tmdbId).slice(0, limit);
-      await Promise.all(unresolved.map(async (item) => {
+      await mapWithConcurrency(unresolved, SEARCH_RESOLVE_CONCURRENCY, async (item) => {
         item.tmdbId = await resolveMovieTmdbId(item);
         item.link = item.tmdbId ? `${BASE_URL}/movies/show.html?id=${item.tmdbId}` : '';
-      }));
+      });
       return nextEntries;
     }
 
     async function normalizeTvEntries(entries, limit = 10) {
       const nextEntries = [...entries];
       const unresolved = nextEntries.filter(item => !item.tmdbId).slice(0, limit);
-      await Promise.all(unresolved.map(async (item) => {
+      await mapWithConcurrency(unresolved, SEARCH_RESOLVE_CONCURRENCY, async (item) => {
         item.tmdbId = await resolveTvTmdbId(item);
         item.link = item.tmdbId ? `${BASE_URL}/tv/show.html?id=${item.tmdbId}` : '';
-      }));
+      });
       return nextEntries;
     }
 
@@ -455,13 +485,18 @@
     }
 
     if (queryNormalized) {
-      Promise.all([
-        fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/search/movie?query=${encodeURIComponent(queryNormalized)}`),
-        fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/search/tv?query=${encodeURIComponent(queryNormalized)}`),
-        fetchJSON(`https://storage-api.watchbilm.org/media/omdb?s=${encodeURIComponent(queryNormalized)}&type=movie`),
-        fetchTvmazeShows(queryNormalized)
-      ])
-      .then(async ([tmdbMovies, tmdbTV, omdbMovies, tvmazeShows]) => {
+      (async () => {
+        const tmdbMovieUrl = `https://storage-api.watchbilm.org/media/tmdb/search/movie?query=${encodeURIComponent(queryNormalized)}`;
+        const tmdbTvUrl = `https://storage-api.watchbilm.org/media/tmdb/search/tv?query=${encodeURIComponent(queryNormalized)}`;
+        const omdbUrl = `https://storage-api.watchbilm.org/media/omdb?s=${encodeURIComponent(queryNormalized)}&type=movie`;
+
+        const [tmdbMovies, tmdbTV] = await Promise.all([
+          fetchJSON(tmdbMovieUrl).catch(() => ({ results: [] })),
+          fetchJSON(tmdbTvUrl).catch(() => ({ results: [] }))
+        ]);
+        const omdbMovies = await fetchJSON(omdbUrl).catch(() => ({ Search: [] }));
+        const tvmazeShows = await fetchTvmazeShows(queryNormalized);
+
         const movieMap = new Map();
         const tvMap = new Map();
 
@@ -499,7 +534,6 @@
           }
         });
 
-
         (tmdbTV.results || []).forEach(item => {
           const key = createTvKey(item.name, item.first_air_date?.slice(0, 4));
           if (!tvMap.has(key)) {
@@ -524,19 +558,23 @@
           }
         });
 
-        cachedMovies = await normalizeMovieEntries(Array.from(movieMap.values()));
-        cachedTvShows = await normalizeTvEntries(Array.from(tvMap.values()));
+        cachedMovies = await normalizeMovieEntries(Array.from(movieMap.values()), SEARCH_RESOLVE_LIMIT);
+        cachedTvShows = await normalizeTvEntries(Array.from(tvMap.values()), SEARCH_RESOLVE_LIMIT);
         cachedAll = [...cachedMovies, ...cachedTvShows];
-
         updateResults(activeFilter);
-      })
-      .catch(err => {
+      })().catch((err) => {
         console.error('Search failed', err);
+        disconnectResultsObserver();
+        renderedResultsCount = 0;
+        currentVisibleItems = [];
         combinedResults.innerHTML = '';
         resultsMessage.textContent = 'Failed to load results.';
         resultsMessage.hidden = false;
       });
     } else {
+      disconnectResultsObserver();
+      renderedResultsCount = 0;
+      currentVisibleItems = [];
       combinedResults.innerHTML = '';
       resultsMessage.textContent = 'Please enter a search term.';
       resultsMessage.hidden = false;
@@ -566,6 +604,42 @@
       });
     });
 
+    function queueFrame(task) {
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(task);
+      } else {
+        setTimeout(task, 16);
+      }
+    }
+
+    function disconnectResultsObserver() {
+      if (!resultsObserver) return;
+      resultsObserver.disconnect();
+      resultsObserver = null;
+    }
+
+    function ensureResultsObserver() {
+      if (!resultsSentinel) return;
+      if (renderedResultsCount >= currentVisibleItems.length) {
+        disconnectResultsObserver();
+        return;
+      }
+      if (typeof window.IntersectionObserver !== 'function') {
+        renderResults(combinedResults, currentVisibleItems);
+        return;
+      }
+      if (resultsObserver) return;
+      resultsObserver = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        renderResults(combinedResults, currentVisibleItems);
+      }, {
+        root: null,
+        rootMargin: '700px 0px',
+        threshold: 0.01
+      });
+      resultsObserver.observe(resultsSentinel);
+    }
+
     function updateResults(filter) {
       let items = [];
       if (filter === 'movies') {
@@ -577,11 +651,14 @@
       }
 
       const validItems = sortItems(items.filter(item => Boolean(item.link)));
+      currentVisibleItems = validItems;
       if (validItems.length > 0) {
-        renderResults(combinedResults, validItems);
+        renderResults(combinedResults, validItems, { reset: true });
         resultsMessage.hidden = true;
         combinedSection.style.display = 'block';
       } else {
+        disconnectResultsObserver();
+        renderedResultsCount = 0;
         combinedResults.innerHTML = '';
         resultsMessage.textContent = items.length > 0
           ? 'Results were found, but some sources could not be linked yet. Try another query.'
@@ -591,18 +668,55 @@
       }
     }
 
-    function renderResults(container, items) {
-      container.innerHTML = '';
-      items.forEach(item => {
-        const card = window.BilmMediaCard.createMediaCard({
-          item,
-          className: 'movie-card',
-          badgeClassName: 'source-badge-overlay',
-          dataset: { source: item.source }
-        });
+    function renderResults(container, items, options = {}) {
+      const reset = options?.reset === true;
+      if (reset) {
+        searchRenderToken += 1;
+        renderedResultsCount = 0;
+        disconnectResultsObserver();
+        container.innerHTML = '';
+        resultsRenderInProgress = false;
+      }
+      if (resultsRenderInProgress) return;
 
-        container.appendChild(card);
-      });
+      const renderToken = searchRenderToken;
+      const nextSlice = items.slice(renderedResultsCount, renderedResultsCount + SEARCH_PAGE_SIZE);
+      if (!nextSlice.length) {
+        ensureResultsObserver();
+        return;
+      }
+
+      resultsRenderInProgress = true;
+      let index = 0;
+      const appendChunk = () => {
+        if (renderToken !== searchRenderToken) {
+          resultsRenderInProgress = false;
+          return;
+        }
+        const fragment = document.createDocumentFragment();
+        const chunkEnd = Math.min(index + SEARCH_RENDER_CHUNK_SIZE, nextSlice.length);
+        while (index < chunkEnd) {
+          const item = nextSlice[index];
+          const card = window.BilmMediaCard.createMediaCard({
+            item,
+            className: 'movie-card',
+            badgeClassName: 'source-badge-overlay',
+            dataset: { source: item.source }
+          });
+          fragment.appendChild(card);
+          index += 1;
+        }
+        container.appendChild(fragment);
+        if (index < nextSlice.length) {
+          queueFrame(appendChunk);
+          return;
+        }
+        renderedResultsCount += nextSlice.length;
+        resultsRenderInProgress = false;
+        ensureResultsObserver();
+      };
+
+      appendChunk();
     }
   </script>
 </body>

@@ -361,6 +361,9 @@
   const AUTOSYNC_HEARTBEAT_MS = 15000;
   const LIST_SYNC_DEBOUNCE_MS = 500;
   const LIST_DELETE_SYNC_DEBOUNCE_MS = 15000;
+  const SYNC_IDLE_PAUSE_MS = 5 * 60 * 1000;
+  const SYNC_HIDDEN_PAUSE_MS = 60 * 1000;
+  const SYNC_PAUSE_RECHECK_MS = 30000;
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
   const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
   const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
@@ -408,6 +411,10 @@
     search_history: 'bilm-search-history',
     chat_messages: 'bilm-shared-chat'
   });
+  const LIST_MAX_ITEMS_BY_KEY = Object.freeze({
+    'bilm-shared-chat': 20
+  });
+  const DEFAULT_LIST_MAX_ITEMS = 120;
   const EXTRA_SYNC_SECTOR_KEYS = Object.freeze({
     settings_profile: 'settings_profile',
     playback_notes: 'playback_notes',
@@ -444,6 +451,10 @@
   const listSyncAppliedSubscribers = new Set();
   let listSyncRetryTimer = null;
   let listSyncRetryDelayMs = 0;
+  let syncActivityBindingsInstalled = false;
+  let syncPauseRecheckTimer = null;
+  let lastUserActivityAt = Date.now();
+  let hiddenSinceAt = document.visibilityState === 'hidden' ? Date.now() : 0;
 
   function readJsonArray(raw) {
     try {
@@ -452,6 +463,77 @@
     } catch {
       return [];
     }
+  }
+
+  function recordSyncActivity() {
+    lastUserActivityAt = Date.now();
+    if (document.visibilityState !== 'hidden') {
+      hiddenSinceAt = 0;
+    }
+  }
+
+  function isSyncTemporarilyPaused() {
+    const now = Date.now();
+    const isIdle = now - lastUserActivityAt >= SYNC_IDLE_PAUSE_MS;
+    const hiddenTooLong = document.visibilityState === 'hidden'
+      && hiddenSinceAt > 0
+      && (now - hiddenSinceAt) >= SYNC_HIDDEN_PAUSE_MS;
+    return isIdle || hiddenTooLong;
+  }
+
+  function clearSyncPauseRecheckTimer() {
+    if (!syncPauseRecheckTimer) return;
+    window.clearTimeout(syncPauseRecheckTimer);
+    syncPauseRecheckTimer = null;
+  }
+
+  function scheduleSyncPauseRecheck() {
+    if (syncPauseRecheckTimer) return;
+    syncPauseRecheckTimer = window.setTimeout(() => {
+      syncPauseRecheckTimer = null;
+      if (!isSyncEnabled() || !auth?.currentUser) return;
+      if (isSyncTemporarilyPaused()) {
+        scheduleSyncPauseRecheck();
+        return;
+      }
+      syncListsFromCloudNow().catch((error) => {
+        console.warn('Paused sync resume pull failed:', error);
+      });
+      flushPendingListOperationsToCloud('activity-resume').catch((error) => {
+        console.warn('Paused sync resume flush failed:', error);
+      });
+    }, SYNC_PAUSE_RECHECK_MS);
+  }
+
+  function ensureSyncActivityBindings() {
+    if (syncActivityBindingsInstalled) return;
+    syncActivityBindingsInstalled = true;
+    const onActivity = () => {
+      const wasPaused = isSyncTemporarilyPaused();
+      recordSyncActivity();
+      if (!wasPaused || isSyncTemporarilyPaused()) return;
+      clearSyncPauseRecheckTimer();
+      if (!isSyncEnabled() || !auth?.currentUser) return;
+      syncListsFromCloudNow().catch((error) => {
+        console.warn('Activity resume pull failed:', error);
+      });
+      flushPendingListOperationsToCloud('activity-resume').catch((error) => {
+        console.warn('Activity resume flush failed:', error);
+      });
+    };
+
+    ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((eventName) => {
+      window.addEventListener(eventName, onActivity, { passive: true });
+    });
+    window.addEventListener('focus', onActivity);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenSinceAt = Date.now();
+        scheduleSyncPauseRecheck();
+        return;
+      }
+      onActivity();
+    });
   }
 
   function getListItemKey(item) {
@@ -965,11 +1047,12 @@
       });
 
       const keyedTombstones = tombstones[storageKey] || {};
+      const maxItems = Number(LIST_MAX_ITEMS_BY_KEY[storageKey] || DEFAULT_LIST_MAX_ITEMS) || DEFAULT_LIST_MAX_ITEMS;
       const filtered = [...byKey.entries()]
         .filter(([itemKey, item]) => (Number(keyedTombstones[itemKey] || 0) || 0) < getItemUpdatedAt(item))
         .sort((a, b) => getItemUpdatedAt(b[1]) - getItemUpdatedAt(a[1]))
         .map(([, item]) => item)
-        .slice(0, 120);
+        .slice(0, maxItems);
 
       merged.localStorage[storageKey] = JSON.stringify(filtered);
     });
@@ -1266,9 +1349,10 @@
           }
         });
 
+        const maxItems = Number(LIST_MAX_ITEMS_BY_KEY[listKey] || DEFAULT_LIST_MAX_ITEMS) || DEFAULT_LIST_MAX_ITEMS;
         const nextList = [...byKey.values()]
           .sort((left, right) => getItemUpdatedAt(right) - getItemUpdatedAt(left))
-          .slice(0, 120);
+          .slice(0, maxItems);
         localStorage.setItem(listKey, JSON.stringify(nextList));
       });
     } finally {
@@ -1358,17 +1442,27 @@
 
   function scheduleListSyncFlush(reason = 'list-mutation') {
     if (!isSyncEnabled()) return;
+    const syncPaused = isSyncTemporarilyPaused();
     const pendingOperations = [
       ...pendingListOperations.values(),
       ...pendingSectorOperations.values()
     ];
     const hasNonDeleteOperation = pendingOperations.some((operation) => operation?.deleted !== true);
-    const flushDelayMs = pendingOperations.length > 0 && !hasNonDeleteOperation
-      ? LIST_DELETE_SYNC_DEBOUNCE_MS
-      : LIST_SYNC_DEBOUNCE_MS;
+    const flushDelayMs = syncPaused
+      ? SYNC_PAUSE_RECHECK_MS
+      : (
+        pendingOperations.length > 0 && !hasNonDeleteOperation
+          ? LIST_DELETE_SYNC_DEBOUNCE_MS
+          : LIST_SYNC_DEBOUNCE_MS
+      );
     clearListSyncRetryTimer();
     clearTimeout(listSyncDebounceTimer);
     listSyncDebounceTimer = window.setTimeout(() => {
+      if (isSyncTemporarilyPaused()) {
+        scheduleSyncPauseRecheck();
+        scheduleListSyncFlush('activity-paused');
+        return;
+      }
       flushPendingListOperationsToCloud(reason).catch((error) => {
         console.warn('List sync push failed:', error);
       });
@@ -1379,6 +1473,10 @@
     await init();
     const user = auth?.currentUser;
     if (!user || !isSyncEnabled() || pendingListSync || transferApiDisabled) return false;
+    if (isSyncTemporarilyPaused()) {
+      scheduleSyncPauseRecheck();
+      return false;
+    }
     if (pendingListOperations.size === 0 && pendingSectorOperations.size === 0) return false;
 
     const listBatchEntries = [...pendingListOperations.entries()];
@@ -1430,6 +1528,7 @@
     await init();
     const user = auth?.currentUser;
     if (!user || !isSyncEnabled() || transferApiDisabled) return false;
+    if (isSyncTemporarilyPaused()) return false;
 
     const userId = getTransferUserId(user);
     let sinceMs = getListSyncCursorMs();
@@ -1485,6 +1584,10 @@
     if (!isSyncEnabled()) return;
     clearTimeout(autosyncDebounceTimer);
     autosyncDebounceTimer = window.setTimeout(() => {
+      if (isSyncTemporarilyPaused()) {
+        scheduleSyncPauseRecheck();
+        return;
+      }
       flushPendingListOperationsToCloud(reason).catch((error) => {
         console.warn('Mutation list sync push failed:', error);
       });
@@ -1588,9 +1691,15 @@
 
   function startAutosyncLoop() {
     stopAutosyncLoop();
+    ensureSyncActivityBindings();
+    recordSyncActivity();
     ensureAutosyncFlushBindings();
     autosyncInterval = window.setInterval(() => {
       if (!isSyncEnabled() || !auth?.currentUser) return;
+      if (isSyncTemporarilyPaused()) {
+        scheduleSyncPauseRecheck();
+        return;
+      }
       syncListsFromCloudNow().catch((error) => {
         console.warn('Autosync list pull failed:', error);
       });
@@ -1602,11 +1711,16 @@
       window.clearInterval(autosyncInterval);
       autosyncInterval = null;
     }
+    clearSyncPauseRecheckTimer();
   }
 
   async function syncFromCloudNow() {
     await init();
     const user = auth?.currentUser;
+    if (isSyncTemporarilyPaused()) {
+      scheduleSyncPauseRecheck();
+      return false;
+    }
     if (user && isSyncEnabled()) {
       try {
         await ensureSectorBootstrapForUser(user);
@@ -1979,6 +2093,22 @@
     },
     getCurrentUser() {
       return auth?.currentUser || currentUser;
+    },
+    isSyncPausedNow() {
+      return isSyncTemporarilyPaused();
+    },
+    noteUserActivity(_source = 'manual') {
+      const wasPaused = isSyncTemporarilyPaused();
+      recordSyncActivity();
+      if (!wasPaused || isSyncTemporarilyPaused()) return;
+      clearSyncPauseRecheckTimer();
+      if (!isSyncEnabled() || !auth?.currentUser) return;
+      syncListsFromCloudNow().catch((error) => {
+        console.warn('Manual activity resume pull failed:', error);
+      });
+      flushPendingListOperationsToCloud('activity-resume').catch((error) => {
+        console.warn('Manual activity resume flush failed:', error);
+      });
     },
     onAuthStateChanged(callback) {
       subscribers.add(callback);

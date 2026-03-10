@@ -95,6 +95,8 @@ function loadAuthScript() {
   const CHAT_REFRESH_COOLDOWN_MS = 5000;
   const CHAT_ACTIVE_POLL_MS = 4000;
   const CHAT_BACKGROUND_POLL_MS = 10000;
+  const CHAT_PAUSED_POLL_MS = 60000;
+  const CHAT_MAX_MESSAGES = 20;
   let chatRefreshCooldownUntil = 0;
   const chatMessages = shadow.getElementById('sharedChatMessages');
   let chatCurrentUser = null;
@@ -144,11 +146,11 @@ function loadAuthScript() {
 
   function loadStoredChatMessages() {
     const stored = storage.getJSON(CHAT_STORAGE_KEY, []);
-    return normalizeChatMessages(Array.isArray(stored) ? stored : []);
+    return normalizeChatMessages(Array.isArray(stored) ? stored : []).slice(-CHAT_MAX_MESSAGES);
   }
 
   function saveStoredChatMessages(messages) {
-    const normalized = normalizeChatMessages(messages).slice(-120);
+    const normalized = normalizeChatMessages(messages).slice(-CHAT_MAX_MESSAGES);
     storage.setJSON(CHAT_STORAGE_KEY, normalized);
     chatRemoteMessages = normalized;
   }
@@ -192,7 +194,10 @@ function loadAuthScript() {
     if (chatRetryTimer) return;
     const nextPending = chatPendingMessages.find((entry) => entry.pending && entry.failed && entry.retryable !== false);
     if (!nextPending) return;
-    const delayMs = Math.min(CHAT_MAX_RETRY_DELAY_MS, Math.max(1200, Number(nextPending.retryDelayMs || 1200)));
+    const paused = authApiInstance?.isSyncPausedNow?.() === true;
+    const delayMs = paused
+      ? CHAT_PAUSED_POLL_MS
+      : Math.min(CHAT_MAX_RETRY_DELAY_MS, Math.max(1200, Number(nextPending.retryDelayMs || 1200)));
     chatRetryTimer = window.setTimeout(() => {
       chatRetryTimer = null;
       attemptSendPendingChat(nextPending.id).catch((error) => {
@@ -230,6 +235,10 @@ function loadAuthScript() {
   async function attemptSendPendingChat(pendingId) {
     const pendingEntry = chatPendingMessages.find((entry) => entry.id === pendingId);
     if (!pendingEntry) return false;
+    if (authApiInstance?.isSyncPausedNow?.()) {
+      schedulePendingChatRetry();
+      return false;
+    }
 
     setPendingChat({
       ...pendingEntry,
@@ -382,6 +391,7 @@ function loadAuthScript() {
   function toggleChatPanel(nextOpen) {
     if (!chatPanel || !chatToggle) return;
     const open = Boolean(nextOpen);
+    authApiInstance?.noteUserActivity?.('chat-panel-toggle');
     chatPanel.hidden = !open;
     chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (open && chatInput) chatInput.focus();
@@ -396,6 +406,7 @@ function loadAuthScript() {
   }
 
   function getChatPollIntervalMs() {
+    if (authApiInstance?.isSyncPausedNow?.()) return CHAT_PAUSED_POLL_MS;
     if (!chatCurrentUser) return CHAT_BACKGROUND_POLL_MS;
     const pageVisible = document.visibilityState === 'visible';
     const focused = document.hasFocus?.() === true;
@@ -405,6 +416,7 @@ function loadAuthScript() {
 
   async function runLiveChatPull(reason = 'poll') {
     if (!authApiInstance || !chatCurrentUser || chatLivePollInFlight) return false;
+    if (authApiInstance?.isSyncPausedNow?.()) return false;
     if (typeof authApiInstance.pullChatNow !== 'function') return false;
     chatLivePollInFlight = true;
     try {
@@ -692,6 +704,7 @@ function loadAuthScript() {
 
     if (chatRefreshBtn) {
       chatRefreshBtn.addEventListener('click', async () => {
+        authApi.noteUserActivity?.('chat-refresh');
         if (Date.now() < chatRefreshCooldownUntil) return;
         chatRefreshBtn.setAttribute('aria-busy', 'true');
         try {
@@ -711,6 +724,7 @@ function loadAuthScript() {
 
     if (chatForm && chatInput) {
       chatForm.addEventListener('submit', async (event) => {
+        authApi.noteUserActivity?.('chat-submit');
         event.preventDefault();
         const text = chatInput.value.trim();
         if (!text) return;

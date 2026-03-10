@@ -3,6 +3,39 @@
   const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const certificationCache = new Map();
   const certificationPending = new Map();
+  const APP_ROOT_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
+
+  function detectBasePath() {
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+    if (!parts.length || appRoots.has(parts[0])) return '';
+    if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
+    return '';
+  }
+
+  function normalizeAppPath(pathname = '') {
+    const rawPath = String(pathname || '').trim();
+    if (!rawPath) return '';
+    const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    const basePath = detectBasePath();
+    if (!basePath) return normalizedPath;
+    if (normalizedPath === basePath || normalizedPath.startsWith(`${basePath}/`)) return normalizedPath;
+    if (!APP_ROOT_PATTERN.test(normalizedPath)) return normalizedPath;
+    return `${basePath}${normalizedPath}`;
+  }
+
+  function normalizeCardLink(rawLink) {
+    const value = String(rawLink || '').trim();
+    if (!value) return '';
+    try {
+      const resolved = new URL(value, window.location.href);
+      if (resolved.origin !== window.location.origin) return resolved.toString();
+      const normalizedPath = normalizeAppPath(resolved.pathname);
+      return `${normalizedPath}${resolved.search}${resolved.hash}`;
+    } catch {
+      return value;
+    }
+  }
 
   function hasUsableImage(imageUrl) {
     if (!imageUrl) return false;
@@ -176,9 +209,14 @@
     card.appendChild(badgeStack);
     card.appendChild(cardMeta);
 
-    if (item.link || onClick) {
+    const resolvedLink = normalizeCardLink(item.link);
+    if (resolvedLink) {
+      item.link = resolvedLink;
+    }
+
+    if (resolvedLink || onClick) {
       card.onclick = onClick || (() => {
-        window.location.href = item.link;
+        window.location.href = resolvedLink;
       });
     }
 

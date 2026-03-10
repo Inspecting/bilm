@@ -11,6 +11,19 @@ function withBase(path) {
   return `${detectBasePath()}${normalized}`;
 }
 
+const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
+
+function normalizeInternalAppPath(pathname = '') {
+  const rawPath = String(pathname || '').trim();
+  if (!rawPath) return '';
+  const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  const basePath = detectBasePath();
+  if (!basePath) return normalizedPath;
+  if (normalizedPath === basePath || normalizedPath.startsWith(`${basePath}/`)) return normalizedPath;
+  if (!APP_ROUTE_PATTERN.test(normalizedPath)) return normalizedPath;
+  return `${basePath}${normalizedPath}`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
   const WATCH_HISTORY_KEY = 'bilm-watch-history';
@@ -137,12 +150,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const resolved = new URL(rawLink, window.location.origin);
+      const resolved = new URL(rawLink, window.location.href);
       const movieId = resolved.searchParams.get('id') || fallbackId;
-      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
-        || /\/movies\/?$/i.test(resolved.pathname);
+      const normalizedPath = normalizeInternalAppPath(resolved.pathname);
+      const normalizedSameOriginHref = `${normalizedPath}${resolved.search}${resolved.hash}`;
+      const pointsToCurrentDetailsRoute = /\/movies\/show\.html$/i.test(normalizedPath);
+      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(normalizedPath)
+        || /\/movies\/?$/i.test(normalizedPath);
+      if ((pointsToCurrentDetailsRoute || pointsToOldMovieRoute) && movieId) {
+        return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+      }
+      if (resolved.origin === window.location.origin) {
+        return normalizedSameOriginHref;
+      }
       if (pointsToOldMovieRoute && movieId) {
         return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+      }
+    } catch {
+      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
+    }
+
+    return rawLink;
+  }
+
+  function normalizeSameOriginHistoryLink(rawLink) {
+    const value = String(rawLink || '').trim();
+    if (!value) return '';
+    try {
+      const resolved = new URL(value, window.location.href);
+      if (resolved.origin !== window.location.origin) return resolved.toString();
+      const normalizedPath = normalizeInternalAppPath(resolved.pathname);
+      return `${normalizedPath}${resolved.search}${resolved.hash}`;
+    } catch {
+      return value;
+    }
+  }
+
+  function resolveTvDetailsLink(item) {
+    const detailsBase = withBase('/tv/show.html');
+    const fallbackId = item?.id || item?.tmdbId;
+    const rawLink = normalizeSameOriginHistoryLink(item?.link);
+    if (!rawLink) {
+      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
+    }
+
+    try {
+      const resolved = new URL(rawLink, window.location.href);
+      const tvId = resolved.searchParams.get('id') || fallbackId;
+      const normalizedPath = normalizeInternalAppPath(resolved.pathname);
+      if (tvId && /\/tv\/show\.html$/i.test(normalizedPath)) {
+        return `${detailsBase}?id=${encodeURIComponent(tvId)}`;
+      }
+      if (resolved.origin === window.location.origin) {
+        return `${normalizedPath}${resolved.search}${resolved.hash}`;
       }
     } catch {
       return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
@@ -304,8 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.addEventListener('click', () => {
           const destination = item.type === 'movie'
             ? resolveMovieDetailsLink(item)
-            : item.link
-              || (item.type === 'tv' && item.id ? `${withBase('/tv/show.html')}?id=${encodeURIComponent(item.id)}` : '');
+            : resolveTvDetailsLink(item);
           if (!destination) return;
           window.location.href = destination;
         });

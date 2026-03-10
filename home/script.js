@@ -11,6 +11,21 @@ function withBase(path) {
   return `${detectBasePath()}${normalized}`;
 }
 
+const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
+const HOME_ROW_BATCH_SIZE = 24;
+const HOME_ROW_RENDER_CHUNK_SIZE = 8;
+
+function normalizeInternalAppPath(pathname = '') {
+  const rawPath = String(pathname || '').trim();
+  if (!rawPath) return '';
+  const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  const basePath = detectBasePath();
+  if (!basePath) return normalizedPath;
+  if (normalizedPath === basePath || normalizedPath.startsWith(`${basePath}/`)) return normalizedPath;
+  if (!APP_ROUTE_PATTERN.test(normalizedPath)) return normalizedPath;
+  return `${basePath}${normalizedPath}`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('searchInput');
   const searchBtn = document.getElementById('searchBtn');
@@ -145,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const resolved = new URL(rawLink, window.location.origin);
+      const resolved = new URL(rawLink, window.location.href);
       const linkId = Number(resolved.searchParams.get('id') || item?.tmdbId || item?.id);
       const inferredType = /\/tv\//i.test(resolved.pathname)
         ? 'tv'
@@ -288,31 +303,41 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rawLink) return '';
 
     try {
-      const resolved = new URL(rawLink, window.location.origin);
+      const resolved = new URL(rawLink, window.location.href);
       const movieId = resolved.searchParams.get('id') || fallbackId;
+      const normalizedPath = normalizeInternalAppPath(resolved.pathname);
+      const normalizedSameOriginHref = `${normalizedPath}${resolved.search}${resolved.hash}`;
+      const pointsToCurrentDetailsRoute = /\/(?:tv|movies)\/show\.html$/i.test(normalizedPath);
       if (movieId && (mediaType === 'movie' || mediaType === 'tv')) {
-        return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+        const pointsToWrongTypeDetails = (
+          (mediaType === 'movie' && /\/tv\//i.test(normalizedPath))
+          || (mediaType === 'tv' && /\/movies?\//i.test(normalizedPath))
+        );
+        if (pointsToCurrentDetailsRoute || pointsToWrongTypeDetails) {
+          return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
+        }
       }
-      const internalRelativeRoute = /\/?movie\.html$/i.test(resolved.pathname)
-        || /\/home\/(?:movie\.html|viewer\.html|show\.html)$/i.test(resolved.pathname)
-        || /\/show\.html$/i.test(resolved.pathname)
-        || /\/home\/(?:movie\.html|viewer\.html)$/i.test(resolved.pathname);
-      const pointsToLegacyHomeDetailsRoute = /\/(?:home\/)?show\.html$/i.test(resolved.pathname);
-      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
-        || /\/movies\/?$/i.test(resolved.pathname)
-        || /\/tv\/(?:viewer\.html|watch\/viewer\.html)$/i.test(resolved.pathname)
-        || /\/tv\/?$/i.test(resolved.pathname);
+      const internalRelativeRoute = /\/?movie\.html$/i.test(normalizedPath)
+        || /\/home\/(?:movie\.html|viewer\.html|show\.html)$/i.test(normalizedPath)
+        || /\/show\.html$/i.test(normalizedPath)
+        || /\/home\/(?:movie\.html|viewer\.html)$/i.test(normalizedPath);
+      const pointsToLegacyHomeDetailsRoute = /\/(?:home\/)?show\.html$/i.test(normalizedPath);
+      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(normalizedPath)
+        || /\/movies\/?$/i.test(normalizedPath)
+        || /\/tv\/(?:viewer\.html|watch\/viewer\.html)$/i.test(normalizedPath)
+        || /\/tv\/?$/i.test(normalizedPath);
       if ((pointsToOldMovieRoute || internalRelativeRoute || pointsToLegacyHomeDetailsRoute) && movieId) {
         return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
       }
 
-      if (resolved.origin === window.location.origin && movieId) {
-        if (mediaType === 'movie' && /\/(home\/)?tv\//i.test(resolved.pathname)) {
+      if (resolved.origin === window.location.origin) {
+        if (movieId && mediaType === 'movie' && /\/(home\/)?tv\//i.test(normalizedPath)) {
           return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
         }
-        if (mediaType === 'tv' && /\/(home\/)?movies?\//i.test(resolved.pathname)) {
+        if (movieId && mediaType === 'tv' && /\/(home\/)?movies?\//i.test(normalizedPath)) {
           return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
         }
+        return normalizedSameOriginHref;
       }
     } catch {
       if (fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
@@ -406,6 +431,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderRow(container, items, emptyMessage, section) {
+    if (container.__bilmRowObserver) {
+      container.__bilmRowObserver.disconnect();
+      container.__bilmRowObserver = null;
+    }
     container.innerHTML = '';
     if (!items.length) {
       const empty = document.createElement('div');
@@ -415,9 +444,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    items.forEach(item => {
+    const state = sectionState[section];
+    const controls = sectionControls[section];
+    const renderToken = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    container.__bilmRenderToken = renderToken;
+
+    function createCard(item) {
       const identity = parseStoredMediaIdentity(item);
-      const state = sectionState[section];
       const card = window.BilmMediaCard.createMediaCard({
         item: {
           title: item.title,
@@ -437,6 +470,9 @@ document.addEventListener('DOMContentLoaded', () => {
         titleClassName: 'card-title',
         subtitleClassName: 'card-subtitle'
       });
+      if (!(card instanceof HTMLElement)) {
+        return document.createDocumentFragment();
+      }
 
       if (state.editing) {
         card.classList.add('is-editing');
@@ -449,7 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
       actionBtn.type = 'button';
       actionBtn.className = 'card-action';
       actionBtn.textContent = '✕';
-      const controls = sectionControls[section];
       actionBtn.setAttribute('aria-label', controls?.removeLabel || 'Remove');
       actionBtn.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -481,8 +516,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       };
 
-      container.appendChild(card);
-    });
+      return card;
+    }
+
+    let renderedCount = 0;
+    const supportsObserver = typeof window.IntersectionObserver === 'function';
+
+    const appendNextBatch = () => {
+      if (container.__bilmRenderToken !== renderToken) return;
+      const nextItems = items.slice(renderedCount, renderedCount + HOME_ROW_BATCH_SIZE);
+      if (!nextItems.length) return;
+
+      let index = 0;
+      const appendChunk = () => {
+        if (container.__bilmRenderToken !== renderToken) return;
+        const fragment = document.createDocumentFragment();
+        const chunkEnd = Math.min(index + HOME_ROW_RENDER_CHUNK_SIZE, nextItems.length);
+        while (index < chunkEnd) {
+          fragment.appendChild(createCard(nextItems[index]));
+          index += 1;
+        }
+        container.appendChild(fragment);
+        if (index < nextItems.length) {
+          window.requestAnimationFrame(appendChunk);
+          return;
+        }
+        renderedCount += nextItems.length;
+        if (renderedCount >= items.length) return;
+
+        const sentinel = document.createElement('div');
+        sentinel.className = 'card-load-sentinel';
+        sentinel.setAttribute('aria-hidden', 'true');
+        sentinel.style.width = '1px';
+        sentinel.style.height = '1px';
+        sentinel.style.flex = '0 0 auto';
+        container.appendChild(sentinel);
+
+        if (!supportsObserver) {
+          sentinel.remove();
+          appendNextBatch();
+          return;
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return;
+          observer.disconnect();
+          container.__bilmRowObserver = null;
+          sentinel.remove();
+          appendNextBatch();
+        }, {
+          root: container,
+          rootMargin: '0px 260px 0px 0px',
+          threshold: 0.01
+        });
+        observer.observe(sentinel);
+        container.__bilmRowObserver = observer;
+      };
+
+      appendChunk();
+    };
+
+    appendNextBatch();
   }
 
   function sortByRecent(items) {
