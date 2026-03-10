@@ -1,0 +1,60 @@
+Anime Routing + Backup Diagnostic Report
+Generated: 2026-03-10 (America/Chicago)
+Workspace: C:\Users\reidm\bilm
+
+Broken / At Risk
+1) Third-party stream domains remain a runtime availability risk.
+- Affected domains include `vidsrc-embed.ru`, `multiembed.mov`, `godriveplayer.com`, `embedmaster.link`, and `vidnest.fun`.
+- Impact: button clicks can still fail when upstream providers are down or blocked regionally, even when local routing is correct.
+- Current mitigation: deterministic server fallback exists, but if all providers fail, playback fails.
+
+2) One-time migration intentionally drops malformed legacy media items with no resolvable provider/type/id key.
+- Source: canonical dedupe only keeps entries with a valid canonical key.
+- Impact: corrupted historical entries may disappear after migration (favors correctness over keeping broken records).
+
+3) Full browser automation coverage is not present in this repo for desktop/mobile click-paths.
+- Impact: viewport/click regressions are still possible between manual checks.
+- Current status: static smoke checks and syntax validation were completed, but no Playwright/Cypress suite exists in-project.
+
+Potential Future Issues
+1) Client-side TMDB key exposure.
+- TMDB fallback calls use a public key in frontend code paths.
+- Risk: key rotation/quota abuse can degrade fallback behavior.
+
+2) Dual-cloud persistence model complexity (`data-api` + Firestore mirror).
+- Current behavior is stable, but long-term schema drift between operation sync and snapshot mirror paths is a maintenance risk.
+
+3) Cross-domain dependency surface is broad.
+- Detected external hosts: `storage-api.watchbilm.org`, `data-api.watchbilm.org`, `api.themoviedb.org`, `graphql.anilist.co`, `image.tmdb.org`, `youtube.com`, and multiple streaming domains.
+- Risk: DNS/CORS/outage changes outside app control can cause intermittent failures.
+
+Working As Expected
+1) Provider-aware canonical identity is implemented and wired into core flows.
+- Keys now normalize to: `tmdb:movie:<id>`, `tmdb:tv:<id>`, `anilist:movie:<id>`, `anilist:tv:<id>`.
+- Favorites, Watch Later, Continue Watching, and Watch History now use provider-aware matching.
+
+2) Anime route preservation is enforced.
+- Anime details links remain `...anime=1&aid=...&type=...` and are no longer rewritten to TMDB `?id=` links.
+- Anime `tmdbId` poisoning is prevented for AniList-backed records.
+
+3) One-time local migration is active.
+- Migration key: `bilm-media-identity-migration-v2`.
+- Target lists: favorites, watch later, continue watching, watch history, and legacy history buckets.
+- Deduplication keeps newest record by `updatedAt`.
+
+4) Anime trailer and “More Like This” now follow AniList-first behavior.
+- Trailer/recommendations/relations pull from AniList first.
+- TMDB fallback is strict (normalized title + tight year tolerance + media-type endpoint matching) and safely shows unavailable when confidence is low.
+
+5) Daily Firebase backup mirror guard is implemented.
+- Sync meta fields added/updated: `lastFirebaseMirrorAtMs`, `lastFirebaseMirrorReason`.
+- Mirror runs only when at least 24 hours have elapsed, triggered after successful sync-capable pushes.
+- Firebase mirror failures are non-blocking when primary data-api sync succeeds.
+
+6) API suite checks passed.
+- `data-api`: 23/23 tests passed.
+- `storage-api`: 3/3 tests passed.
+
+7) Desktop/mobile static smoke checks passed for core pages.
+- Verified viewport meta on home, movie details, movie watch, TV details, TV watch, settings, and history pages.
+- JavaScript syntax checks passed for all modified frontend/shared files.

@@ -9,6 +9,18 @@ const anilistId = params.get('aid') || params.get('id');
 
 const FAVORITES_KEY = 'bilm-favorites';
 const WATCH_LATER_KEY = 'bilm-watch-later';
+const mediaIdentity = window.BilmMediaIdentity || {
+  toMediaTypeFromAniListFormat: () => 'tv',
+  buildDetailsLink: ({ type, id }) => (type === 'tv'
+    ? `../tv/show.html?anime=1&aid=${id}&type=tv`
+    : `./show.html?anime=1&aid=${id}&type=movie`),
+  createStoredMediaItem: (item) => item,
+  canonicalizeStoredItem: (item) => item,
+  findIndexByIdentity: (list, item) => list.findIndex((entry) => entry?.key && entry.key === item?.key),
+  hasIdentity: (list, item) => list.some((entry) => entry?.key && entry.key === item?.key),
+  dedupeCanonicalItems: (list) => list
+};
+mediaIdentity.migrateLocalListsOnce?.();
 
 const status = document.getElementById('status');
 const favoriteBtn = document.getElementById('favoriteBtn');
@@ -63,25 +75,31 @@ function fetchJSON(url) {
 function readList(key) {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => mediaIdentity.canonicalizeStoredItem(item) || item).filter(Boolean);
   } catch {
     return [];
   }
 }
 
 function writeList(key, items) {
-  localStorage.setItem(key, JSON.stringify(items));
+  const list = Array.isArray(items) ? items : [];
+  const normalized = list
+    .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
+    .filter(Boolean);
+  localStorage.setItem(key, JSON.stringify(mediaIdentity.dedupeCanonicalItems(normalized)));
 }
 
 function toggleInList(key, item) {
+  const canonical = mediaIdentity.canonicalizeStoredItem(item) || item;
   const current = readList(key);
-  const index = current.findIndex((entry) => entry.key === item.key || entry.tmdbId === item.tmdbId || entry.id === item.id);
+  const index = mediaIdentity.findIndexByIdentity(current, canonical);
   if (index >= 0) {
     current.splice(index, 1);
     writeList(key, current);
     return false;
   }
-  current.unshift(item);
+  current.unshift(canonical);
   writeList(key, current.slice(0, 60));
   return true;
 }
@@ -109,6 +127,31 @@ function pickCertification(items, key = 'certification') {
   return '';
 }
 
+function normalizeTitle(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function extractYear(value) {
+  const parsed = Number.parseInt(String(value || '').trim(), 10);
+  return Number.isFinite(parsed) && parsed > 1800 ? parsed : 0;
+}
+
+function sanitizeText(value) {
+  return String(value || '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function setMoreLikeStatus(message) {
+  if (moreLikeStatus) {
+    moreLikeStatus.textContent = message;
+  }
+}
+
 function createMovieCard(movie) {
   const cardItem = {
     tmdbId: movie.id,
@@ -134,10 +177,34 @@ function createMovieCard(movie) {
   });
 }
 
-function setMoreLikeStatus(message) {
-  if (moreLikeStatus) {
-    moreLikeStatus.textContent = message;
-  }
+function createAnimeCard(media) {
+  const animeMediaId = Number(media?.id || 0);
+  if (!animeMediaId) return document.createDocumentFragment();
+  const mediaType = mediaIdentity.toMediaTypeFromAniListFormat(media?.format);
+  const detailsLink = mediaIdentity.buildDetailsLink({
+    provider: 'anilist',
+    type: mediaType,
+    id: animeMediaId
+  });
+  return window.BilmMediaCard.createMediaCard({
+    item: {
+      id: animeMediaId,
+      anilistId: animeMediaId,
+      title: media?.title?.english || media?.title?.romaji || 'Untitled',
+      year: String(media?.startDate?.year || 'N/A'),
+      type: mediaType,
+      img: media?.coverImage?.large || media?.coverImage?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
+      source: 'AniList',
+      rating: Number.isFinite(Number(media?.averageScore)) ? Number(media.averageScore) / 10 : null,
+      link: detailsLink
+    },
+    className: 'movie-card',
+    badgeClassName: 'source-badge-overlay',
+    metaClassName: 'card-meta',
+    titleClassName: 'card-title',
+    subtitleClassName: 'card-subtitle',
+    dataset: { anilistId: animeMediaId }
+  });
 }
 
 async function fetchMoreLikeCandidates(page = 1) {
@@ -180,6 +247,85 @@ async function loadMoreLikeMovies() {
   similarLoading = false;
 }
 
+function collectAnimeRecommendations(details) {
+  const recommended = [];
+  const seen = new Set();
+  const addMedia = (media) => {
+    const id = Number(media?.id || 0);
+    if (!id || seen.has(id) || id === Number(details?.id || 0)) return;
+    seen.add(id);
+    recommended.push(media);
+  };
+
+  (details?.recommendations?.nodes || []).forEach((node) => addMedia(node?.mediaRecommendation));
+  (details?.relations?.edges || []).forEach((edge) => {
+    const relationType = String(edge?.relationType || '').trim().toUpperCase();
+    if (!relationType) return;
+    addMedia(edge?.node);
+  });
+
+  return recommended;
+}
+
+function renderAnimeTrailer(details) {
+  const trailerSite = String(details?.trailer?.site || '').trim().toLowerCase();
+  const trailerId = String(details?.trailer?.id || '').trim();
+  if (trailerSite === 'youtube' && trailerId) {
+    document.getElementById('trailerBox').innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(trailerId)}" title="Trailer" allowfullscreen></iframe>`;
+    return true;
+  }
+  return false;
+}
+
+async function findStrictTmdbMovieMatch({ title, year }) {
+  const normalizedTitle = normalizeTitle(title);
+  if (!normalizedTitle) return 0;
+  const search = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/search/movie?query=${encodeURIComponent(title)}`);
+  const candidates = Array.isArray(search?.results) ? search.results : [];
+  for (const candidate of candidates) {
+    const candidateTitle = normalizeTitle(candidate?.title || candidate?.original_title);
+    if (!candidateTitle || candidateTitle !== normalizedTitle) continue;
+    const candidateYear = extractYear(String(candidate?.release_date || '').slice(0, 4));
+    if (year > 0 && candidateYear > 0 && Math.abs(candidateYear - year) > 1) continue;
+    return Number(candidate?.id || 0) || 0;
+  }
+  return 0;
+}
+
+async function renderStrictTmdbAnimeFallback({ title, year, includeRecommendations = true }) {
+  const strictTmdbId = await findStrictTmdbMovieMatch({ title, year });
+  if (!strictTmdbId) return false;
+
+  const videos = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${strictTmdbId}/videos`);
+  const trailer = (videos?.results || []).find((video) => video.site === 'YouTube' && video.type === 'Trailer');
+  if (trailer?.key) {
+    document.getElementById('trailerBox').innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(trailer.key)}" title="Trailer" allowfullscreen></iframe>`;
+  }
+
+  if (!includeRecommendations || !moreLikeEl) return Boolean(trailer?.key);
+
+  const [similar, recommended] = await Promise.all([
+    fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${strictTmdbId}/similar?page=1`),
+    fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${strictTmdbId}/recommendations?page=1`)
+  ]);
+  const merged = [...(similar?.results || []), ...(recommended?.results || [])];
+  const deduped = [];
+  const seen = new Set();
+  merged.forEach((movie) => {
+    const id = Number(movie?.id || 0);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    deduped.push(movie);
+  });
+
+  if (!deduped.length) return Boolean(trailer?.key);
+  deduped.slice(0, 24).forEach((movie) => {
+    moreLikeEl.appendChild(createMovieCard(movie));
+  });
+  setMoreLikeStatus('Using strict TMDB fallback recommendations.');
+  return true;
+}
+
 async function fetchAnimeMovieDetails() {
   if (!anilistId) {
     status.textContent = 'Missing anime id.';
@@ -190,6 +336,7 @@ async function fetchAnimeMovieDetails() {
     query ($id: Int!) {
       Media(id: $id, type: ANIME) {
         id
+        format
         title { romaji english }
         coverImage { large medium }
         bannerImage
@@ -199,6 +346,33 @@ async function fetchAnimeMovieDetails() {
         averageScore
         genres
         startDate { year month day }
+        trailer { id site thumbnail }
+        recommendations(perPage: 24, sort: RATING_DESC) {
+          nodes {
+            mediaRecommendation {
+              id
+              format
+              title { romaji english }
+              coverImage { large medium }
+              startDate { year month day }
+              averageScore
+            }
+          }
+        }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              type
+              format
+              title { romaji english }
+              coverImage { large medium }
+              startDate { year month day }
+              averageScore
+            }
+          }
+        }
       }
     }
   `;
@@ -233,7 +407,7 @@ async function fetchAnimeMovieDetails() {
     document.getElementById('movieBody').style.display = '';
     document.getElementById('movieTitle').textContent = `${title} (${year})`;
     document.getElementById('titleHead').textContent = title;
-    document.getElementById('overview').textContent = (details.description || 'No description available.').replace(/<[^>]+>/g, '');
+    document.getElementById('overview').textContent = sanitizeText(details.description || 'No description available.');
     document.getElementById('poster').src = details.coverImage?.large || details.coverImage?.medium || 'https://via.placeholder.com/500x750?text=No+Poster';
 
     const pills = document.getElementById('pills');
@@ -251,22 +425,47 @@ async function fetchAnimeMovieDetails() {
       pills.appendChild(span);
     });
 
-    document.getElementById('trailerBox').innerHTML = '<p class="subtitle">Trailer not available from this source.</p>';
-    document.getElementById('castLine').textContent = 'Cast data unavailable for anime source.';
+    const hasAniListTrailer = renderAnimeTrailer(details);
+    if (!hasAniListTrailer) {
+      document.getElementById('trailerBox').innerHTML = '<p class="subtitle">Trailer not available from AniList. Trying strict fallback…</p>';
+    }
 
+    document.getElementById('castLine').textContent = 'Cast data unavailable for anime source.';
     document.getElementById('watchLink').href = `./watch/viewer.html?anime=1&aid=${details.id}&type=movie&episode=1`;
     document.getElementById('tmdbLink').textContent = 'Open on AniList';
     document.getElementById('tmdbLink').href = `https://anilist.co/anime/${details.id}`;
 
     if (moreLikeEl) {
       moreLikeEl.innerHTML = '';
-      setMoreLikeStatus('Recommendations unavailable for anime right now.');
+      const recommendations = collectAnimeRecommendations(details);
+      recommendations.forEach((media) => {
+        moreLikeEl.appendChild(createAnimeCard(media));
+      });
+      if (recommendations.length) {
+        setMoreLikeStatus('');
+      } else {
+        setMoreLikeStatus('AniList had no recommendations. Trying strict fallback…');
+      }
+      if (!hasAniListTrailer || !recommendations.length) {
+        const fallbackUsed = await renderStrictTmdbAnimeFallback({
+          title,
+          year: extractYear(year),
+          includeRecommendations: !recommendations.length
+        });
+        if (!fallbackUsed) {
+          if (!hasAniListTrailer) {
+            document.getElementById('trailerBox').innerHTML = '<p class="subtitle">No trailer available right now.</p>';
+          }
+          if (!recommendations.length) {
+            setMoreLikeStatus('Recommendations unavailable for anime right now.');
+          }
+        }
+      }
     }
 
-    const movieItem = {
-      key: `anime-movie-${details.id}`,
+    const movieItem = mediaIdentity.createStoredMediaItem({
+      provider: 'anilist',
       id: details.id,
-      tmdbId: details.id,
       anilistId: details.id,
       title,
       type: 'movie',
@@ -276,13 +475,14 @@ async function fetchAnimeMovieDetails() {
       source: 'AniList',
       rating: details.averageScore ? details.averageScore / 10 : null,
       certification: 'N/A',
-      link: `./show.html?anime=1&aid=${details.id}&type=movie`,
       updatedAt: Date.now()
-    };
+    });
 
     const syncStates = () => {
-      const isFavorite = readList(FAVORITES_KEY).some((entry) => entry.key === movieItem.key || entry.anilistId === movieItem.anilistId);
-      const isWatchLater = readList(WATCH_LATER_KEY).some((entry) => entry.key === movieItem.key || entry.anilistId === movieItem.anilistId);
+      const favorites = readList(FAVORITES_KEY);
+      const watchLater = readList(WATCH_LATER_KEY);
+      const isFavorite = mediaIdentity.hasIdentity(favorites, movieItem);
+      const isWatchLater = mediaIdentity.hasIdentity(watchLater, movieItem);
       setIconState(favoriteBtn, isFavorite, { active: 'Remove from favorites', inactive: 'Add to favorites' });
       setIconState(watchLaterBtn, isWatchLater, { active: 'Remove from watch later', inactive: 'Add to watch later' });
     };
@@ -366,8 +566,8 @@ async function loadMovieDetails() {
       await loadMoreLikeMovies();
     }
 
-    const movieItem = {
-      key: `movie-${details.id}`,
+    const movieItem = mediaIdentity.createStoredMediaItem({
+      provider: 'tmdb',
       id: details.id,
       tmdbId: details.id,
       title: details.title,
@@ -378,13 +578,14 @@ async function loadMovieDetails() {
       source: 'TMDB',
       rating: details.vote_average,
       certification,
-      link: `./show.html?id=${details.id}`,
       updatedAt: Date.now()
-    };
+    });
 
     const syncStates = () => {
-      const isFavorite = readList(FAVORITES_KEY).some((entry) => entry.key === movieItem.key || entry.tmdbId === movieItem.tmdbId || entry.id === movieItem.id);
-      const isWatchLater = readList(WATCH_LATER_KEY).some((entry) => entry.key === movieItem.key || entry.tmdbId === movieItem.tmdbId || entry.id === movieItem.id);
+      const favorites = readList(FAVORITES_KEY);
+      const watchLater = readList(WATCH_LATER_KEY);
+      const isFavorite = mediaIdentity.hasIdentity(favorites, movieItem);
+      const isWatchLater = mediaIdentity.hasIdentity(watchLater, movieItem);
       setIconState(favoriteBtn, isFavorite, { active: 'Remove from favorites', inactive: 'Add to favorites' });
       setIconState(watchLaterBtn, isWatchLater, { active: 'Remove from watch later', inactive: 'Add to watch later' });
     };
@@ -410,12 +611,13 @@ loadMovieDetails();
 
 if (moreLikeBox) {
   moreLikeBox.addEventListener('scroll', () => {
-    if (similarLoading || similarEnded) return;
+    if (similarLoading || similarEnded || isAnime) return;
     if (moreLikeBox.scrollTop + moreLikeBox.clientHeight >= moreLikeBox.scrollHeight - 180) {
       loadMoreLikeMovies();
     }
   });
 }
+
 async function waitForApiCooldown(url) {
   let host = 'default';
   try {
@@ -431,5 +633,3 @@ async function waitForApiCooldown(url) {
   }
   apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
 }
-
-

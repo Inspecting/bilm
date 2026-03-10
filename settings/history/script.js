@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
   const WATCH_HISTORY_KEY = 'bilm-watch-history';
   const LEGACY_WATCH_HISTORY_KEY = 'bilm-continue-watching';
+  const MEDIA_HISTORY_KEYS = new Set([WATCH_HISTORY_KEY, LEGACY_WATCH_HISTORY_KEY]);
   const HISTORY_PREFS_KEY = 'bilm-history-page-prefs';
   const storage = window.bilmTheme?.storage || {
     getJSON: (key, fallback = []) => {
@@ -44,6 +45,13 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem(key, JSON.stringify(value));
     }
   };
+  const mediaIdentity = window.BilmMediaIdentity || {
+    migrateLocalListsOnce: () => false,
+    resolveDetailsDestination: (item) => String(item?.link || '').trim(),
+    canonicalizeStoredItem: (item) => item,
+    dedupeCanonicalItems: (list) => list
+  };
+  mediaIdentity.migrateLocalListsOnce?.();
 
   const state = {
     activeType: 'search',
@@ -85,11 +93,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadList(key) {
     const list = storage.getJSON(key, []);
-    return Array.isArray(list) ? list : [];
+    if (!Array.isArray(list)) return [];
+    if (!MEDIA_HISTORY_KEYS.has(key)) return list;
+    return list
+      .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
+      .filter(Boolean);
   }
 
   function saveList(key, list) {
-    storage.setJSON(key, list);
+    if (!MEDIA_HISTORY_KEYS.has(key)) {
+      storage.setJSON(key, Array.isArray(list) ? list : []);
+      return;
+    }
+    const normalized = (Array.isArray(list) ? list : [])
+      .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
+      .filter(Boolean);
+    storage.setJSON(key, mediaIdentity.dedupeCanonicalItems(normalized));
   }
 
 
@@ -141,36 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function resolveMovieDetailsLink(item) {
-    const detailsBase = withBase('/movies/show.html');
-    const fallbackId = item?.id || item?.tmdbId;
-    const rawLink = String(item?.link || '');
-
-    if (!rawLink) {
-      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
-    }
-
-    try {
-      const resolved = new URL(rawLink, window.location.href);
-      const movieId = resolved.searchParams.get('id') || fallbackId;
-      const normalizedPath = normalizeInternalAppPath(resolved.pathname);
-      const normalizedSameOriginHref = `${normalizedPath}${resolved.search}${resolved.hash}`;
-      const pointsToCurrentDetailsRoute = /\/movies\/show\.html$/i.test(normalizedPath);
-      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(normalizedPath)
-        || /\/movies\/?$/i.test(normalizedPath);
-      if ((pointsToCurrentDetailsRoute || pointsToOldMovieRoute) && movieId) {
-        return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
-      }
-      if (resolved.origin === window.location.origin) {
-        return normalizedSameOriginHref;
-      }
-      if (pointsToOldMovieRoute && movieId) {
-        return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
-      }
-    } catch {
-      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
-    }
-
-    return rawLink;
+    return mediaIdentity.resolveDetailsDestination(item, 'movie');
   }
 
   function normalizeSameOriginHistoryLink(rawLink) {
@@ -187,28 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function resolveTvDetailsLink(item) {
-    const detailsBase = withBase('/tv/show.html');
-    const fallbackId = item?.id || item?.tmdbId;
-    const rawLink = normalizeSameOriginHistoryLink(item?.link);
-    if (!rawLink) {
-      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
-    }
-
-    try {
-      const resolved = new URL(rawLink, window.location.href);
-      const tvId = resolved.searchParams.get('id') || fallbackId;
-      const normalizedPath = normalizeInternalAppPath(resolved.pathname);
-      if (tvId && /\/tv\/show\.html$/i.test(normalizedPath)) {
-        return `${detailsBase}?id=${encodeURIComponent(tvId)}`;
-      }
-      if (resolved.origin === window.location.origin) {
-        return `${normalizedPath}${resolved.search}${resolved.hash}`;
-      }
-    } catch {
-      return fallbackId ? `${detailsBase}?id=${encodeURIComponent(fallbackId)}` : '';
-    }
-
-    return rawLink;
+    return mediaIdentity.resolveDetailsDestination(item, 'tv');
   }
 
   function getRangeCutoff() {

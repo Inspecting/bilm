@@ -359,6 +359,7 @@
 
   const MIN_SAVE_INTERVAL_MS = 15000;
   const AUTOSYNC_HEARTBEAT_MS = 15000;
+  const FIREBASE_MIRROR_INTERVAL_MS = 24 * 60 * 60 * 1000;
   const LIST_SYNC_DEBOUNCE_MS = 500;
   const LIST_DELETE_SYNC_DEBOUNCE_MS = 15000;
   const SYNC_IDLE_PAUSE_MS = 5 * 60 * 1000;
@@ -1171,6 +1172,57 @@
     return localStorage.getItem(SYNC_ENABLED_KEY) !== '0';
   }
 
+  function getLastFirebaseMirrorAtMs(meta = readSyncMeta()) {
+    const raw = Number(meta?.lastFirebaseMirrorAtMs || 0);
+    return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  }
+
+  function isFirebaseMirrorDue(nowMs = Date.now(), meta = readSyncMeta()) {
+    const lastMirrorAtMs = getLastFirebaseMirrorAtMs(meta);
+    if (!lastMirrorAtMs) return true;
+    return nowMs - lastMirrorAtMs >= FIREBASE_MIRROR_INTERVAL_MS;
+  }
+
+  async function mirrorSnapshotToFirebaseIfDue(reason = 'daily-sync') {
+    const user = auth?.currentUser;
+    if (!user || !isSyncEnabled()) return false;
+    if (!modules?.setDoc || !modules?.doc || !modules?.serverTimestamp || !firestore) return false;
+
+    const nowMs = Date.now();
+    const meta = readSyncMeta();
+    if (!isFirebaseMirrorDue(nowMs, meta)) return false;
+
+    const snapshot = collectBackupData();
+    const payload = {
+      ...(snapshot || {}),
+      meta: {
+        ...(snapshot?.meta || {}),
+        updatedAtMs: nowMs,
+        deviceId: getOrCreateDeviceId(),
+        version: 1
+      }
+    };
+
+    try {
+      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+        cloudBackup: {
+          schema: 'bilm-cloud-sync-v1',
+          updatedAt: modules.serverTimestamp(),
+          snapshot: payload,
+          transferApiMirrored: true
+        }
+      }, { merge: true });
+      writeSyncMeta({
+        lastFirebaseMirrorAtMs: nowMs,
+        lastFirebaseMirrorReason: String(reason || 'daily-sync')
+      });
+      return true;
+    } catch (error) {
+      console.warn('Daily Firebase mirror failed:', error);
+      return false;
+    }
+  }
+
   function snapshotSignature(snapshot) {
     try {
       const normalized = snapshot
@@ -1530,6 +1582,7 @@
         lastListSyncPushAt: Date.now(),
         lastListSyncPushReason: reason
       });
+      void mirrorSnapshotToFirebaseIfDue(`list-sync:${reason}`);
       console.debug('[sync] flush success', {
         reason,
         count: operations.length
@@ -2166,13 +2219,15 @@
     async saveCloudSnapshot(snapshot, options = {}) {
       const user = await requireAuth();
       const mirrorToFirebase = options?.mirrorToFirebase === true;
+      const mirrorReason = String(options?.mirrorReason || 'manual-save');
       const cloudSnapshot = await api.getCloudSnapshot();
       const mergedSnapshot = mergeSnapshots(cloudSnapshot, snapshot || null) || snapshot || null;
+      const nowMs = Date.now();
       const payload = {
         ...(mergedSnapshot || {}),
         meta: {
           ...(mergedSnapshot?.meta || {}),
-          updatedAtMs: Date.now(),
+          updatedAtMs: nowMs,
           deviceId: getOrCreateDeviceId(),
           version: 1
         }
@@ -2184,6 +2239,7 @@
       const userId = getTransferUserId(user);
       let savedToTransferApi = false;
       let lastTransferError = null;
+      let firebaseMirrored = false;
       try {
         await saveSnapshotToTransferApi(user, userId, payload);
         savedToTransferApi = true;
@@ -2202,6 +2258,7 @@
               transferApiMirrored: savedToTransferApi
             }
           }, { merge: true });
+          firebaseMirrored = true;
         } catch (firebaseError) {
           console.warn('Firebase backup write failed during cloud snapshot save:', firebaseError);
           if (!savedToTransferApi) {
@@ -2213,8 +2270,12 @@
       }
 
       writeSyncMeta({
-        lastCloudPushAt: Date.now(),
-        lastLocalChangeAt: Date.now()
+        lastCloudPushAt: nowMs,
+        lastLocalChangeAt: nowMs,
+        ...(firebaseMirrored ? {
+          lastFirebaseMirrorAtMs: nowMs,
+          lastFirebaseMirrorReason: mirrorReason
+        } : {})
       });
     },
     async getCloudSnapshot(options = {}) {
@@ -2338,6 +2399,7 @@
         lastListSyncPushAt: Date.now(),
         lastListSyncPushReason: reason
       });
+      void mirrorSnapshotToFirebaseIfDue(`sector-sync:${reason}`);
       return response;
     },
     async scheduleCloudSave(reason = 'manual') {

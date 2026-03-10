@@ -90,6 +90,14 @@ const storage = window.bilmTheme?.storage || {
   getItem: (key) => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value)
 };
+const mediaIdentity = window.BilmMediaIdentity || {
+  createStoredMediaItem: (item) => item,
+  canonicalizeStoredItem: (item) => item,
+  findIndexByIdentity: (list, item) => list.findIndex((entry) => entry?.key && entry.key === item?.key),
+  hasIdentity: (list, item) => list.some((entry) => entry?.key && entry.key === item?.key),
+  dedupeCanonicalItems: (list) => list
+};
+mediaIdentity.migrateLocalListsOnce?.();
 
 const isMobile = window.matchMedia('(max-width: 768px)').matches
   || window.matchMedia('(pointer: coarse)').matches
@@ -195,11 +203,16 @@ function stopContinueWatchingTimer() {
 
 function loadList(key) {
   const list = storage.getJSON(key, []);
-  return Array.isArray(list) ? list : [];
+  if (!Array.isArray(list)) return [];
+  return list.map((item) => mediaIdentity.canonicalizeStoredItem(item) || item).filter(Boolean);
 }
 
 function saveList(key, items) {
-  storage.setJSON(key, items);
+  const list = Array.isArray(items) ? items : [];
+  const normalized = list
+    .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
+    .filter(Boolean);
+  storage.setJSON(key, mediaIdentity.dedupeCanonicalItems(normalized));
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -326,67 +339,73 @@ async function loadMoreLikeShows() {
   similarLoading = false;
 }
 
+function buildCurrentMediaItem() {
+  if (!mediaDetails) return null;
+  const provider = isAnime ? 'anilist' : 'tmdb';
+  const id = Number(mediaDetails.id || 0) || 0;
+  if (!id) return null;
+  return mediaIdentity.createStoredMediaItem({
+    provider,
+    id,
+    anilistId: provider === 'anilist' ? id : undefined,
+    tmdbId: provider === 'tmdb' ? id : undefined,
+    type: 'tv',
+    title: mediaDetails.title,
+    date: mediaDetails.firstAirDate || '',
+    year: mediaDetails.year,
+    poster: mediaDetails.poster,
+    link: mediaDetails.link,
+    updatedAt: Date.now(),
+    season: currentSeason,
+    episode: currentEpisode,
+    source: provider === 'anilist' ? 'AniList' : 'TMDB',
+    rating: mediaDetails.rating,
+    certification: mediaDetails.certification || ''
+  });
+}
+
+function syncFavoriteAndWatchLaterButtons() {
+  const entry = buildCurrentMediaItem();
+  if (!entry) {
+    updateFavoriteButton(false);
+    updateWatchLaterButton(false);
+    return;
+  }
+  const favorites = loadList(FAVORITES_KEY);
+  const watchLater = loadList(WATCH_LATER_KEY);
+  updateFavoriteButton(mediaIdentity.hasIdentity(favorites, entry));
+  updateWatchLaterButton(mediaIdentity.hasIdentity(watchLater, entry));
+}
+
 function toggleFavorite() {
-  if (!mediaDetails) return;
+  const entry = buildCurrentMediaItem();
+  if (!entry) return;
   const items = loadList(FAVORITES_KEY);
-  const key = `tv-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key || item.tmdbId === mediaDetails.id || item.id === mediaDetails.id);
+  const existingIndex = mediaIdentity.findIndexByIdentity(items, entry);
   if (existingIndex >= 0) {
     items.splice(existingIndex, 1);
     saveList(FAVORITES_KEY, items);
     updateFavoriteButton(false);
     return;
   }
-
-  items.unshift({
-    key,
-    id: mediaDetails.id,
-    tmdbId: mediaDetails.id,
-    type: 'tv',
-    title: mediaDetails.title,
-    date: mediaDetails.firstAirDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    season: currentSeason,
-    episode: currentEpisode,
-    source: 'TMDB',
-    rating: mediaDetails.rating
-  });
-  saveList(FAVORITES_KEY, items);
+  items.unshift(entry);
+  saveList(FAVORITES_KEY, items.slice(0, 60));
   updateFavoriteButton(true);
 }
 
 function toggleWatchLater() {
-  if (!mediaDetails) return;
+  const entry = buildCurrentMediaItem();
+  if (!entry) return;
   const items = loadList(WATCH_LATER_KEY);
-  const key = `tv-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key || item.tmdbId === mediaDetails.id || item.id === mediaDetails.id);
+  const existingIndex = mediaIdentity.findIndexByIdentity(items, entry);
   if (existingIndex >= 0) {
     items.splice(existingIndex, 1);
     saveList(WATCH_LATER_KEY, items);
     updateWatchLaterButton(false);
     return;
   }
-
-  items.unshift({
-    key,
-    id: mediaDetails.id,
-    tmdbId: mediaDetails.id,
-    type: 'tv',
-    title: mediaDetails.title,
-    date: mediaDetails.firstAirDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    season: currentSeason,
-    episode: currentEpisode,
-    source: 'TMDB',
-    rating: mediaDetails.rating
-  });
-  saveList(WATCH_LATER_KEY, items);
+  items.unshift(entry);
+  saveList(WATCH_LATER_KEY, items.slice(0, 60));
   updateWatchLaterButton(true);
 }
 
@@ -403,21 +422,10 @@ function upsertHistoryItem(key, payload) {
 function updateContinueWatching() {
   const settings = window.bilmTheme?.getSettings?.() || {};
   if (!continueWatchingEnabled || !mediaDetails || settings.incognito === true) return;
-  const payload = {
-    key: `tv-${mediaDetails.id}`,
-    id: mediaDetails.id,
-    type: 'tv',
-    title: mediaDetails.title,
-    date: mediaDetails.firstAirDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    season: currentSeason,
-    episode: currentEpisode,
-    source: 'TMDB',
-    rating: mediaDetails.rating
-  };
+  const payload = buildCurrentMediaItem();
+  if (!payload) return;
+  payload.season = currentSeason;
+  payload.episode = currentEpisode;
 
   upsertHistoryItem(CONTINUE_KEY, payload);
   upsertHistoryItem(WATCH_HISTORY_KEY, payload);
@@ -439,8 +447,9 @@ function savePlaybackNotes(notes) {
 }
 
 function getPlaybackNoteKey() {
-  if (!tmdbId) return null;
-  return `tv-${tmdbId}-s${currentSeason}-e${currentEpisode}`;
+  const item = buildCurrentMediaItem();
+  if (!item?.key) return null;
+  return `${item.key}-s${currentSeason}-e${currentEpisode}`;
 }
 
 function normalizeTimeDigits(value, maxLength) {
@@ -657,11 +666,23 @@ function normalizeSeasonEpisodeState() {
   if (currentEpisode > maxEpisodes) currentEpisode = maxEpisodes;
 }
 
+function getProgressStorageKey() {
+  if (isAnime) {
+    const animeNumericId = Number(animeId || 0) || 0;
+    if (!animeNumericId) return '';
+    return `bilm-tv-progress-anilist-${animeNumericId}`;
+  }
+  const tmdbNumericId = Number(tmdbId || 0) || 0;
+  if (!tmdbNumericId) return '';
+  return `bilm-tv-progress-tmdb-${tmdbNumericId}`;
+}
+
 function saveProgress() {
-  if (!tmdbId) return;
+  const progressKey = getProgressStorageKey();
+  if (!progressKey) return;
   normalizeSeasonEpisodeState();
   seasonEpisodeMemory[currentSeason] = currentEpisode;
-  storage.setItem(`bilm-tv-progress-${tmdbId}`, JSON.stringify({
+  storage.setItem(progressKey, JSON.stringify({
     season: currentSeason,
     episode: currentEpisode,
     seasonEpisodes: seasonEpisodeMemory
@@ -669,8 +690,9 @@ function saveProgress() {
 }
 
 function loadProgress() {
-  if (!tmdbId) return;
-  const saved = storage.getItem(`bilm-tv-progress-${tmdbId}`);
+  const progressKey = getProgressStorageKey();
+  if (!progressKey) return;
+  const saved = storage.getItem(progressKey);
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
@@ -1111,21 +1133,23 @@ async function fetchTMDBData() {
     populateSeasons(totalSeasons);
     populateEpisodes(episodeCount);
     updateControls();
+    loadProgress();
 
     mediaDetails = {
-      id: animeId,
+      id: Number(animeId || 0) || 0,
       title,
+      firstAirDate: '',
       year,
       poster: details?.coverImage?.large || details?.coverImage?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
       link: `${appWithBase('/tv/show.html')}?anime=1&aid=${animeId}&type=tv`,
       rating: details?.averageScore ? details.averageScore / 10 : null,
       certification: 'N/A',
       genreIds: [],
-      genreSlugs: []
+      genreSlugs: [],
+      provider: 'anilist'
     };
 
-    updateFavoriteButton(loadList(FAVORITES_KEY).some(item => item.key === `anime-tv-${animeId}` || item.anilistId === Number(animeId)));
-    updateWatchLaterButton(loadList(WATCH_LATER_KEY).some(item => item.key === `anime-tv-${animeId}` || item.anilistId === Number(animeId)));
+    syncFavoriteAndWatchLaterButtons();
     loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();
@@ -1177,8 +1201,8 @@ async function fetchTMDBData() {
     document.title = `Bilm 💜 - ${showTitle}`;
 
     mediaDetails = {
-      id: tmdbId,
-      tmdbId,
+      id: Number(tmdbId || 0) || 0,
+      tmdbId: Number(tmdbId || 0) || 0,
       title: showTitle,
       firstAirDate,
       year,
@@ -1187,13 +1211,11 @@ async function fetchTMDBData() {
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
       link: `${appWithBase('/tv/show.html')}?id=${tmdbId}`,
-      certification
+      certification,
+      provider: 'tmdb'
     };
 
-    const favorites = loadList(FAVORITES_KEY);
-    updateFavoriteButton(favorites.some(item => item.key === `tv-${tmdbId}` || item.tmdbId === tmdbId || item.id === tmdbId));
-    const watchLater = loadList(WATCH_LATER_KEY);
-    updateWatchLaterButton(watchLater.some(item => item.key === `tv-${tmdbId}` || item.tmdbId === tmdbId || item.id === tmdbId));
+    syncFavoriteAndWatchLaterButtons();
     mediaTitle.textContent = showTitle;
     mediaMeta.textContent = displayDate;
     document.title = `Bilm 💜 - ${showTitle}`;

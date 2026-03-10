@@ -81,6 +81,14 @@ const storage = window.bilmTheme?.storage || {
     localStorage.setItem(key, JSON.stringify(value));
   }
 };
+const mediaIdentity = window.BilmMediaIdentity || {
+  createStoredMediaItem: (item) => item,
+  canonicalizeStoredItem: (item) => item,
+  findIndexByIdentity: (list, item) => list.findIndex((entry) => entry?.key && entry.key === item?.key),
+  hasIdentity: (list, item) => list.some((entry) => entry?.key && entry.key === item?.key),
+  dedupeCanonicalItems: (list) => list
+};
+mediaIdentity.migrateLocalListsOnce?.();
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const CONTINUE_WATCHING_DELAY = 15000;
@@ -317,8 +325,9 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
 }
 
 function updateIframe() {
-  if (!contentId) {
-    console.warn('No id parameter provided.');
+  const idToUse = isAnime ? animeId : (imdbId || contentId);
+  if (!idToUse) {
+    console.warn('No valid ID parameter provided.');
     iframe.removeAttribute('sandbox');
     iframe.src = '';
     setPlayerStatus('Missing title ID. Open this title again from the catalog.', 'error');
@@ -347,11 +356,16 @@ function updateIframe() {
 
 function loadList(key) {
   const list = storage.getJSON(key, []);
-  return Array.isArray(list) ? list : [];
+  if (!Array.isArray(list)) return [];
+  return list.map((item) => mediaIdentity.canonicalizeStoredItem(item) || item).filter(Boolean);
 }
 
 function saveList(key, items) {
-  storage.setJSON(key, items);
+  const list = Array.isArray(items) ? items : [];
+  const normalized = list
+    .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
+    .filter(Boolean);
+  storage.setJSON(key, mediaIdentity.dedupeCanonicalItems(normalized));
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -478,61 +492,71 @@ async function loadMoreLikeMovies() {
   similarLoading = false;
 }
 
+function buildCurrentMediaItem() {
+  if (!mediaDetails) return null;
+  const provider = isAnime ? 'anilist' : 'tmdb';
+  const id = Number(mediaDetails.id || 0) || 0;
+  if (!id) return null;
+  return mediaIdentity.createStoredMediaItem({
+    provider,
+    id,
+    anilistId: provider === 'anilist' ? id : undefined,
+    tmdbId: provider === 'tmdb' ? id : undefined,
+    type: 'movie',
+    title: mediaDetails.title,
+    date: mediaDetails.releaseDate || '',
+    year: mediaDetails.year,
+    poster: mediaDetails.poster,
+    link: mediaDetails.link,
+    updatedAt: Date.now(),
+    source: provider === 'anilist' ? 'AniList' : 'TMDB',
+    rating: mediaDetails.rating,
+    certification: mediaDetails.certification || ''
+  });
+}
+
+function syncFavoriteAndWatchLaterButtons() {
+  const entry = buildCurrentMediaItem();
+  if (!entry) {
+    updateFavoriteButton(false);
+    updateWatchLaterButton(false);
+    return;
+  }
+  const favorites = loadList(FAVORITES_KEY);
+  const watchLater = loadList(WATCH_LATER_KEY);
+  updateFavoriteButton(mediaIdentity.hasIdentity(favorites, entry));
+  updateWatchLaterButton(mediaIdentity.hasIdentity(watchLater, entry));
+}
+
 function toggleFavorite() {
-  if (!mediaDetails) return;
+  const entry = buildCurrentMediaItem();
+  if (!entry) return;
   const items = loadList(FAVORITES_KEY);
-  const key = `movie-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key);
+  const existingIndex = mediaIdentity.findIndexByIdentity(items, entry);
   if (existingIndex >= 0) {
     items.splice(existingIndex, 1);
     saveList(FAVORITES_KEY, items);
     updateFavoriteButton(false);
     return;
   }
-
-  items.unshift({
-    key,
-    id: mediaDetails.id,
-    type: 'movie',
-    title: mediaDetails.title,
-    date: mediaDetails.releaseDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    source: 'TMDB',
-    rating: mediaDetails.rating
-  });
-  saveList(FAVORITES_KEY, items);
+  items.unshift(entry);
+  saveList(FAVORITES_KEY, items.slice(0, 60));
   updateFavoriteButton(true);
 }
 
 function toggleWatchLater() {
-  if (!mediaDetails) return;
+  const entry = buildCurrentMediaItem();
+  if (!entry) return;
   const items = loadList(WATCH_LATER_KEY);
-  const key = `movie-${mediaDetails.id}`;
-  const existingIndex = items.findIndex(item => item.key === key);
+  const existingIndex = mediaIdentity.findIndexByIdentity(items, entry);
   if (existingIndex >= 0) {
     items.splice(existingIndex, 1);
     saveList(WATCH_LATER_KEY, items);
     updateWatchLaterButton(false);
     return;
   }
-
-  items.unshift({
-    key,
-    id: mediaDetails.id,
-    type: 'movie',
-    title: mediaDetails.title,
-    date: mediaDetails.releaseDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    source: 'TMDB',
-    rating: mediaDetails.rating
-  });
-  saveList(WATCH_LATER_KEY, items);
+  items.unshift(entry);
+  saveList(WATCH_LATER_KEY, items.slice(0, 60));
   updateWatchLaterButton(true);
 }
 
@@ -549,19 +573,8 @@ function upsertHistoryItem(key, payload) {
 function updateContinueWatching() {
   const settings = window.bilmTheme?.getSettings?.() || {};
   if (!continueWatchingEnabled || !mediaDetails || settings.incognito === true) return;
-  const payload = {
-    key: `movie-${mediaDetails.id}`,
-    id: mediaDetails.id,
-    type: 'movie',
-    title: mediaDetails.title,
-    date: mediaDetails.releaseDate,
-    year: mediaDetails.year,
-    poster: mediaDetails.poster,
-    link: mediaDetails.link,
-    updatedAt: Date.now(),
-    source: 'TMDB',
-    rating: mediaDetails.rating
-  };
+  const payload = buildCurrentMediaItem();
+  if (!payload) return;
 
   upsertHistoryItem(CONTINUE_KEY, payload);
   upsertHistoryItem(WATCH_HISTORY_KEY, payload);
@@ -583,7 +596,9 @@ function savePlaybackNotes(notes) {
 }
 
 function getPlaybackNoteKey() {
-  return mediaDetails ? `movie-${mediaDetails.id}` : null;
+  if (!mediaDetails) return null;
+  const item = buildCurrentMediaItem();
+  return item?.key || null;
 }
 
 function normalizeTimeDigits(value, maxLength) {
@@ -609,10 +624,6 @@ function loadPlaybackNote() {
   if (!key) return;
   const notes = loadPlaybackNotes();
   const { hours, minutes } = parsePlaybackNoteValue(notes[key]);
-  const normalizedHours = normalizeTimeDigits(hours, 3);
-  const normalizedMinutes = normalizeTimeDigits(minutes, 2);
-  playbackNoteHoursInput.value = normalizedHours || '00';
-  playbackNoteMinutesInput.value = normalizedMinutes || '00';
   playbackNoteHoursInput.value = normalizeTimeDigits(hours, 3);
   playbackNoteMinutesInput.value = normalizeTimeDigits(minutes, 2);
 }
@@ -663,18 +674,19 @@ async function loadMovieDetails() {
     mediaTitle.textContent = title;
     mediaMeta.textContent = `${year} • Anime`;
     document.title = `Bilm 💜 - ${title}`;
+    const animeNumericId = Number(animeId || 0) || 0;
     mediaDetails = {
-      id: animeId,
+      id: animeNumericId,
       title,
+      releaseDate: '',
       year,
       poster: details?.coverImage?.large || details?.coverImage?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
       link: `${appWithBase('/movies/show.html')}?anime=1&aid=${animeId}&type=movie`,
       rating: details?.averageScore ? details.averageScore / 10 : null,
-      certification: 'N/A'
+      certification: 'N/A',
+      provider: 'anilist'
     };
-    const baseItem = { key: `anime-movie-${animeId}`, anilistId: Number(animeId) };
-    updateFavoriteButton(loadList(FAVORITES_KEY).some(item => item.key === baseItem.key || item.anilistId === baseItem.anilistId));
-    updateWatchLaterButton(loadList(WATCH_LATER_KEY).some(item => item.key === baseItem.key || item.anilistId === baseItem.anilistId));
+    syncFavoriteAndWatchLaterButtons();
     loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();
@@ -715,7 +727,7 @@ async function loadMovieDetails() {
     document.title = `Bilm 💜 - ${title}`;
 
     mediaDetails = {
-      id: contentId,
+      id: Number(contentId || 0) || 0,
       title,
       releaseDate,
       year,
@@ -724,13 +736,11 @@ async function loadMovieDetails() {
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
       link: `${appWithBase('/movies/show.html')}?id=${contentId}`,
       rating: details.vote_average,
-      certification
+      certification,
+      provider: 'tmdb'
     };
 
-    const favorites = loadList(FAVORITES_KEY);
-    updateFavoriteButton(favorites.some(item => item.key === `movie-${contentId}`));
-    const watchLater = loadList(WATCH_LATER_KEY);
-    updateWatchLaterButton(watchLater.some(item => item.key === `movie-${contentId}`));
+    syncFavoriteAndWatchLaterButtons();
     loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();

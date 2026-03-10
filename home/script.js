@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const FAVORITES_KEY = 'bilm-favorites';
   const WATCH_LATER_KEY = 'bilm-watch-later';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const MEDIA_LIST_KEYS = new Set([CONTINUE_KEY, FAVORITES_KEY, WATCH_LATER_KEY]);
   const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const storage = window.bilmTheme?.storage || {
     getJSON: (key, fallback = []) => {
@@ -67,6 +68,21 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem(key, JSON.stringify(value));
     }
   };
+  const mediaIdentity = window.BilmMediaIdentity || {
+    migrateLocalListsOnce: () => false,
+    resolveIdentity: (item) => ({
+      provider: item?.source === 'AniList' ? 'anilist' : 'tmdb',
+      type: item?.type === 'tv' ? 'tv' : 'movie',
+      id: Number(item?.tmdbId || item?.anilistId || item?.id || 0) || 0,
+      tmdbId: Number(item?.tmdbId || item?.id || 0) || 0,
+      anilistId: Number(item?.anilistId || 0) || 0,
+      key: String(item?.key || '').trim()
+    }),
+    resolveDetailsDestination: (item) => String(item?.link || '').trim(),
+    canonicalizeStoredItem: (item) => item,
+    dedupeCanonicalItems: (list) => list
+  };
+  mediaIdentity.migrateLocalListsOnce?.();
 
   document.querySelector('main').classList.add('visible');
 
@@ -110,11 +126,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadList(key) {
     const list = storage.getJSON(key, []);
-    return Array.isArray(list) ? list : [];
+    if (!Array.isArray(list)) return [];
+    if (!MEDIA_LIST_KEYS.has(key)) return list;
+    return list.map((item) => mediaIdentity.canonicalizeStoredItem(item) || item).filter(Boolean);
   }
 
   function saveList(key, items) {
-    storage.setJSON(key, items);
+    if (!MEDIA_LIST_KEYS.has(key)) {
+      storage.setJSON(key, Array.isArray(items) ? items : []);
+      return;
+    }
+    const list = Array.isArray(items) ? items : [];
+    const normalized = list
+      .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
+      .filter(Boolean);
+    storage.setJSON(key, mediaIdentity.dedupeCanonicalItems(normalized));
   }
 
   function toYear(dateString) {
@@ -145,38 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function parseStoredMediaIdentity(item) {
-    const typeFromItem = item?.type === 'tv' ? 'tv' : item?.type === 'movie' ? 'movie' : '';
-    const idFromItem = Number(item?.tmdbId || item?.id);
-    if (typeFromItem && idFromItem > 0) {
-      return { mediaType: typeFromItem, tmdbId: idFromItem };
-    }
-
-    const rawLink = String(item?.link || '');
-    if (!rawLink) {
-      return {
-        mediaType: typeFromItem || 'movie',
-        tmdbId: idFromItem > 0 ? idFromItem : 0
-      };
-    }
-
-    try {
-      const resolved = new URL(rawLink, window.location.href);
-      const linkId = Number(resolved.searchParams.get('id') || item?.tmdbId || item?.id);
-      const inferredType = /\/tv\//i.test(resolved.pathname)
-        ? 'tv'
-        : /\/movies?\//i.test(resolved.pathname)
-          ? 'movie'
-          : (typeFromItem || 'movie');
-      return {
-        mediaType: inferredType,
-        tmdbId: Number.isFinite(linkId) && linkId > 0 ? linkId : 0
-      };
-    } catch {
-      return {
-        mediaType: typeFromItem || 'movie',
-        tmdbId: idFromItem > 0 ? idFromItem : 0
-      };
-    }
+    const resolved = mediaIdentity.resolveIdentity(item);
+    const provider = resolved?.provider === 'anilist' ? 'anilist' : 'tmdb';
+    const mediaType = resolved?.type === 'tv' ? 'tv' : 'movie';
+    const tmdbId = provider === 'tmdb' ? (Number(resolved?.tmdbId || resolved?.id || 0) || 0) : 0;
+    const animeId = provider === 'anilist' ? (Number(resolved?.anilistId || resolved?.id || 0) || 0) : 0;
+    return { provider, mediaType, tmdbId, animeId };
   }
 
   function normalizeCertification(value) {
@@ -254,18 +254,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function needsRatingHydration(item) {
     const identity = parseStoredMediaIdentity(item);
-    return normalizeMediaRating(item) === null && identity.tmdbId > 0;
+    return identity.provider === 'tmdb' && normalizeMediaRating(item) === null && identity.tmdbId > 0;
   }
 
   function needsCertificationHydration(item) {
     const identity = parseStoredMediaIdentity(item);
-    return !normalizeCertification(item?.certification) && identity.tmdbId > 0;
+    return identity.provider === 'tmdb' && !normalizeCertification(item?.certification) && identity.tmdbId > 0;
   }
 
   async function hydrateRatingsForKey(key, expectedType) {
     const items = loadList(key);
     const targets = items.filter((item) => {
-      if (expectedType && item?.type && item.type !== expectedType) return false;
+      const identity = parseStoredMediaIdentity(item);
+      if (identity.provider !== 'tmdb') return false;
+      if (expectedType && identity.mediaType !== expectedType) return false;
       return needsRatingHydration(item) || needsCertificationHydration(item) || !item?.type || !Number(item?.tmdbId || item?.id);
     });
     if (!targets.length) return;
@@ -324,58 +326,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function normalizeMediaLink(item) {
-    const rawLink = String(item?.link || '');
-    const fallbackId = item?.tmdbId || item?.id;
-    const mediaType = item?.type === 'tv' ? 'tv' : 'movie';
-    const detailsBase = mediaType === 'tv'
-      ? withBase('/tv/show.html')
-      : withBase('/movies/show.html');
-
-    if (!rawLink && fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
-    if (!rawLink) return '';
-
-    try {
-      const resolved = new URL(rawLink, window.location.href);
-      const movieId = resolved.searchParams.get('id') || fallbackId;
-      const normalizedPath = normalizeInternalAppPath(resolved.pathname);
-      const normalizedSameOriginHref = `${normalizedPath}${resolved.search}${resolved.hash}`;
-      const pointsToCurrentDetailsRoute = /\/(?:tv|movies)\/show\.html$/i.test(normalizedPath);
-      if (movieId && (mediaType === 'movie' || mediaType === 'tv')) {
-        const pointsToWrongTypeDetails = (
-          (mediaType === 'movie' && /\/tv\//i.test(normalizedPath))
-          || (mediaType === 'tv' && /\/movies?\//i.test(normalizedPath))
-        );
-        if (pointsToCurrentDetailsRoute || pointsToWrongTypeDetails) {
-          return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
-        }
-      }
-      const internalRelativeRoute = /\/?movie\.html$/i.test(normalizedPath)
-        || /\/home\/(?:movie\.html|viewer\.html|show\.html)$/i.test(normalizedPath)
-        || /\/show\.html$/i.test(normalizedPath)
-        || /\/home\/(?:movie\.html|viewer\.html)$/i.test(normalizedPath);
-      const pointsToLegacyHomeDetailsRoute = /\/(?:home\/)?show\.html$/i.test(normalizedPath);
-      const pointsToOldMovieRoute = /\/movies\/(?:viewer\.html|watch\/viewer\.html)$/i.test(normalizedPath)
-        || /\/movies\/?$/i.test(normalizedPath)
-        || /\/tv\/(?:viewer\.html|watch\/viewer\.html)$/i.test(normalizedPath)
-        || /\/tv\/?$/i.test(normalizedPath);
-      if ((pointsToOldMovieRoute || internalRelativeRoute || pointsToLegacyHomeDetailsRoute) && movieId) {
-        return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
-      }
-
-      if (resolved.origin === window.location.origin) {
-        if (movieId && mediaType === 'movie' && /\/(home\/)?tv\//i.test(normalizedPath)) {
-          return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
-        }
-        if (movieId && mediaType === 'tv' && /\/(home\/)?movies?\//i.test(normalizedPath)) {
-          return `${detailsBase}?id=${encodeURIComponent(movieId)}`;
-        }
-        return normalizedSameOriginHref;
-      }
-    } catch {
-      if (fallbackId) return `${detailsBase}?id=${encodeURIComponent(fallbackId)}`;
-    }
-
-    return rawLink;
+    const identity = parseStoredMediaIdentity(item);
+    const destination = mediaIdentity.resolveDetailsDestination(item, identity.mediaType);
+    return destination || '';
   }
 
   const sectionState = {
@@ -483,15 +436,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createCard(item) {
       const identity = parseStoredMediaIdentity(item);
+      const tmdbId = identity.provider === 'tmdb'
+        ? (Number(item?.tmdbId || identity.tmdbId || item?.id || 0) || undefined)
+        : undefined;
+      const cardId = identity.provider === 'anilist'
+        ? (Number(item?.anilistId || identity.animeId || item?.id || 0) || undefined)
+        : tmdbId;
       const card = window.BilmMediaCard.createMediaCard({
         item: {
           title: item.title,
           year: item.year || toYear(item.date) || 'N/A',
           type: item.type || identity.mediaType,
-          tmdbId: Number(item?.tmdbId || identity.tmdbId || 0) || undefined,
-          id: Number(item?.id || identity.tmdbId || 0) || undefined,
+          tmdbId,
+          id: cardId,
           img: item.poster,
-          source: item.source || 'TMDB',
+          source: item.source || (identity.provider === 'anilist' ? 'AniList' : 'TMDB'),
           rating: normalizeMediaRating(item),
           certification: item.certification,
           link: normalizeMediaLink(item)
