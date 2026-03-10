@@ -12,6 +12,7 @@ const mimeTypes = new Map([
   ['.js', 'text/javascript; charset=utf-8'],
   ['.mjs', 'text/javascript; charset=utf-8'],
   ['.css', 'text/css; charset=utf-8'],
+  ['.txt', 'text/plain; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
   ['.svg', 'image/svg+xml'],
   ['.png', 'image/png'],
@@ -42,6 +43,130 @@ function sendJson(res, status, payload, headers = {}) {
     ...headers
   });
   res.end(JSON.stringify(payload));
+}
+
+function normalizeSuperEmbedInt(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value || '').trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function buildSuperEmbedRequestUrl({
+  videoId,
+  tmdb,
+  season,
+  episode
+}) {
+  const requestUrl = new URL('https://getsuperembed.link/');
+  requestUrl.searchParams.set('video_id', String(videoId || '').trim());
+  requestUrl.searchParams.set('tmdb', String(tmdb || 0));
+  requestUrl.searchParams.set('season', String(season || 0));
+  requestUrl.searchParams.set('episode', String(episode || 0));
+  requestUrl.searchParams.set('player_font', 'Poppins');
+  requestUrl.searchParams.set('player_bg_color', '000000');
+  requestUrl.searchParams.set('player_font_color', 'ffffff');
+  requestUrl.searchParams.set('player_primary_color', '34cfeb');
+  requestUrl.searchParams.set('player_secondary_color', '6900e0');
+  requestUrl.searchParams.set('player_loader', '1');
+  requestUrl.searchParams.set('preferred_server', '0');
+  requestUrl.searchParams.set('player_sources_toggle_type', '2');
+  return requestUrl.toString();
+}
+
+async function resolveSuperEmbedRedirect(urlObj) {
+  const videoId = String(urlObj.searchParams.get('video_id') || '').trim();
+  if (!videoId) {
+    const error = new Error('Missing video_id');
+    error.statusCode = 400;
+    throw error;
+  }
+  const tmdb = normalizeSuperEmbedInt(urlObj.searchParams.get('tmdb'), 0) > 0 ? 1 : 0;
+  const season = normalizeSuperEmbedInt(
+    urlObj.searchParams.get('season') || urlObj.searchParams.get('s'),
+    0
+  );
+  const episode = normalizeSuperEmbedInt(
+    urlObj.searchParams.get('episode') || urlObj.searchParams.get('e'),
+    0
+  );
+  const requestUrl = buildSuperEmbedRequestUrl({
+    videoId,
+    tmdb,
+    season,
+    episode
+  });
+
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(requestUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        accept: 'text/plain, text/html;q=0.9, application/json;q=0.7, */*;q=0.5',
+        'user-agent': 'bilm-se-player/1.0'
+      },
+      signal: abortController.signal
+    });
+  } catch (error) {
+    const wrapped = new Error(error?.name === 'AbortError'
+      ? 'SuperEmbed request timed out'
+      : 'SuperEmbed request failed');
+    wrapped.statusCode = error?.name === 'AbortError' ? 504 : 502;
+    throw wrapped;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    const error = new Error(`SuperEmbed upstream returned HTTP ${response.status}`);
+    error.statusCode = response.status >= 500 ? 502 : response.status;
+    throw error;
+  }
+
+  const text = String(await response.text() || '').trim();
+  if (!/^https:\/\//i.test(text)) {
+    const error = new Error(text || 'SuperEmbed returned an invalid redirect URL');
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return text;
+}
+
+async function handleSuperEmbedRoute(req, res, urlObj) {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      allow: 'GET, HEAD, OPTIONS',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff'
+    });
+    res.end();
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendJson(res, 405, { error: 'Method Not Allowed' }, {
+      allow: 'GET, HEAD, OPTIONS',
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  try {
+    const redirectUrl = await resolveSuperEmbedRedirect(urlObj);
+    res.writeHead(302, {
+      location: redirectUrl,
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff'
+    });
+    res.end();
+  } catch (error) {
+    const status = Number(error?.statusCode || 502) || 502;
+    sendJson(res, status, { error: String(error?.message || 'SuperEmbed request failed') }, {
+      'cache-control': 'no-store'
+    });
+  }
 }
 
 function staticHeaders(filePath, stat) {
@@ -235,6 +360,10 @@ async function handleAniListProxy(req, res) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  if (url.pathname === '/se_player.php') {
+    await handleSuperEmbedRoute(req, res, url);
+    return;
+  }
   if (url.pathname === '/api/anilist') {
     await handleAniListProxy(req, res);
     return;

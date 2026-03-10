@@ -211,12 +211,44 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function fetchJSON(url) {
+    const rawUrl = String(url || '').trim();
+    const buildBackupUrl = () => {
+      try {
+        const parsed = new URL(rawUrl, window.location.href);
+        if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
+        if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
+        const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
+        const backup = new URL(`https://api.themoviedb.org/3/${tmdbPath}`);
+        parsed.searchParams.forEach((value, key) => {
+          if (String(key || '').toLowerCase() === 'api_key') return;
+          backup.searchParams.append(key, value);
+        });
+        backup.searchParams.set('api_key', TMDB_API_KEY);
+        return backup.toString();
+      } catch {
+        return '';
+      }
+    };
+
     try {
-      const response = await fetch(url);
+      const response = await fetch(rawUrl);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();
-    } catch {
-      return null;
+    } catch (error) {
+      const backupUrl = buildBackupUrl();
+      if (!backupUrl) return null;
+      try {
+        console.info('[api-fallback] home fetch using backup provider', {
+          primaryUrl: rawUrl,
+          backupUrl
+        });
+        const backupResponse = await fetch(backupUrl);
+        if (!backupResponse.ok) throw new Error(`HTTP ${backupResponse.status}`);
+        return await backupResponse.json();
+      } catch {
+        console.warn('Home API fallback failed:', error);
+        return null;
+      }
     }
   }
 

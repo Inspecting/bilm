@@ -38,7 +38,7 @@ const languageItems = languageDropdown ? [...languageDropdown.querySelectorAll('
 let currentSeason = 1;
 let currentEpisode = 1;
 const initialSettings = window.bilmTheme?.getSettings?.();
-const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
+const supportedServers = ['embedmaster', 'superembed', 'multiembed', 'vidsrc', 'godrive'];
 const animeSupportedServers = ['vidnest'];
 const visibleServerItems = serverItems.filter((item) => {
   const server = item.getAttribute('data-server');
@@ -59,6 +59,7 @@ let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const API_COOLDOWN_MS = 250;
 const apiCooldownByHost = new Map();
+const canUseLocalSePlayerRoute = () => !/\.github\.io$/i.test(String(window.location.hostname || ''));
 
 function toSlug(value) {
   return (value || '')
@@ -694,6 +695,14 @@ function buildTvUrl(server) {
   }
   if (!tmdbId && !imdbId) return '';
   switch (server) {
+    case 'superembed':
+      return tmdbId
+        ? (
+          canUseLocalSePlayerRoute()
+            ? `${appWithBase('/se_player.php')}?video_id=${encodeURIComponent(tmdbId)}&tmdb=1&s=${encodeURIComponent(season)}&e=${encodeURIComponent(episode)}`
+            : `https://embedmaster.link/830gqxyfskjlsnbq/tv/${tmdbId}/${season}/${episode}`
+        )
+        : '';
     case 'vidsrc': {
       const id = imdbId || tmdbId;
       return `https://vidsrc-embed.ru/embed/tv/${id}/${season}-${episode}`;
@@ -729,6 +738,10 @@ function getServerLabel(server) {
 function resolveTvEmbedRequest() {
   let server = currentServer;
   let url = buildTvUrl(server);
+
+  if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
+    setPlayerStatus('SuperEmbed file route is not available on this host. Using EmbedMaster direct mode.', 'warning');
+  }
 
   if (!url && server === 'godrive' && !tmdbId) {
     const fallbackServer = normalizeServer('vidsrc');
@@ -807,6 +820,21 @@ async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
   if (result?.ok) {
     setPlayerStatus('');
     return;
+  }
+
+  if (server === 'superembed') {
+    const fallbackServer = normalizeServer('embedmaster');
+    if (fallbackServer !== server) {
+      console.warn('[player] superembed route failed; switching server', {
+        context: 'tv',
+        failedServer: server,
+        fallbackServer
+      });
+      setActiveServer(fallbackServer);
+      setPlayerStatus('SuperEmbed route could not load. Switched to EmbedMaster.', 'warning');
+      updateIframe();
+      return;
+    }
   }
 
   setPlayerStatus(

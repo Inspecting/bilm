@@ -342,11 +342,56 @@
       apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
     }
 
+    function buildSearchBackupUrl(rawUrl) {
+      try {
+        const parsed = new URL(String(rawUrl || '').trim(), window.location.href);
+        if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
+        if (parsed.pathname.startsWith('/media/tmdb/')) {
+          const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
+          const backup = new URL(`https://api.themoviedb.org/3/${tmdbPath}`);
+          parsed.searchParams.forEach((value, key) => {
+            if (String(key || '').toLowerCase() === 'api_key') return;
+            backup.searchParams.append(key, value);
+          });
+          backup.searchParams.set('api_key', TMDB_API_KEY);
+          return backup.toString();
+        }
+        if (parsed.pathname.startsWith('/media/omdb')) {
+          const backup = new URL('https://www.omdbapi.com/');
+          parsed.searchParams.forEach((value, key) => {
+            if (String(key || '').toLowerCase() === 'apikey') return;
+            backup.searchParams.append(key, value);
+          });
+          backup.searchParams.set('apikey', OMDB_API_KEY);
+          return backup.toString();
+        }
+        if (parsed.pathname.startsWith('/media/tvmaze/')) {
+          const tvmazePath = parsed.pathname.slice('/media/tvmaze'.length);
+          return `https://api.tvmaze.com${tvmazePath}${parsed.search}`;
+        }
+      } catch {
+        return '';
+      }
+      return '';
+    }
+
     async function fetchJSON(url) {
-      await waitForApiCooldown(url);
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return response.json();
+      const primaryUrl = String(url || '').trim();
+      await waitForApiCooldown(primaryUrl);
+      const response = await fetch(primaryUrl);
+      if (response.ok) return response.json();
+
+      const backupUrl = buildSearchBackupUrl(primaryUrl);
+      if (!backupUrl) throw new Error(`HTTP ${response.status}`);
+      console.info('[api-fallback] search fetch using backup provider', {
+        primaryUrl,
+        backupUrl,
+        status: response.status
+      });
+      await waitForApiCooldown(backupUrl);
+      const backupResponse = await fetch(backupUrl);
+      if (!backupResponse.ok) throw new Error(`HTTP ${backupResponse.status}`);
+      return backupResponse.json();
     }
 
     function getYearValue(item) {

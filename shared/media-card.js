@@ -107,7 +107,16 @@
       try {
         const [mediaType, mediaId] = key.split(':');
         const endpoint = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
-        const response = await fetch(`https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}`);
+        const primaryUrl = `https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}`;
+        let response = await fetch(primaryUrl);
+        if (!response.ok) {
+          const backupUrl = `https://api.themoviedb.org/3/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
+          console.info('[api-fallback] media-card certification using backup provider', {
+            primaryUrl,
+            backupUrl
+          });
+          response = await fetch(backupUrl);
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const certification = mediaType === 'movie'

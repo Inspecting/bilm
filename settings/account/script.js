@@ -564,10 +564,21 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const canProceed = await requestCloudLoginPermission();
       if (!canProceed) throw new Error('Cloud import cancelled until you choose to log in.');
-      const snapshot = await window.bilmAuth.getCloudSnapshot();
+      const result = await window.bilmAuth.getCloudSnapshot({
+        mode: 'data-api-first-fallback-firestore',
+        includeSource: true
+      });
+      const snapshot = result?.snapshot || null;
       if (!snapshot) throw new Error('No cloud backup found for this account.');
       dataCodeField.value = formatBackup(snapshot);
-      transferStatusText.textContent = 'Cloud backup loaded. Review the JSON data, then select Apply Import when ready.';
+      const sourceLabel = result?.source === 'data-api'
+        ? 'data-api'
+        : (result?.source === 'firestore-fallback' ? 'Firestore fallback' : 'cloud source');
+      console.info('[cloud-import] source selected', {
+        source: result?.source || 'none',
+        mode: 'data-api-first-fallback-firestore'
+      });
+      transferStatusText.textContent = `Cloud backup loaded from ${sourceLabel}. Review the JSON data, then select Apply Import when ready.`;
     } catch (error) {
       transferStatusText.textContent = `Cloud import failed: ${error.message}`;
     }

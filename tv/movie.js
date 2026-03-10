@@ -22,11 +22,42 @@ let similarLoading = false;
 let similarEnded = false;
 const seenMoreLike = new Set();
 
+function buildBackupUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || '').trim(), window.location.href);
+    if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
+    if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
+    const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
+    const backup = new URL(`https://api.themoviedb.org/3/${tmdbPath}`);
+    parsed.searchParams.forEach((value, key) => {
+      if (String(key || '').toLowerCase() === 'api_key') return;
+      backup.searchParams.append(key, value);
+    });
+    backup.searchParams.set('api_key', TMDB_API_KEY);
+    return backup.toString();
+  } catch {
+    return '';
+  }
+}
+
 function fetchJSON(url) {
-  return fetch(url).then((res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  });
+  const primaryUrl = String(url || '').trim();
+  return fetch(primaryUrl)
+    .then((res) => {
+      if (res.ok) return res.json();
+      throw new Error(`HTTP ${res.status}`);
+    })
+    .catch(async (error) => {
+      const backupUrl = buildBackupUrl(primaryUrl);
+      if (!backupUrl) throw error;
+      console.info('[api-fallback] tv details using backup provider', {
+        primaryUrl,
+        backupUrl
+      });
+      const backupResponse = await fetch(backupUrl);
+      if (!backupResponse.ok) throw error;
+      return backupResponse.json();
+    });
 }
 
 function readList(key) {
@@ -185,11 +216,20 @@ async function fetchAnimeShowDetails() {
 
   try {
     await waitForApiCooldown(ANILIST_GRAPHQL_URL);
-    const response = await fetch(ANILIST_GRAPHQL_URL, {
+    let response = await fetch(ANILIST_GRAPHQL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
       body: JSON.stringify({ query, variables: { id: Number(anilistId) } })
     });
+    if (!response.ok) {
+      console.info('[api-fallback] anime tv details using direct AniList provider');
+      await waitForApiCooldown('https://graphql.anilist.co');
+      response = await fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify({ query, variables: { id: Number(anilistId) } })
+      });
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     const details = payload?.data?.Media;

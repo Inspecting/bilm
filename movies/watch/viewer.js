@@ -31,7 +31,7 @@ const languageDropdown = document.getElementById('languageDropdown');
 const languageItems = languageDropdown ? [...languageDropdown.querySelectorAll('[data-language]')] : [];
 
 const initialSettings = window.bilmTheme?.getSettings?.();
-const supportedServers = ['embedmaster', 'vidsrc', 'godrive', 'multiembed'];
+const supportedServers = ['embedmaster', 'superembed', 'multiembed', 'vidsrc', 'godrive'];
 const animeSupportedServers = ['vidnest'];
 const visibleServerItems = serverItems.filter((item) => {
   const server = item.getAttribute('data-server');
@@ -49,6 +49,7 @@ let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const API_COOLDOWN_MS = 250;
 const apiCooldownByHost = new Map();
+const canUseLocalSePlayerRoute = () => !/\.github\.io$/i.test(String(window.location.hostname || ''));
 
 function toSlug(value) {
   return (value || '')
@@ -184,6 +185,11 @@ function buildMovieUrl(server) {
   }
   if (!contentId) return '';
   switch (server) {
+    case 'superembed':
+      if (canUseLocalSePlayerRoute()) {
+        return `${appWithBase('/se_player.php')}?video_id=${encodeURIComponent(contentId)}&tmdb=1`;
+      }
+      return `https://embedmaster.link/830gqxyfskjlsnbq/movie/${contentId}`;
     case 'vidsrc':
       return `https://vidsrc-embed.ru/embed/movie/${imdbId || contentId}`;
     case 'godrive':
@@ -215,6 +221,10 @@ function getServerLabel(server) {
 function resolveMovieEmbedRequest() {
   let server = currentServer;
   let url = buildMovieUrl(server);
+
+  if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
+    setPlayerStatus('SuperEmbed file route is not available on this host. Using EmbedMaster direct mode.', 'warning');
+  }
 
   if (!url && server === 'godrive' && !imdbId) {
     const fallbackServer = normalizeServer('vidsrc');
@@ -293,6 +303,21 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
   if (result?.ok) {
     setPlayerStatus('');
     return;
+  }
+
+  if (server === 'superembed') {
+    const fallbackServer = normalizeServer('embedmaster');
+    if (fallbackServer !== server) {
+      console.warn('[player] superembed route failed; switching server', {
+        context: 'movie',
+        failedServer: server,
+        fallbackServer
+      });
+      setActiveServer(fallbackServer);
+      setPlayerStatus('SuperEmbed route could not load. Switched to EmbedMaster.', 'warning');
+      updateIframe();
+      return;
+    }
   }
 
   setPlayerStatus(

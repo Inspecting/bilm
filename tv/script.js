@@ -89,6 +89,35 @@ async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getStorageApiBackupGetUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || '').trim(), window.location.href);
+    if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
+    if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
+    const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
+    const backup = new URL(`https://api.themoviedb.org/3/${tmdbPath}`);
+    parsed.searchParams.forEach((value, key) => {
+      if (String(key || '').toLowerCase() === 'api_key') return;
+      backup.searchParams.append(key, value);
+    });
+    backup.searchParams.set('api_key', TMDB_API_KEY);
+    return backup.toString();
+  } catch {
+    return '';
+  }
+}
+
+function getStorageApiBackupPostUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || '').trim(), window.location.href);
+    if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
+    if (parsed.pathname !== '/media/anilist') return '';
+    return 'https://graphql.anilist.co';
+  } catch {
+    return '';
+  }
+}
+
 async function fetchJSON(url, options = {}) {
   const signal = getRequestSignal(options.signal);
   const maxRetries = options.maxRetries ?? API_MAX_RETRIES;
@@ -130,8 +159,23 @@ async function fetchJSON(url, options = {}) {
         throw new Error(`HTTP ${res.status}`);
       } catch (error) {
         if (isAbortError(error) || signal.aborted) return null;
-        if (attempt >= maxRetries) return null;
+        if (attempt >= maxRetries) break;
       }
+    }
+
+    const backupUrl = getStorageApiBackupGetUrl(url);
+    if (!backupUrl || backupUrl === url) return null;
+    try {
+      console.info('[api-fallback] tv page using backup provider', {
+        primaryUrl: url,
+        backupUrl
+      });
+      await waitForApiCooldown(backupUrl, signal);
+      const fallbackResponse = await fetch(backupUrl, { signal });
+      if (!fallbackResponse.ok) return null;
+      return await fallbackResponse.json();
+    } catch {
+      return null;
     }
 
     return null;
@@ -195,8 +239,28 @@ async function postJSON(url, body, options = {}) {
         throw new Error(`HTTP ${res.status}`);
       } catch (error) {
         if (isAbortError(error) || signal.aborted) return null;
-        if (attempt >= maxRetries) return null;
+        if (attempt >= maxRetries) break;
       }
+    }
+
+    const backupUrl = getStorageApiBackupPostUrl(url);
+    if (!backupUrl || backupUrl === url) return null;
+    try {
+      console.info('[api-fallback] tv page using backup provider', {
+        primaryUrl: url,
+        backupUrl
+      });
+      await waitForApiCooldown(backupUrl, signal);
+      const fallbackResponse = await fetch(backupUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify(body),
+        signal
+      });
+      if (!fallbackResponse.ok) return null;
+      return await fallbackResponse.json();
+    } catch {
+      return null;
     }
 
     return null;

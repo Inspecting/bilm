@@ -2184,24 +2184,49 @@
         lastLocalChangeAt: Date.now()
       });
     },
-    async getCloudSnapshot() {
+    async getCloudSnapshot(options = {}) {
       const user = await requireAuth();
       const userId = getTransferUserId(user);
+      const mode = String(options?.mode || 'merged').trim().toLowerCase();
+      const includeSource = options?.includeSource === true;
       let transferSnapshot = null;
+      let transferError = null;
       try {
         transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
       } catch (error) {
+        transferError = error;
         console.warn('Data API load failed (falling back to Firestore data):', error);
       }
+      const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
 
-      const docSnap = await modules.getDoc(modules.doc(firestore, 'users', user.uid));
-      const data = docSnap.data() || {};
-      const firestoreSnapshot = data.cloudBackup?.snapshot || null;
+      if (mode === 'data-api-first-fallback-firestore') {
+        const snapshot = transferSnapshot || firestoreSnapshot || null;
+        const source = transferSnapshot
+          ? 'data-api'
+          : (firestoreSnapshot ? 'firestore-fallback' : 'none');
+        return includeSource
+          ? { snapshot, source, transferError }
+          : snapshot;
+      }
+
       const mergedSnapshot = mergeSnapshots(firestoreSnapshot, transferSnapshot);
-      if (mergedSnapshot) return mergedSnapshot;
-      return getSnapshotUpdatedAtMs(transferSnapshot) >= getSnapshotUpdatedAtMs(firestoreSnapshot)
-        ? transferSnapshot
-        : firestoreSnapshot;
+      const snapshot = mergedSnapshot
+        || (
+          getSnapshotUpdatedAtMs(transferSnapshot) >= getSnapshotUpdatedAtMs(firestoreSnapshot)
+            ? transferSnapshot
+            : firestoreSnapshot
+        )
+        || null;
+      const source = mergedSnapshot
+        ? 'merged'
+        : (
+          transferSnapshot
+            ? 'data-api'
+            : (firestoreSnapshot ? 'firestore' : 'none')
+        );
+      return includeSource
+        ? { snapshot, source, transferError }
+        : snapshot;
     },
     async syncFromCloudNow() {
       await init();
