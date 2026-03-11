@@ -52,8 +52,6 @@ function withBase(path) {
     loading: true,
     defaultServer: 'embedmaster',
     animeDefaultServer: 'vidnest',
-    autoplay: false,
-    proxyEnabled: false,
     searchHistory: true,
     continueWatching: true,
     incognito: false
@@ -159,75 +157,84 @@ function withBase(path) {
     return [...keys];
   };
 
+  const runWithMutationSuppression = (task) => {
+    const guard = window.bilmAuth?.withMutationSuppressed;
+    if (typeof guard === 'function') {
+      return guard(task);
+    }
+    return task();
+  };
+
   const handleIncognitoTransition = (prevSettings, nextSettings) => {
     const wasIncognito = prevSettings?.incognito === true;
     const isIncognito = nextSettings?.incognito === true;
     if (wasIncognito === isIncognito) return;
-
-    if (isIncognito) {
-      let backup = null;
-      try {
-        backup = localStorage.getItem(INCOGNITO_BACKUP_KEY);
-      } catch {
-        backup = null;
-      }
-      if (!backup) {
-        const snapshot = {};
-        const keysToBackup = collectIncognitoKeys();
-        keysToBackup.forEach((key) => {
+    runWithMutationSuppression(() => {
+      if (isIncognito) {
+        let backup = null;
+        try {
+          backup = localStorage.getItem(INCOGNITO_BACKUP_KEY);
+        } catch {
+          backup = null;
+        }
+        if (!backup) {
+          const snapshot = {};
+          const keysToBackup = collectIncognitoKeys();
+          keysToBackup.forEach((key) => {
+            try {
+              const value = localStorage.getItem(key);
+              if (value !== null) snapshot[key] = value;
+            } catch {
+              return;
+            }
+          });
           try {
-            const value = localStorage.getItem(key);
-            if (value !== null) snapshot[key] = value;
+            localStorage.setItem(INCOGNITO_BACKUP_KEY, JSON.stringify(snapshot));
+          } catch {
+            return;
+          }
+        }
+        const keysToClear = collectIncognitoKeys();
+        keysToClear.forEach((key) => {
+          try {
+            localStorage.removeItem(key);
+          } catch {
+            return;
+          }
+        });
+      } else {
+        let backup = {};
+        try {
+          backup = safeParse(localStorage.getItem(INCOGNITO_BACKUP_KEY), {});
+        } catch {
+          backup = {};
+        }
+        const keysToRestore = collectIncognitoKeys();
+        keysToRestore.forEach((key) => {
+          try {
+            if (Object.prototype.hasOwnProperty.call(backup, key)) {
+              localStorage.setItem(key, backup[key]);
+            } else {
+              localStorage.removeItem(key);
+            }
           } catch {
             return;
           }
         });
         try {
-          localStorage.setItem(INCOGNITO_BACKUP_KEY, JSON.stringify(snapshot));
+          localStorage.removeItem(INCOGNITO_BACKUP_KEY);
         } catch {
           return;
         }
-      }
-      const keysToClear = collectIncognitoKeys();
-      keysToClear.forEach((key) => {
-        try {
-          localStorage.removeItem(key);
-        } catch {
-          return;
-        }
-      });
-    } else {
-      let backup = {};
-      try {
-        backup = safeParse(localStorage.getItem(INCOGNITO_BACKUP_KEY), {});
-      } catch {
-        backup = {};
-      }
-      const keysToRestore = collectIncognitoKeys();
-      keysToRestore.forEach((key) => {
-        try {
-          if (Object.prototype.hasOwnProperty.call(backup, key)) {
-            localStorage.setItem(key, backup[key]);
-          } else {
-            localStorage.removeItem(key);
+        keysToRestore.forEach((key) => {
+          try {
+            sessionStorage.removeItem(key);
+          } catch {
+            return;
           }
-        } catch {
-          return;
-        }
-      });
-      try {
-        localStorage.removeItem(INCOGNITO_BACKUP_KEY);
-      } catch {
-        return;
+        });
       }
-      keysToRestore.forEach((key) => {
-        try {
-          sessionStorage.removeItem(key);
-        } catch {
-          return;
-        }
-      });
-    }
+    });
   };
 
   let currentSettings = loadSettings();

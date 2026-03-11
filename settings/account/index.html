@@ -51,6 +51,13 @@
           </span>
         </label>
         <p id="lastSyncText" class="muted">Last successful sync: Never</p>
+        <div class="actions">
+          <button id="manualFirebaseBackupBtn" class="btn btn-outline" type="button">Manual Firebase Backup</button>
+        </div>
+        <p id="firebaseBackupAutoText" class="muted">Last automatic Firebase backup: Never</p>
+        <p id="firebaseBackupManualText" class="muted">Last manual Firebase backup: Never</p>
+        <p id="firebaseBackupCadenceText" class="muted">Automatic backup runs daily at 12:00 AM (local time), once every 24 hours.</p>
+        <p id="firebaseBackupCooldownText" class="muted">Manual backup availability: now</p>
       </section>
 
       <section class="panel">
@@ -104,9 +111,6 @@
       <p id="statusText" class="status" aria-live="polite"></p>
     </section>
   </main>
-
-  <script src="../../shared/auth.js" defer></script>
-  <script src="../../shared/navbar.js" defer></script>
 
   <div class="data-modal" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
     <div class="data-modal__panel">

@@ -13,35 +13,6 @@
     return `${url}${url.includes('?') ? '&' : '?'}${encodeURIComponent(key)}=${Date.now()}`;
   }
 
-  function waitForLateLoad({ iframe, waitMs = DEFAULT_LATE_LOAD_WINDOW_MS, isCancelled = null }) {
-    return new Promise((resolve) => {
-      let settled = false;
-      const timeoutId = setTimeout(() => finish(false), Math.max(0, Number(waitMs) || 0));
-
-      function cleanup() {
-        iframe.removeEventListener('load', onLateLoad);
-        clearTimeout(timeoutId);
-      }
-
-      function finish(ok) {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(ok);
-      }
-
-      function onLateLoad() {
-        if (typeof isCancelled === 'function' && isCancelled()) {
-          finish(false);
-          return;
-        }
-        finish(true);
-      }
-
-      iframe.addEventListener('load', onLateLoad, { once: true });
-    });
-  }
-
   async function loadWithRetry({
     iframe,
     url,
@@ -90,23 +61,26 @@
       const result = await new Promise((resolve) => {
         let settled = false;
         let timedOut = false;
+        let inLateWindow = false;
         const timer = setTimeout(() => {
           timedOut = true;
           if (safeTimeoutGraceMs <= 0) {
-            finish({ ok: false, reason: 'timeout', attempt, timeoutMs, attemptUrl });
+            startLateWindowOrFail();
             return;
           }
           timeoutGraceTimer = setTimeout(() => {
-            finish({ ok: false, reason: 'timeout', attempt, timeoutMs, attemptUrl });
+            startLateWindowOrFail();
           }, safeTimeoutGraceMs);
         }, timeoutMs);
         let timeoutGraceTimer = null;
+        let lateWindowTimer = null;
 
         function cleanup() {
           iframe.removeEventListener('load', onLoad);
           iframe.removeEventListener('error', onError);
           clearTimeout(timer);
           clearTimeout(timeoutGraceTimer);
+          clearTimeout(lateWindowTimer);
         }
 
         function finish(payload) {
@@ -116,13 +90,27 @@
           resolve(payload);
         }
 
+        function startLateWindowOrFail() {
+          if (safeLateLoadWindowMs <= 0 || inLateWindow) {
+            finish({ ok: false, reason: 'timeout', attempt, timeoutMs, attemptUrl });
+            return;
+          }
+          inLateWindow = true;
+          lateWindowTimer = setTimeout(() => {
+            finish({ ok: false, reason: 'timeout', attempt, timeoutMs, attemptUrl });
+          }, safeLateLoadWindowMs);
+        }
+
         function onLoad() {
           finish({
             ok: true,
-            reason: timedOut ? 'load_after_timeout_grace' : 'load',
+            reason: inLateWindow
+              ? 'late_load_recovered'
+              : (timedOut ? 'load_after_timeout_grace' : 'load'),
             attempt,
             timeoutMs,
-            attemptUrl
+            attemptUrl,
+            late: inLateWindow
           });
         }
 
@@ -140,32 +128,10 @@
         if (typeof onSuccess === 'function') {
           onSuccess(result);
         }
-        return result;
-      }
-
-      if (result.reason === 'timeout' && safeLateLoadWindowMs > 0) {
-        const lateLoadRecovered = await waitForLateLoad({
-          iframe,
-          waitMs: safeLateLoadWindowMs,
-          isCancelled
-        });
-        if (lateLoadRecovered) {
-          const recoveredResult = {
-            ok: true,
-            reason: 'late_load_recovered',
-            attempt,
-            timeoutMs,
-            attemptUrl,
-            late: true
-          };
-          if (typeof onLateSuccess === 'function') {
-            onLateSuccess(recoveredResult);
-          }
-          if (typeof onSuccess === 'function') {
-            onSuccess(recoveredResult);
-          }
-          return recoveredResult;
+        if (result.late && typeof onLateSuccess === 'function') {
+          onLateSuccess(result);
         }
+        return result;
       }
 
       if (typeof onFailure === 'function') {

@@ -80,6 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const syncToggle = document.getElementById('syncToggle');
   const syncStatusText = document.getElementById('syncStatusText');
   const lastSyncText = document.getElementById('lastSyncText');
+  const manualFirebaseBackupBtn = document.getElementById('manualFirebaseBackupBtn');
+  const firebaseBackupAutoText = document.getElementById('firebaseBackupAutoText');
+  const firebaseBackupManualText = document.getElementById('firebaseBackupManualText');
+  const firebaseBackupCadenceText = document.getElementById('firebaseBackupCadenceText');
+  const firebaseBackupCooldownText = document.getElementById('firebaseBackupCooldownText');
 
   let pendingImportPayload = null;
   let activeImportSlot = null;
@@ -295,11 +300,15 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(SYNC_ENABLED_KEY, enabled ? '1' : '0');
     if (syncToggle) syncToggle.checked = enabled;
     if (syncStatusText) {
+      const incognitoEnabled = window.bilmTheme?.getSettings?.()?.incognito === true;
       syncStatusText.textContent = enabled
-        ? 'Live sync is on for this device.'
+        ? (incognitoEnabled
+          ? 'Live sync is enabled but paused while incognito is on.'
+          : 'Live sync is on for this device.')
         : 'Live sync is paused on this device.';
     }
     refreshLastSyncText();
+    refreshFirebaseBackupStatus();
   }
 
   function readSyncMeta() {
@@ -336,6 +345,37 @@ document.addEventListener('DOMContentLoaded', () => {
     lastSyncText.textContent = `Last successful sync: ${formatSyncAt(latestAt)}`;
   }
 
+  function refreshFirebaseBackupStatus() {
+    if (!window.bilmAuth?.getFirebaseBackupStatus) return;
+    const status = window.bilmAuth.getFirebaseBackupStatus();
+    const loggedIn = Boolean(window.bilmAuth?.getCurrentUser?.());
+    const incognitoEnabled = window.bilmTheme?.getSettings?.()?.incognito === true;
+    if (firebaseBackupAutoText) {
+      firebaseBackupAutoText.textContent = `Last automatic Firebase backup: ${formatSyncAt(status?.lastAutoBackupAtMs || 0)}`;
+    }
+    if (firebaseBackupManualText) {
+      firebaseBackupManualText.textContent = `Last manual Firebase backup: ${formatSyncAt(status?.lastManualBackupAtMs || 0)}`;
+    }
+    if (firebaseBackupCadenceText) {
+      firebaseBackupCadenceText.textContent = status?.cadenceText
+        || 'Automatic backup runs daily at 12:00 AM (local time), once every 24 hours.';
+    }
+    const nextManualAtMs = Number(status?.nextManualBackupAtMs || 0);
+    const availableNow = status?.manualBackupAvailable !== false;
+    if (firebaseBackupCooldownText) {
+      firebaseBackupCooldownText.textContent = incognitoEnabled
+        ? 'Manual backup is unavailable while incognito is on.'
+        : (availableNow || !nextManualAtMs
+        ? 'Manual backup availability: now'
+        : `Manual backup next available at: ${formatSyncAt(nextManualAtMs)}`);
+    }
+    if (manualFirebaseBackupBtn) {
+      manualFirebaseBackupBtn.disabled = !loggedIn
+        || incognitoEnabled
+        || (!availableNow && nextManualAtMs > Date.now());
+    }
+  }
+
   async function requestCloudLoginPermission() {
     await ensureAuthReady();
     if (window.bilmAuth.getCurrentUser()) return true;
@@ -359,23 +399,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function applyBackup(payload) {
-    const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
-    localStorage.clear();
-    sessionStorage.clear();
-
-    Object.entries(payload.localStorage || {}).forEach(([key, value]) => {
-      localStorage.setItem(key, value);
-    });
-
-    if (syncPreference === '0') {
-      localStorage.setItem(SYNC_ENABLED_KEY, '0');
+  async function applyBackup(payload, reason = 'account-import') {
+    await ensureAuthReady();
+    if (!window.bilmAuth?.applyImportedBackupSnapshot) {
+      throw new Error('Import service unavailable. Refresh and try again.');
     }
-
-    Object.entries(payload.sessionStorage || {}).forEach(([key, value]) => {
-      sessionStorage.setItem(key, value);
+    await window.bilmAuth.applyImportedBackupSnapshot(payload, {
+      reason,
+      preserveSyncPreference: true,
+      preserveSyncMeta: true
     });
-
   }
 
   function isValidEmail(email) {
@@ -420,6 +453,9 @@ document.addEventListener('DOMContentLoaded', () => {
     signOutBtn.hidden = !loggedIn;
     saveUsernameBtn.disabled = !loggedIn;
     deleteAccountBtn.disabled = !loggedIn;
+    if (manualFirebaseBackupBtn) {
+      manualFirebaseBackupBtn.disabled = !loggedIn;
+    }
     usernameInput.value = user?.displayName || '';
   }
 
@@ -637,7 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  applyImportBtn?.addEventListener('click', () => {
+  applyImportBtn?.addEventListener('click', async () => {
     try {
       pendingImportPayload = parseBackup(dataCodeField.value);
       if (activeImportSlot) {
@@ -651,7 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       if (!confirm('Import this backup now? This will overwrite current local data.')) return;
-      applyBackup(pendingImportPayload);
+      await applyBackup(pendingImportPayload, 'account-import');
       transferStatusText.textContent = 'Import complete. Reloading...';
       setTimeout(() => location.reload(), 250);
     } catch (error) {
@@ -749,12 +785,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  mergeDataBtn?.addEventListener('click', () => {
+  mergeDataBtn?.addEventListener('click', async () => {
     try {
       if (mergeDataBtn.disabled) return;
       const merged = mergeBackupPayloads(importSlots.one, importSlots.two, collectBackupData());
       if (!confirm('Merge Import 1 and Import 2 and apply now? This will overwrite current local data.')) return;
-      applyBackup(merged);
+      await applyBackup(merged, 'account-merge-import');
       transferStatusText.textContent = 'Merged data applied. Reloading...';
       setTimeout(() => location.reload(), 250);
     } catch (error) {
@@ -789,6 +825,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  manualFirebaseBackupBtn?.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      if (!window.bilmAuth?.runManualFirebaseBackup) {
+        throw new Error('Manual Firebase backup is unavailable right now.');
+      }
+      manualFirebaseBackupBtn.disabled = true;
+      statusText.textContent = 'Running manual Firebase backup...';
+      await window.bilmAuth.runManualFirebaseBackup({
+        reason: 'manual-account-sync',
+        source: 'settings-account'
+      });
+      statusText.textContent = 'Manual Firebase backup completed.';
+      refreshFirebaseBackupStatus();
+    } catch (error) {
+      statusText.textContent = `Manual Firebase backup failed: ${error.message}`;
+      refreshFirebaseBackupStatus();
+    } finally {
+      window.setTimeout(() => {
+        refreshFirebaseBackupStatus();
+      }, 350);
+    }
+  });
+
   confirmCloudLoginBtn?.addEventListener('click', () => {
     closeModal(cloudAuthPromptModal);
     closeModal(dataModal);
@@ -805,6 +865,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('storage', (event) => {
     if (event.key !== SYNC_META_KEY) return;
     refreshLastSyncText();
+    refreshFirebaseBackupStatus();
+  });
+  window.addEventListener('bilm:theme-changed', () => {
+    refreshFirebaseBackupStatus();
   });
 
   (async () => {
@@ -813,18 +877,25 @@ document.addEventListener('DOMContentLoaded', () => {
       if (clearOnLogoutToggle) clearOnLogoutToggle.checked = getClearOnLogoutSetting();
       setSyncEnabled(isSyncEnabled());
       refreshLastSyncText();
+      refreshFirebaseBackupStatus();
       updateMergeUi();
       updateAccountUi(window.bilmAuth.getCurrentUser());
       window.bilmAuth.onAuthStateChanged((user) => {
         updateAccountUi(user);
         refreshLastSyncText();
+        refreshFirebaseBackupStatus();
       });
       window.bilmAuth.onListSyncApplied?.(() => {
         refreshLastSyncText();
+        refreshFirebaseBackupStatus();
       });
       window.bilmAuth.onCloudSnapshotChanged?.(() => {
         refreshLastSyncText();
+        refreshFirebaseBackupStatus();
       });
+      window.setInterval(() => {
+        refreshFirebaseBackupStatus();
+      }, 30000);
     } catch (error) {
       accountStatusText.textContent = 'Account tools unavailable right now. Refresh and try again.';
       statusText.textContent = `Auth setup failed: ${error.message}`;

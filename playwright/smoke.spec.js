@@ -24,21 +24,20 @@ test('watch player menus are mutually exclusive', async ({ page }) => {
   await page.click('#serverBtn');
   await expect(page.locator('#serverDropdown')).toBeVisible();
   await expect(page.locator('#subtitleDropdown')).toBeHidden();
-
-  await page.click('#autoplayBtn');
-  await expect(page.locator('#autoplayDropdown')).toBeVisible();
-  await expect(page.locator('#serverDropdown')).toBeHidden();
 });
 
-test('anime watch keeps subtitles disabled and autoplay available', async ({ page }) => {
+test('anime watch keeps subtitles disabled', async ({ page }) => {
   await page.goto('/tv/watch/viewer.html?anime=1&aid=21459&type=tv');
   await expect(page.locator('#playexBar')).toBeVisible();
   await expect(page.locator('#subtitleBtn')).toBeHidden();
-  await expect(page.locator('#autoplayBtn')).toBeVisible();
+  await expect(page.locator('#autoplayBtn')).toHaveCount(0);
 });
 
 test('settings exposes diagnostics controls', async ({ page }) => {
   await page.goto('/settings/');
+  await expect(page.locator('#openMaintenanceBtn')).toBeVisible();
+  await page.click('#openMaintenanceBtn');
+  await expect(page).toHaveURL(/\/settings\/maintenance\/?$/);
   await expect(page.locator('#runHealthCheckBtn')).toBeVisible();
   await expect(page.locator('#restoreMigrationBtn')).toBeVisible();
 });

@@ -352,14 +352,18 @@
   let autosyncDebounceTimer = null;
   let listSyncDebounceTimer = null;
   let suppressMutationHook = false;
+  let externalMutationSuppressionDepth = 0;
   let lastUploadedCloudSignature = '';
   let lastLocalSnapshotSignature = '';
   let lastSaveAttemptAt = 0;
   let snapshotListenerReady = false;
+  let firebaseAutoBackupTimer = null;
 
   const MIN_SAVE_INTERVAL_MS = 15000;
   const AUTOSYNC_HEARTBEAT_MS = 15000;
   const FIREBASE_MIRROR_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const FIREBASE_MANUAL_BACKUP_COOLDOWN_MS = 60 * 60 * 1000;
+  const FIREBASE_AUTO_BACKUP_REASON = 'auto-midnight';
   const LIST_SYNC_DEBOUNCE_MS = 500;
   const LIST_DELETE_SYNC_DEBOUNCE_MS = 15000;
   const SYNC_IDLE_PAUSE_MS = 5 * 60 * 1000;
@@ -373,6 +377,10 @@
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
   const SYNC_DEVICE_ID_KEY = 'bilm-sync-device-id';
+  const THEME_SETTINGS_KEY = 'bilm-theme-settings';
+  const INCOGNITO_BACKUP_KEY = 'bilm-incognito-backup';
+  const INCOGNITO_SEARCH_MAP_KEY = 'bilm-incognito-search-map';
+  const DEBUG_ISSUE_LOCAL_KEY = 'debug-local-issue';
   const MERGEABLE_LIST_KEYS = new Set([
     'bilm-favorites',
     'bilm-watch-later',
@@ -390,6 +398,11 @@
   ];
   const LOCAL_ONLY_LOCAL_STORAGE_KEYS = new Set([
     'bilm-global-message-dismissed-migrating-data'
+  ]);
+  const LOCAL_ONLY_SYNC_EXCLUDED_KEYS = new Set([
+    INCOGNITO_BACKUP_KEY,
+    INCOGNITO_SEARCH_MAP_KEY,
+    DEBUG_ISSUE_LOCAL_KEY
   ]);
   const BACKUP_SESSION_ALLOWLIST = [
     /^bilm-/,
@@ -474,7 +487,58 @@
     }
   }
 
+  function withMutationSuppressed(task) {
+    externalMutationSuppressionDepth += 1;
+    let result;
+    try {
+      result = typeof task === 'function' ? task() : undefined;
+    } catch (error) {
+      externalMutationSuppressionDepth = Math.max(0, externalMutationSuppressionDepth - 1);
+      throw error;
+    }
+
+    if (result && typeof result.finally === 'function') {
+      return result.finally(() => {
+        externalMutationSuppressionDepth = Math.max(0, externalMutationSuppressionDepth - 1);
+      });
+    }
+
+    externalMutationSuppressionDepth = Math.max(0, externalMutationSuppressionDepth - 1);
+    return result;
+  }
+
+  function isMutationHookSuppressed() {
+    return suppressMutationHook || externalMutationSuppressionDepth > 0;
+  }
+
+  function readThemeSettings() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(THEME_SETTINGS_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function isIncognitoSyncPaused() {
+    return readThemeSettings()?.incognito === true;
+  }
+
+  function buildIncognitoPausedError(action = 'cloud sync') {
+    const error = new Error(`Cannot ${action} while incognito is enabled on this device.`);
+    error.code = 'incognito_sync_paused';
+    error.retryable = true;
+    return error;
+  }
+
+  function assertIncognitoSyncAllowed(action = 'cloud sync') {
+    if (isIncognitoSyncPaused()) {
+      throw buildIncognitoPausedError(action);
+    }
+  }
+
   function isSyncTemporarilyPaused() {
+    if (isIncognitoSyncPaused()) return true;
     const now = Date.now();
     const isIdle = now - lastUserActivityAt >= SYNC_IDLE_PAUSE_MS;
     const hiddenTooLong = document.visibilityState === 'hidden'
@@ -1112,6 +1176,15 @@
     return allowlist.some((pattern) => pattern.test(String(key || '')));
   }
 
+  function isSnapshotExcludedStorageKey(key) {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey) return true;
+    if (LOCAL_ONLY_SYNC_EXCLUDED_KEYS.has(normalizedKey)) return true;
+    if (normalizedKey.startsWith('debug-')) return true;
+    if (normalizedKey.startsWith('bilm-incognito-')) return true;
+    return false;
+  }
+
   function isLocalOnlyStorageKey(key) {
     return LOCAL_ONLY_LOCAL_STORAGE_KEYS.has(String(key || ''));
   }
@@ -1139,6 +1212,9 @@
       if (allowlist.length && !shouldIncludeStorageKey(key, allowlist)) {
         return all;
       }
+      if (isSnapshotExcludedStorageKey(key)) {
+        return all;
+      }
       all[key] = value;
       return all;
     }, {});
@@ -1147,9 +1223,15 @@
   function collectBackupData() {
     const meta = readSyncMeta();
     const localState = readStorage(localStorage, BACKUP_LOCAL_ALLOWLIST);
+    const sessionState = readStorage(sessionStorage, BACKUP_SESSION_ALLOWLIST);
     delete localState[SYNC_ENABLED_KEY];
     delete localState[SYNC_META_KEY];
     delete localState[SYNC_DEVICE_ID_KEY];
+    delete localState[INCOGNITO_BACKUP_KEY];
+    delete localState[INCOGNITO_SEARCH_MAP_KEY];
+    delete localState[DEBUG_ISSUE_LOCAL_KEY];
+    delete sessionState[INCOGNITO_BACKUP_KEY];
+    delete sessionState[INCOGNITO_SEARCH_MAP_KEY];
     LOCAL_ONLY_LOCAL_STORAGE_KEYS.forEach((key) => {
       delete localState[key];
     });
@@ -1159,7 +1241,7 @@
       origin: location.origin,
       pathname: location.pathname,
       localStorage: localState,
-      sessionStorage: readStorage(sessionStorage, BACKUP_SESSION_ALLOWLIST),
+      sessionStorage: sessionState,
       meta: {
         updatedAtMs: Date.now(),
         deviceId: getOrCreateDeviceId(),
@@ -1178,50 +1260,196 @@
     return Number.isFinite(raw) && raw > 0 ? raw : 0;
   }
 
+  function getLastFirebaseManualBackupAtMs(meta = readSyncMeta()) {
+    const raw = Number(meta?.lastFirebaseManualBackupAtMs || 0);
+    return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  }
+
+  function getLastFirebaseAutoBackupAtMs(meta = readSyncMeta()) {
+    const raw = Number(meta?.lastFirebaseAutoBackupAtMs || 0);
+    return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  }
+
   function isFirebaseMirrorDue(nowMs = Date.now(), meta = readSyncMeta()) {
     const lastMirrorAtMs = getLastFirebaseMirrorAtMs(meta);
     if (!lastMirrorAtMs) return true;
     return nowMs - lastMirrorAtMs >= FIREBASE_MIRROR_INTERVAL_MS;
   }
 
-  async function mirrorSnapshotToFirebaseIfDue(reason = 'daily-sync') {
+  function getNextManualFirebaseBackupAtMs(meta = readSyncMeta()) {
+    const lastManualAtMs = getLastFirebaseManualBackupAtMs(meta);
+    if (!lastManualAtMs) return 0;
+    return lastManualAtMs + FIREBASE_MANUAL_BACKUP_COOLDOWN_MS;
+  }
+
+  function getFirebaseBackupStatus(meta = readSyncMeta()) {
+    const nowMs = Date.now();
+    const nextManualAtMs = getNextManualFirebaseBackupAtMs(meta);
+    return {
+      lastMirrorAtMs: getLastFirebaseMirrorAtMs(meta),
+      lastMirrorReason: String(meta?.lastFirebaseMirrorReason || '').trim() || null,
+      lastMirrorSource: String(meta?.lastFirebaseMirrorSource || '').trim() || null,
+      lastMirrorSnapshotSource: String(meta?.lastFirebaseMirrorSnapshotSource || '').trim() || null,
+      lastAutoBackupAtMs: getLastFirebaseAutoBackupAtMs(meta),
+      lastAutoBackupReason: String(meta?.lastFirebaseAutoBackupReason || '').trim() || null,
+      lastAutoBackupSource: String(meta?.lastFirebaseAutoBackupSource || '').trim() || null,
+      lastManualBackupAtMs: getLastFirebaseManualBackupAtMs(meta),
+      lastManualBackupReason: String(meta?.lastFirebaseManualBackupReason || '').trim() || null,
+      lastManualBackupSource: String(meta?.lastFirebaseManualBackupSource || '').trim() || null,
+      manualCooldownMs: FIREBASE_MANUAL_BACKUP_COOLDOWN_MS,
+      manualBackupAvailable: nextManualAtMs <= 0 || nowMs >= nextManualAtMs,
+      nextManualBackupAtMs: nextManualAtMs > nowMs ? nextManualAtMs : 0,
+      cadenceText: 'Automatic backup runs daily at 12:00 AM (local time), once every 24 hours.'
+    };
+  }
+
+  async function writeFirebaseBackupSnapshot({
+    reason = 'manual',
+    source = 'unknown',
+    mode = 'auto',
+    respectManualCooldown = false
+  } = {}) {
     const user = auth?.currentUser;
-    if (!user || !isSyncEnabled()) return false;
-    if (!modules?.setDoc || !modules?.doc || !modules?.serverTimestamp || !firestore) return false;
+    if (!user || !isSyncEnabled()) return { ok: false, skipped: true, reason: 'no-user-or-sync-disabled' };
+    if (isIncognitoSyncPaused()) {
+      throw buildIncognitoPausedError('run Firebase backup');
+    }
+    if (!modules?.setDoc || !modules?.doc || !modules?.serverTimestamp || !firestore) {
+      return { ok: false, skipped: true, reason: 'firebase-modules-unavailable' };
+    }
 
     const nowMs = Date.now();
     const meta = readSyncMeta();
-    if (!isFirebaseMirrorDue(nowMs, meta)) return false;
+    const isManualBackup = mode === 'manual';
+    if (isManualBackup && respectManualCooldown) {
+      const nextAvailableAtMs = getNextManualFirebaseBackupAtMs(meta);
+      if (nextAvailableAtMs && nextAvailableAtMs > nowMs) {
+        const error = new Error(`Manual Firebase backup is cooling down. Next available at ${new Date(nextAvailableAtMs).toLocaleString()}.`);
+        error.code = 'firebase_manual_backup_cooldown';
+        error.nextAvailableAtMs = nextAvailableAtMs;
+        error.retryable = true;
+        throw error;
+      }
+    }
 
-    const snapshot = collectBackupData();
+    let snapshot = null;
+    let snapshotSource = 'local-fallback';
+    try {
+      const userId = getTransferUserId(user);
+      const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
+      if (transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1') {
+        snapshot = transferSnapshot;
+        snapshotSource = 'data-api';
+      }
+    } catch (error) {
+      console.warn('Using local fallback for Firebase backup snapshot:', error);
+    }
+    if (!snapshot) {
+      snapshot = collectBackupData();
+    }
     const payload = {
       ...(snapshot || {}),
       meta: {
         ...(snapshot?.meta || {}),
         updatedAtMs: nowMs,
         deviceId: getOrCreateDeviceId(),
-        version: 1
+        version: 1,
+        backupSnapshotSource: snapshotSource
       }
     };
 
+    await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
+      cloudBackup: {
+        schema: 'bilm-cloud-sync-v1',
+        updatedAt: modules.serverTimestamp(),
+        snapshot: payload,
+        transferApiMirrored: true
+      }
+    }, { merge: true });
+
+    const sanitizedReason = String(reason || (isManualBackup ? 'manual' : FIREBASE_AUTO_BACKUP_REASON)).trim()
+      || (isManualBackup ? 'manual' : FIREBASE_AUTO_BACKUP_REASON);
+    const sanitizedSource = String(source || 'unknown').trim() || 'unknown';
+    const nextMeta = {
+      lastFirebaseMirrorAtMs: nowMs,
+      lastFirebaseMirrorReason: sanitizedReason,
+      lastFirebaseMirrorSource: sanitizedSource,
+      lastFirebaseMirrorSnapshotSource: snapshotSource
+    };
+    if (isManualBackup) {
+      nextMeta.lastFirebaseManualBackupAtMs = nowMs;
+      nextMeta.lastFirebaseManualBackupReason = sanitizedReason;
+      nextMeta.lastFirebaseManualBackupSource = sanitizedSource;
+    } else {
+      nextMeta.lastFirebaseAutoBackupAtMs = nowMs;
+      nextMeta.lastFirebaseAutoBackupReason = sanitizedReason;
+      nextMeta.lastFirebaseAutoBackupSource = sanitizedSource;
+    }
+    writeSyncMeta(nextMeta);
+    return {
+      ok: true,
+      atMs: nowMs,
+      mode: isManualBackup ? 'manual' : 'auto',
+      reason: sanitizedReason,
+      source: sanitizedSource
+    };
+  }
+
+  function getNextLocalMidnightDelayMs(nowMs = Date.now()) {
+    const next = new Date(nowMs);
+    next.setHours(24, 0, 0, 0);
+    return Math.max(500, next.getTime() - nowMs);
+  }
+
+  function clearFirebaseAutoBackupTimer() {
+    if (!firebaseAutoBackupTimer) return;
+    window.clearTimeout(firebaseAutoBackupTimer);
+    firebaseAutoBackupTimer = null;
+  }
+
+  async function runAutomaticFirebaseBackupIfDue(triggerSource = 'startup-catchup') {
+    const user = auth?.currentUser;
+    if (!user || !isSyncEnabled() || isIncognitoSyncPaused()) return false;
+    const nowMs = Date.now();
+    const meta = readSyncMeta();
+    const todayStart = new Date(nowMs);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartMs = todayStart.getTime();
+    const lastAutoAtMs = getLastFirebaseAutoBackupAtMs(meta);
+
+    if (lastAutoAtMs >= todayStartMs) return false;
+    if (lastAutoAtMs > 0 && (nowMs - lastAutoAtMs) < FIREBASE_MIRROR_INTERVAL_MS) return false;
+
     try {
-      await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
-        cloudBackup: {
-          schema: 'bilm-cloud-sync-v1',
-          updatedAt: modules.serverTimestamp(),
-          snapshot: payload,
-          transferApiMirrored: true
-        }
-      }, { merge: true });
-      writeSyncMeta({
-        lastFirebaseMirrorAtMs: nowMs,
-        lastFirebaseMirrorReason: String(reason || 'daily-sync')
+      await writeFirebaseBackupSnapshot({
+        reason: FIREBASE_AUTO_BACKUP_REASON,
+        source: String(triggerSource || 'startup-catchup'),
+        mode: 'auto',
+        respectManualCooldown: false
       });
       return true;
     } catch (error) {
-      console.warn('Daily Firebase mirror failed:', error);
+      console.warn('Automatic Firebase backup failed:', error);
       return false;
     }
+  }
+
+  function scheduleNextAutomaticFirebaseBackup() {
+    clearFirebaseAutoBackupTimer();
+    firebaseAutoBackupTimer = window.setTimeout(async () => {
+      try {
+        await runAutomaticFirebaseBackupIfDue('midnight-timer');
+      } finally {
+        scheduleNextAutomaticFirebaseBackup();
+      }
+    }, getNextLocalMidnightDelayMs());
+  }
+
+  function mirrorSnapshotToFirebaseIfDue(reason = FIREBASE_AUTO_BACKUP_REASON) {
+    if (String(reason || '').startsWith('list-sync:') || String(reason || '').startsWith('sector-sync:')) {
+      return Promise.resolve(false);
+    }
+    return runAutomaticFirebaseBackupIfDue(String(reason || 'auto').trim() || 'auto');
   }
 
   function snapshotSignature(snapshot) {
@@ -1244,46 +1472,128 @@
     }
   }
 
-  function applyRemoteSnapshot(snapshot) {
-    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
+  function sanitizeImportedThemeSettings(rawValue) {
+    const parsed = safeParse(rawValue, null);
+    if (!parsed || typeof parsed !== 'object') return rawValue;
+    const nextSettings = {
+      ...parsed,
+      incognito: false
+    };
     try {
-      suppressMutationHook = true;
-      const syncPreference = localStorage.getItem(SYNC_ENABLED_KEY);
-      const syncMetaRaw = localStorage.getItem(SYNC_META_KEY);
-      const deviceIdRaw = localStorage.getItem(SYNC_DEVICE_ID_KEY);
+      return JSON.stringify(nextSettings);
+    } catch {
+      return rawValue;
+    }
+  }
+
+  function sanitizeImportedSnapshot(snapshot, nowMs = Date.now()) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return null;
+    const localState = {
+      ...(snapshot.localStorage || {})
+    };
+    const sessionState = {
+      ...(snapshot.sessionStorage || {})
+    };
+
+    delete localState[INCOGNITO_BACKUP_KEY];
+    delete sessionState[INCOGNITO_BACKUP_KEY];
+    delete localState[INCOGNITO_SEARCH_MAP_KEY];
+    delete sessionState[INCOGNITO_SEARCH_MAP_KEY];
+    delete localState[DEBUG_ISSUE_LOCAL_KEY];
+
+    if (typeof localState[THEME_SETTINGS_KEY] === 'string') {
+      localState[THEME_SETTINGS_KEY] = sanitizeImportedThemeSettings(localState[THEME_SETTINGS_KEY]);
+    }
+
+    return {
+      ...snapshot,
+      localStorage: localState,
+      sessionStorage: sessionState,
+      meta: {
+        ...(snapshot?.meta || {}),
+        updatedAtMs: nowMs,
+        deviceId: getOrCreateDeviceId(),
+        version: 1
+      }
+    };
+  }
+
+  function applySnapshotTransaction(snapshot, {
+    reason = 'import',
+    preserveSyncPreference = true,
+    preserveSyncMeta = true
+  } = {}) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return false;
+    const nowMs = Date.now();
+    const sanitizedSnapshot = sanitizeImportedSnapshot(snapshot, nowMs);
+    if (!sanitizedSnapshot) return false;
+
+    return withMutationSuppressed(() => {
+      const syncPreference = preserveSyncPreference ? localStorage.getItem(SYNC_ENABLED_KEY) : null;
+      const syncMetaRaw = preserveSyncMeta ? localStorage.getItem(SYNC_META_KEY) : null;
+      const deviceIdRaw = localStorage.getItem(SYNC_DEVICE_ID_KEY) || getOrCreateDeviceId();
       const localOnlyState = captureLocalOnlyStorageState();
+
       localStorage.clear();
       sessionStorage.clear();
 
-      Object.entries(snapshot.localStorage || {}).forEach(([key, value]) => {
-        localStorage.setItem(key, value);
+      Object.entries(sanitizedSnapshot.localStorage || {}).forEach(([key, value]) => {
+        if (typeof value === 'undefined' || value === null) return;
+        localStorage.setItem(key, String(value));
       });
-      Object.entries(snapshot.sessionStorage || {}).forEach(([key, value]) => {
-        sessionStorage.setItem(key, value);
+      Object.entries(sanitizedSnapshot.sessionStorage || {}).forEach(([key, value]) => {
+        if (typeof value === 'undefined' || value === null) return;
+        sessionStorage.setItem(key, String(value));
       });
 
       if (syncPreference === '0') {
         localStorage.setItem(SYNC_ENABLED_KEY, '0');
       }
-
       if (syncMetaRaw) localStorage.setItem(SYNC_META_KEY, syncMetaRaw);
       if (deviceIdRaw) localStorage.setItem(SYNC_DEVICE_ID_KEY, deviceIdRaw);
+
+      localStorage.removeItem(INCOGNITO_BACKUP_KEY);
+      sessionStorage.removeItem(INCOGNITO_BACKUP_KEY);
+      localStorage.removeItem(INCOGNITO_SEARCH_MAP_KEY);
+      sessionStorage.removeItem(INCOGNITO_SEARCH_MAP_KEY);
+
       restoreLocalOnlyStorageState(localOnlyState);
 
+      pendingListOperations.clear();
+      pendingSectorOperations.clear();
+
+      writeSyncMeta({
+        lastLocalChangeAt: nowMs,
+        lastMutationType: 'import-apply',
+        lastImportAt: nowMs,
+        lastImportReason: String(reason || 'import').trim() || 'import',
+        listTombstones: {}
+      });
+
+      const signature = snapshotSignature(sanitizedSnapshot);
+      lastAppliedCloudSignature = signature;
+      lastUploadedCloudSignature = signature;
+      lastLocalSnapshotSignature = signature;
+      return true;
+    });
+  }
+
+  function applyRemoteSnapshot(snapshot) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
+    try {
+      const applied = applySnapshotTransaction(snapshot, {
+        reason: 'remote-cloud-apply',
+        preserveSyncPreference: true,
+        preserveSyncMeta: true
+      });
+      if (!applied) return;
       writeSyncMeta({
         lastCloudPullAt: Date.now(),
         lastCloudSnapshotAt: Number(snapshot?.meta?.updatedAtMs || 0) || Date.now(),
         lastAppliedFromDeviceId: snapshot?.meta?.deviceId || null
       });
-
-      const signature = snapshotSignature(snapshot);
-      lastAppliedCloudSignature = signature;
-      lastUploadedCloudSignature = signature;
-      lastLocalSnapshotSignature = signature;
     } catch (error) {
       console.warn('Applying cloud snapshot failed:', error);
-    } finally {
-      suppressMutationHook = false;
     }
   }
 
@@ -1331,6 +1641,7 @@
     const user = auth?.currentUser;
     const forceReasons = new Set(['manual', 'pagehide', 'visibility-hidden']);
     if (!user || !isSyncEnabled() || pendingAutosync) return false;
+    if (isIncognitoSyncPaused()) return false;
     if (!snapshotListenerReady && !forceReasons.has(reason)) return false;
 
     const now = Date.now();
@@ -1614,6 +1925,7 @@
     await init();
     const user = auth?.currentUser;
     if (!user || !isSyncEnabled() || pendingListSync || transferApiDisabled) return false;
+    if (isIncognitoSyncPaused()) return false;
     if (isSyncTemporarilyPaused()) {
       scheduleSyncPauseRecheck();
       return false;
@@ -1680,6 +1992,7 @@
     await init();
     const user = auth?.currentUser;
     if (!user || !isSyncEnabled() || transferApiDisabled) return false;
+    if (isIncognitoSyncPaused()) return false;
     if (isSyncTemporarilyPaused()) return false;
 
     const userId = getTransferUserId(user);
@@ -1772,7 +2085,7 @@
         const key = String(args?.[0] || '');
         const beforeRaw = key ? this.getItem(key) : null;
         const result = originalSetItem.apply(this, args);
-        if (suppressMutationHook) return result;
+        if (isMutationHookSuppressed()) return result;
         if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return result;
         let listMutation = false;
         if (MERGEABLE_LIST_KEYS.has(key)) {
@@ -1816,7 +2129,7 @@
         const key = String(args?.[0] || '');
         const beforeRaw = key ? this.getItem(key) : null;
         const result = originalRemoveItem.apply(this, args);
-        if (suppressMutationHook) return result;
+        if (isMutationHookSuppressed()) return result;
         if (key === SYNC_META_KEY || key === SYNC_DEVICE_ID_KEY) return result;
         let listMutation = false;
         if (MERGEABLE_LIST_KEYS.has(key) && beforeRaw !== null) {
@@ -1836,7 +2149,7 @@
       };
       localProto.clear = function wrappedClear(...args) {
         const result = originalClear.apply(this, args);
-        if (suppressMutationHook) return result;
+        if (isMutationHookSuppressed()) return result;
         pendingListOperations.clear();
         pendingSectorOperations.clear();
         writeSyncMeta({ lastLocalChangeAt: Date.now(), lastMutationType: 'storage-clear' });
@@ -1881,6 +2194,7 @@
   async function syncFromCloudNow() {
     await init();
     const user = auth?.currentUser;
+    if (isIncognitoSyncPaused()) return false;
     if (isSyncTemporarilyPaused()) {
       scheduleSyncPauseRecheck();
       return false;
@@ -2042,14 +2356,19 @@
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
           startCloudSnapshotListener(currentUser);
+          scheduleNextAutomaticFirebaseBackup();
           if (currentUser && isSyncEnabled()) {
             syncFromCloudNow().catch((error) => {
               console.warn('Cloud import failed:', error);
+            });
+            runAutomaticFirebaseBackupIfDue('auth-state').catch((error) => {
+              console.warn('Startup Firebase backup check failed:', error);
             });
             startAutosyncLoop();
           } else {
             snapshotListenerReady = false;
             stopAutosyncLoop();
+            clearFirebaseAutoBackupTimer();
           }
           notifySubscribers(currentUser);
         });
@@ -2302,16 +2621,18 @@
       return () => listSyncAppliedSubscribers.delete(callback);
     },
     async saveCloudSnapshot(snapshot, options = {}) {
+      assertIncognitoSyncAllowed('save cloud backup');
       const user = await requireAuth();
       const mirrorToFirebase = options?.mirrorToFirebase === true;
       const mirrorReason = String(options?.mirrorReason || 'manual-save');
-      const cloudSnapshot = await api.getCloudSnapshot();
-      const mergedSnapshot = mergeSnapshots(cloudSnapshot, snapshot || null) || snapshot || null;
       const nowMs = Date.now();
+      const baseSnapshot = snapshot && snapshot.schema === 'bilm-backup-v1'
+        ? snapshot
+        : collectBackupData();
       const payload = {
-        ...(mergedSnapshot || {}),
+        ...(baseSnapshot || {}),
         meta: {
-          ...(mergedSnapshot?.meta || {}),
+          ...(baseSnapshot?.meta || {}),
           updatedAtMs: nowMs,
           deviceId: getOrCreateDeviceId(),
           version: 1
@@ -2359,14 +2680,16 @@
         lastLocalChangeAt: nowMs,
         ...(firebaseMirrored ? {
           lastFirebaseMirrorAtMs: nowMs,
-          lastFirebaseMirrorReason: mirrorReason
+          lastFirebaseMirrorReason: mirrorReason,
+          lastFirebaseMirrorSource: 'save-cloud-snapshot'
         } : {})
       });
     },
     async getCloudSnapshot(options = {}) {
+      assertIncognitoSyncAllowed('load cloud backup');
       const user = await requireAuth();
       const userId = getTransferUserId(user);
-      const mode = String(options?.mode || 'merged').trim().toLowerCase();
+      const mode = String(options?.mode || 'data-api-first-fallback-firestore').trim().toLowerCase();
       const includeSource = options?.includeSource === true;
       let transferSnapshot = null;
       let transferError = null;
@@ -2378,7 +2701,7 @@
       }
       const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
 
-      if (mode === 'data-api-first-fallback-firestore') {
+      if (mode === 'data-api-first-fallback-firestore' || mode === 'merged') {
         const snapshot = transferSnapshot || firestoreSnapshot || null;
         const source = transferSnapshot
           ? 'data-api'
@@ -2391,22 +2714,10 @@
           ? { snapshot, source, transferError, driftDetected: driftState.detected }
           : snapshot;
       }
-
-      const mergedSnapshot = mergeSnapshots(firestoreSnapshot, transferSnapshot);
-      const snapshot = mergedSnapshot
-        || (
-          getSnapshotUpdatedAtMs(transferSnapshot) >= getSnapshotUpdatedAtMs(firestoreSnapshot)
-            ? transferSnapshot
-            : firestoreSnapshot
-        )
-        || null;
-      const source = mergedSnapshot
-        ? 'merged'
-        : (
-          transferSnapshot
-            ? 'data-api'
-            : (firestoreSnapshot ? 'firestore' : 'none')
-        );
+      const snapshot = transferSnapshot || firestoreSnapshot || null;
+      const source = transferSnapshot
+        ? 'data-api'
+        : (firestoreSnapshot ? 'firestore-fallback' : 'none');
       const driftState = evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source);
       if (driftState.detected) {
         void runOneShotDriftRepairPullIfNeeded(driftState, `snapshot:${source}`);
@@ -2417,10 +2728,14 @@
     },
     async syncFromCloudNow() {
       await init();
+      if (isIncognitoSyncPaused()) return false;
       return syncFromCloudNow();
     },
     async pullChatNow(options = {}) {
       await init();
+      if (isIncognitoSyncPaused()) {
+        throw buildIncognitoPausedError('sync chat');
+      }
       const user = await requireAuth();
       const userId = getTransferUserId(user);
       const sinceMs = normalizeOperationUpdatedAt(options?.sinceMs, getChatSyncCursorMs());
@@ -2472,10 +2787,16 @@
       };
     },
     async flushSyncNow(reason = 'manual') {
+      if (isIncognitoSyncPaused()) {
+        throw buildIncognitoPausedError('sync now');
+      }
       return flushPendingListOperationsToCloud(reason);
     },
     async pushSectorOperationsNow(operations = [], reason = 'manual') {
       await init();
+      if (isIncognitoSyncPaused()) {
+        throw buildIncognitoPausedError('push cloud updates');
+      }
       const user = await requireAuth();
       const userId = getTransferUserId(user);
       const normalizedOperations = (Array.isArray(operations) ? operations : [])
@@ -2496,7 +2817,50 @@
       return response;
     },
     async scheduleCloudSave(reason = 'manual') {
+      if (isIncognitoSyncPaused()) {
+        throw buildIncognitoPausedError('schedule cloud save');
+      }
       return flushPendingListOperationsToCloud(reason);
+    },
+    withMutationSuppressed(task) {
+      return withMutationSuppressed(task);
+    },
+    async applyImportedBackupSnapshot(snapshot, options = {}) {
+      if (!snapshot || snapshot.schema !== 'bilm-backup-v1') {
+        throw new Error('Invalid backup snapshot schema.');
+      }
+      const reason = String(options?.reason || options?.source || 'import').trim() || 'import';
+      const preserveSyncPreference = options?.preserveSyncPreference !== false;
+      const preserveSyncMeta = options?.preserveSyncMeta !== false;
+      const applied = applySnapshotTransaction(snapshot, {
+        reason,
+        preserveSyncPreference,
+        preserveSyncMeta
+      });
+      if (!applied) {
+        throw new Error('Failed to apply imported backup snapshot.');
+      }
+      return {
+        ok: true,
+        reason,
+        appliedAtMs: Date.now()
+      };
+    },
+    getFirebaseBackupStatus() {
+      return getFirebaseBackupStatus();
+    },
+    async runManualFirebaseBackup(options = {}) {
+      assertIncognitoSyncAllowed('run manual Firebase backup');
+      await init();
+      await requireAuth();
+      const reason = String(options?.reason || 'manual-backup').trim() || 'manual-backup';
+      const source = String(options?.source || 'manual-ui').trim() || 'manual-ui';
+      return writeFirebaseBackupSnapshot({
+        reason,
+        source,
+        mode: 'manual',
+        respectManualCooldown: true
+      });
     }
   };
   Object.defineProperty(window, 'bilmAuthModules', {

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm - Maintenance</title>
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="manifest" href="../../manifest.json" />
+  <link rel="apple-touch-icon" href="../../icon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../shared/theme.css" />
+  <link rel="stylesheet" href="../account/style.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="../../shared/access.js"></script>
+  <script src="../../shared/theme.js"></script>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <main>
+    <section class="account-shell">
+      <header class="account-header">
+        <h1>Maintenance</h1>
+        <p>Reset tools, quarantine recovery, local diagnostics, and debug controls.</p>
+      </header>
+
+      <section class="panel">
+        <h2>Quick Access</h2>
+        <div class="actions">
+          <a class="btn btn-outline" href="../">Back to Settings</a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Reset</h2>
+        <p class="muted">Use with care. Reset Data removes local browser data for this site on this device.</p>
+        <div class="actions">
+          <button id="resetThemeBtn" class="btn btn-outline" type="button">Reset Theme</button>
+          <button id="resetDataBtn" class="btn btn-danger" type="button">Reset Data</button>
+        </div>
+        <p class="muted" id="resetStatusText" aria-live="polite"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Quarantine Recovery</h2>
+        <p class="muted">
+          Quarantine stores malformed migration entries so they are not lost. Restore re-runs safe recovery; clear permanently removes quarantined entries.
+        </p>
+        <p class="muted" id="migrationRecoveryCount">No quarantined items found.</p>
+        <div class="actions">
+          <button id="restoreMigrationBtn" class="btn btn-outline" type="button">Restore Quarantine</button>
+          <button id="clearMigrationBtn" class="btn btn-outline" type="button">Clear Quarantine</button>
+        </div>
+        <p class="muted" id="migrationRecoveryStatus" aria-live="polite"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Connection Health</h2>
+        <p class="muted">Runs local-only checks using the internal app health endpoint.</p>
+        <div class="actions">
+          <button id="runHealthCheckBtn" class="btn btn-outline" type="button">Run Check</button>
+        </div>
+        <p class="muted" id="healthCheckStatus" aria-live="polite">No checks run yet.</p>
+        <div class="health-scroll" id="healthCheckList" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" id="syncDebugPanel">
+        <div class="panel-title-row">
+          <h2>Debug</h2>
+          <button id="clearSyncDebugBtn" class="btn btn-outline" type="button">Clear</button>
+        </div>
+        <p class="muted" id="syncDebugMessage">No debug issues detected on this page yet.</p>
+        <pre id="syncDebugDetails" class="sync-debug-details" hidden></pre>
+      </section>
+    </section>
+  </main>
+
+  <script src="../../shared/toast.js" defer></script>
+  <script src="../../shared/media-identity.js" defer></script>
+  <script src="../../shared/auth.js" defer></script>
+  <script src="../../shared/navbar.js" defer></script>
+  <script src="./script.js" defer></script>
+</body>
+</html>

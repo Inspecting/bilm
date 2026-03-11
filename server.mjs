@@ -299,10 +299,161 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
   }
 }
 
+function sanitizeHealthTargets(rawTargets = []) {
+  if (!Array.isArray(rawTargets)) return [];
+  return rawTargets
+    .slice(0, 20)
+    .map((target) => {
+      const label = String(target?.label || '').trim();
+      const rawUrl = String(target?.url || '').trim();
+      if (!label || !rawUrl) return null;
+      let parsed;
+      try {
+        parsed = new URL(rawUrl);
+      } catch {
+        return {
+          label,
+          url: rawUrl,
+          invalid: true
+        };
+      }
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return {
+          label,
+          url: rawUrl,
+          invalid: true
+        };
+      }
+      return {
+        label,
+        url: parsed.toString(),
+        invalid: false
+      };
+    })
+    .filter(Boolean);
+}
+
+async function checkHealthTarget(target) {
+  if (target.invalid) {
+    return {
+      label: target.label,
+      url: target.url,
+      ok: false,
+      status: null,
+      latencyMs: 0,
+      error: 'invalid_target'
+    };
+  }
+
+  const startedAt = Date.now();
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), 7000);
+  try {
+    let response = await fetch(target.url, {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: abortController.signal,
+      headers: {
+        accept: 'application/json, text/plain, */*'
+      }
+    });
+
+    if (response.status === 405 || response.status === 501) {
+      response = await fetch(target.url, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: abortController.signal,
+        headers: {
+          accept: 'application/json, text/plain, */*'
+        }
+      });
+    }
+
+    return {
+      label: target.label,
+      url: target.url,
+      ok: response.ok,
+      status: response.status,
+      latencyMs: Math.max(1, Date.now() - startedAt),
+      error: response.ok ? null : `http_${response.status}`
+    };
+  } catch (error) {
+    return {
+      label: target.label,
+      url: target.url,
+      ok: false,
+      status: null,
+      latencyMs: Math.max(1, Date.now() - startedAt),
+      error: error?.name === 'AbortError' ? 'timeout' : 'request_failed'
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function handleHealthCheck(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      allow: 'POST, OPTIONS',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff'
+    });
+    res.end();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method Not Allowed' }, {
+      allow: 'POST, OPTIONS',
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readRequestBody(req, 128 * 1024);
+  } catch (error) {
+    if (error?.statusCode === 413) {
+      sendJson(res, 413, { error: 'Payload too large' }, { 'cache-control': 'no-store' });
+      return;
+    }
+    sendJson(res, 400, { error: 'Invalid request payload' }, { 'cache-control': 'no-store' });
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(body || '{}');
+  } catch {
+    sendJson(res, 400, { error: 'Invalid JSON payload' }, { 'cache-control': 'no-store' });
+    return;
+  }
+
+  const targets = sanitizeHealthTargets(parsed?.targets || []);
+  const results = [];
+  for (const target of targets) {
+    // Run sequentially to avoid burst traffic.
+    // eslint-disable-next-line no-await-in-loop
+    const result = await checkHealthTarget(target);
+    results.push(result);
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    checkedAtMs: Date.now(),
+    results
+  }, { 'cache-control': 'no-store' });
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   if (url.pathname === '/api/anilist') {
     await handleAniListProxy(req, res);
+    return;
+  }
+  if (url.pathname === '/api/health/check') {
+    await handleHealthCheck(req, res);
     return;
   }
   if (url.pathname.startsWith('/api/tmdb/')) {
