@@ -1456,11 +1456,17 @@
       const sourceLabel = result?.source === 'data-api'
         ? 'data-api'
         : (result?.source === 'firestore-fallback' ? 'Firestore fallback' : 'cloud source');
+      const transferCount = Number(result?.transferItemCount || 0);
+      const firestoreCount = Number(result?.firestoreItemCount || 0);
+      const selectionReason = String(result?.selectionReason || '').trim();
       console.info('[cloud-import] source selected', {
         source: result?.source || 'none',
-        mode: 'data-api-first-fallback-firestore'
+        mode: 'data-api-first-fallback-firestore',
+        selectionReason,
+        transferCount,
+        firestoreCount
       });
-      backupStatus.textContent = `Cloud backup loaded from ${sourceLabel}. Review the JSON data, then click Apply Import when ready.`;
+      backupStatus.textContent = `Cloud backup loaded from ${sourceLabel}. (${transferCount} data-api items, ${firestoreCount} firebase items${selectionReason ? `, rule: ${selectionReason}` : ''}) Review the JSON data, then click Apply Import when ready.`;
       showToast(`Cloud import ready (${sourceLabel}).`, 'success');
     } catch (err) {
       backupStatus.textContent = `Cloud import failed: ${err.message}`;

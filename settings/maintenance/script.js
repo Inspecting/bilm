@@ -308,6 +308,49 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  async function runFallbackTargetProbe(target) {
+    const startedAt = Date.now();
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(() => abortController.abort(), 7000);
+    try {
+      await fetch(target.url, {
+        method: 'GET',
+        mode: 'no-cors',
+        cache: 'no-store',
+        signal: abortController.signal
+      });
+      return {
+        label: target.label,
+        url: target.url,
+        ok: true,
+        status: null,
+        latencyMs: Math.max(1, Date.now() - startedAt),
+        error: null
+      };
+    } catch (error) {
+      return {
+        label: target.label,
+        url: target.url,
+        ok: false,
+        status: null,
+        latencyMs: Math.max(1, Date.now() - startedAt),
+        error: error?.name === 'AbortError' ? 'timeout' : 'request_failed'
+      };
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  async function runFallbackHealthChecks() {
+    const results = [];
+    for (const target of HEALTH_CHECK_TARGETS) {
+      // eslint-disable-next-line no-await-in-loop
+      const result = await runFallbackTargetProbe(target);
+      results.push(result);
+    }
+    return results;
+  }
+
   async function runConnectionHealthChecks() {
     if (!runHealthCheckBtn || !healthCheckStatus) return;
     runHealthCheckBtn.disabled = true;
@@ -332,8 +375,18 @@ document.addEventListener('DOMContentLoaded', () => {
         healthCheckStatus.textContent = `${failed}/${results.length} checks failed.`;
       }
     } catch (error) {
-      healthCheckStatus.textContent = `Health checks failed: ${error.message}`;
-      renderHealthResults([]);
+      try {
+        const fallbackResults = await runFallbackHealthChecks();
+        renderHealthResults(fallbackResults);
+        const failed = fallbackResults.filter((entry) => !entry.ok).length;
+        healthCheckStatus.textContent = failed === 0
+          ? 'Health endpoint unavailable. Fallback probe passed for all targets.'
+          : `Health endpoint unavailable; fallback probe found ${failed}/${fallbackResults.length} failed target(s).`;
+      } catch (fallbackError) {
+        healthCheckStatus.textContent = `Health checks failed: ${error.message}`;
+        renderHealthResults([]);
+        console.warn('Health fallback check failed:', fallbackError);
+      }
     } finally {
       runHealthCheckBtn.disabled = false;
     }

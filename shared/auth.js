@@ -358,6 +358,7 @@
   let lastSaveAttemptAt = 0;
   let snapshotListenerReady = false;
   let firebaseAutoBackupTimer = null;
+  let snapshotRecoveryCheckedThisSession = false;
 
   const MIN_SAVE_INTERVAL_MS = 15000;
   const AUTOSYNC_HEARTBEAT_MS = 15000;
@@ -1007,15 +1008,11 @@
     let operations = [];
     try {
       const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
-      if (transferSnapshot) {
-        operations = sectorBootstrapOperationsFromSnapshot(transferSnapshot, nowMs);
-        migrationSource = 'd1_snapshot';
-      } else {
-        const firebaseSnapshot = await readFirebaseBackupSnapshot(user);
-        if (firebaseSnapshot) {
-          operations = sectorBootstrapOperationsFromSnapshot(firebaseSnapshot, nowMs);
-          migrationSource = 'firebase_snapshot';
-        }
+      const firebaseSnapshot = await readFirebaseBackupSnapshot(user);
+      const selected = choosePreferredCloudSnapshot(transferSnapshot, firebaseSnapshot);
+      if (selected.snapshot) {
+        operations = sectorBootstrapOperationsFromSnapshot(selected.snapshot, nowMs);
+        migrationSource = selected.source === 'data-api' ? 'd1_snapshot' : 'firebase_snapshot';
       }
     } catch (error) {
       console.warn('Cloud snapshot bootstrap source unavailable, using local fallback:', error);
@@ -1636,6 +1633,104 @@
     return Number(snapshot?.meta?.updatedAtMs || 0) || 0;
   }
 
+  function getSnapshotMergeableItemCount(snapshot) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return 0;
+    let total = 0;
+    MERGEABLE_LIST_KEYS.forEach((storageKey) => {
+      const list = readJsonArray(snapshot?.localStorage?.[storageKey]);
+      total += Array.isArray(list) ? list.length : 0;
+    });
+    return total;
+  }
+
+  function choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot) {
+    const transferValid = transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1';
+    const firestoreValid = firestoreSnapshot && firestoreSnapshot.schema === 'bilm-backup-v1';
+
+    if (transferValid && !firestoreValid) {
+      return {
+        snapshot: transferSnapshot,
+        source: 'data-api',
+        reason: 'data_api_only',
+        transferItemCount: getSnapshotMergeableItemCount(transferSnapshot),
+        firestoreItemCount: 0
+      };
+    }
+    if (firestoreValid && !transferValid) {
+      return {
+        snapshot: firestoreSnapshot,
+        source: 'firestore-fallback',
+        reason: 'firestore_only',
+        transferItemCount: 0,
+        firestoreItemCount: getSnapshotMergeableItemCount(firestoreSnapshot)
+      };
+    }
+    if (!transferValid && !firestoreValid) {
+      return {
+        snapshot: null,
+        source: 'none',
+        reason: 'no_snapshot',
+        transferItemCount: 0,
+        firestoreItemCount: 0
+      };
+    }
+
+    const transferItemCount = getSnapshotMergeableItemCount(transferSnapshot);
+    const firestoreItemCount = getSnapshotMergeableItemCount(firestoreSnapshot);
+    const transferUpdatedAtMs = getSnapshotUpdatedAtMs(transferSnapshot);
+    const firestoreUpdatedAtMs = getSnapshotUpdatedAtMs(firestoreSnapshot);
+    const transferHasData = transferItemCount > 0;
+    const firestoreHasData = firestoreItemCount > 0;
+
+    // Recovery-first guard: if Data API has an empty or thin snapshot while Firebase has richer history,
+    // prefer Firebase so older account data can be restored without payload merges.
+    if (!transferHasData && firestoreHasData) {
+      return {
+        snapshot: firestoreSnapshot,
+        source: 'firestore-fallback',
+        reason: 'firestore_richer_transfer_empty',
+        transferItemCount,
+        firestoreItemCount
+      };
+    }
+
+    if (
+      firestoreHasData
+      && firestoreItemCount >= Math.max(10, Math.ceil(Math.max(transferItemCount, 1) * 1.5))
+      && firestoreItemCount >= transferItemCount + 25
+    ) {
+      return {
+        snapshot: firestoreSnapshot,
+        source: 'firestore-fallback',
+        reason: 'firestore_richer_by_volume',
+        transferItemCount,
+        firestoreItemCount
+      };
+    }
+
+    if (
+      firestoreHasData
+      && firestoreUpdatedAtMs > (transferUpdatedAtMs + (6 * 60 * 60 * 1000))
+      && firestoreItemCount >= transferItemCount
+    ) {
+      return {
+        snapshot: firestoreSnapshot,
+        source: 'firestore-fallback',
+        reason: 'firestore_newer_and_not_smaller',
+        transferItemCount,
+        firestoreItemCount
+      };
+    }
+
+    return {
+      snapshot: transferSnapshot,
+      source: 'data-api',
+      reason: 'data_api_preferred',
+      transferItemCount,
+      firestoreItemCount
+    };
+  }
+
   async function saveLocalSnapshotToCloud(reason = 'auto') {
     await init();
     const user = auth?.currentUser;
@@ -2221,6 +2316,20 @@
         requestId: error?.requestId || null
       });
     }
+    if (!listSyncApplied && !snapshotRecoveryCheckedThisSession && user && isSyncEnabled()) {
+      snapshotRecoveryCheckedThisSession = true;
+      try {
+        const userId = getTransferUserId(user);
+        const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
+        const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
+        const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
+        if (shouldApplyRemoteSnapshot(selected.snapshot)) {
+          applyRemoteSnapshot(selected.snapshot);
+        }
+      } catch (error) {
+        console.warn('One-shot snapshot recovery check failed:', error);
+      }
+    }
     const meta = readSyncMeta();
     if (meta?.cloudDriftRepairPending === true) {
       void runOneShotDriftRepairPullIfNeeded({
@@ -2355,6 +2464,7 @@
 
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
+          snapshotRecoveryCheckedThisSession = false;
           startCloudSnapshotListener(currentUser);
           scheduleNextAutomaticFirebaseBackup();
           if (currentUser && isSyncEnabled()) {
@@ -2702,28 +2812,42 @@
       const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
 
       if (mode === 'data-api-first-fallback-firestore' || mode === 'merged') {
-        const snapshot = transferSnapshot || firestoreSnapshot || null;
-        const source = transferSnapshot
-          ? 'data-api'
-          : (firestoreSnapshot ? 'firestore-fallback' : 'none');
+        const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
+        const snapshot = selected.snapshot;
+        const source = selected.source;
         const driftState = evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source);
         if (driftState.detected) {
           void runOneShotDriftRepairPullIfNeeded(driftState, `snapshot:${source}`);
         }
         return includeSource
-          ? { snapshot, source, transferError, driftDetected: driftState.detected }
+          ? {
+            snapshot,
+            source,
+            transferError,
+            driftDetected: driftState.detected,
+            selectionReason: selected.reason,
+            transferItemCount: selected.transferItemCount,
+            firestoreItemCount: selected.firestoreItemCount
+          }
           : snapshot;
       }
-      const snapshot = transferSnapshot || firestoreSnapshot || null;
-      const source = transferSnapshot
-        ? 'data-api'
-        : (firestoreSnapshot ? 'firestore-fallback' : 'none');
+      const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
+      const snapshot = selected.snapshot;
+      const source = selected.source;
       const driftState = evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source);
       if (driftState.detected) {
         void runOneShotDriftRepairPullIfNeeded(driftState, `snapshot:${source}`);
       }
       return includeSource
-        ? { snapshot, source, transferError, driftDetected: driftState.detected }
+        ? {
+          snapshot,
+          source,
+          transferError,
+          driftDetected: driftState.detected,
+          selectionReason: selected.reason,
+          transferItemCount: selected.transferItemCount,
+          firestoreItemCount: selected.firestoreItemCount
+        }
         : snapshot;
     },
     async syncFromCloudNow() {
