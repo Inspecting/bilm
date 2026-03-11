@@ -1,6 +1,5 @@
 (function initBilmMediaCard(global) {
   const NO_IMAGE = 'https://via.placeholder.com/140x210?text=No+Image';
-  const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const certificationCache = new Map();
   const certificationPending = new Map();
   const APP_ROOT_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
@@ -22,6 +21,11 @@
     if (normalizedPath === basePath || normalizedPath.startsWith(`${basePath}/`)) return normalizedPath;
     if (!APP_ROOT_PATTERN.test(normalizedPath)) return normalizedPath;
     return `${basePath}${normalizedPath}`;
+  }
+
+  function withBase(pathname = '') {
+    const normalizedPath = String(pathname || '').startsWith('/') ? String(pathname) : `/${String(pathname || '')}`;
+    return `${detectBasePath()}${normalizedPath}`;
   }
 
   function normalizeCardLink(rawLink) {
@@ -110,7 +114,7 @@
         const primaryUrl = `https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}`;
         let response = await fetch(primaryUrl);
         if (!response.ok) {
-          const backupUrl = `https://api.themoviedb.org/3/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}?api_key=${encodeURIComponent(TMDB_API_KEY)}`;
+          const backupUrl = `${window.location.origin}${withBase(`/api/tmdb/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}`)}`;
           console.info('[api-fallback] media-card certification using backup provider', {
             primaryUrl,
             backupUrl

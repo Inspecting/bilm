@@ -234,10 +234,79 @@ async function handleAniListProxy(req, res) {
   }
 }
 
+async function handleTmdbProxy(req, res, pathname, searchParams) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendJson(res, 405, { error: 'Method Not Allowed' }, {
+      allow: 'GET, HEAD',
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  const apiKey = String(process.env.TMDB_API_KEY || '').trim();
+  if (!apiKey) {
+    sendJson(res, 503, {
+      error: 'TMDB proxy unavailable',
+      code: 'tmdb_proxy_missing_api_key'
+    }, { 'cache-control': 'no-store' });
+    return;
+  }
+
+  const relativePath = String(pathname || '').replace(/^\/api\/tmdb\/?/i, '').trim();
+  if (!relativePath) {
+    sendJson(res, 400, { error: 'TMDB path is required' }, { 'cache-control': 'no-store' });
+    return;
+  }
+
+  const upstreamUrl = new URL(`https://api.themoviedb.org/3/${relativePath}`);
+  searchParams.forEach((value, key) => {
+    if (String(key || '').toLowerCase() === 'api_key') return;
+    upstreamUrl.searchParams.append(key, value);
+  });
+  upstreamUrl.searchParams.set('api_key', apiKey);
+
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), 12000);
+  try {
+    const upstream = await fetch(upstreamUrl.toString(), {
+      method: req.method,
+      headers: {
+        accept: req.headers.accept || 'application/json, text/plain, */*'
+      },
+      signal: abortController.signal
+    });
+    const payload = await upstream.arrayBuffer();
+    const headers = {
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff'
+    };
+    const contentType = upstream.headers.get('content-type');
+    if (contentType) headers['content-type'] = contentType;
+    res.writeHead(upstream.status, headers);
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    res.end(Buffer.from(payload));
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      sendJson(res, 504, { error: 'TMDB upstream timed out' }, { 'cache-control': 'no-store' });
+      return;
+    }
+    sendJson(res, 502, { error: 'TMDB proxy request failed' }, { 'cache-control': 'no-store' });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   if (url.pathname === '/api/anilist') {
     await handleAniListProxy(req, res);
+    return;
+  }
+  if (url.pathname.startsWith('/api/tmdb/')) {
+    await handleTmdbProxy(req, res, url.pathname, url.searchParams);
     return;
   }
   await serveStatic(req, res, url.pathname);

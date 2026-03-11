@@ -1,6 +1,5 @@
 const appWithBase = window.bilmTheme?.withBase || ((path) => path);
 
-const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const params = new URLSearchParams(window.location.search);
 const contentId = params.get('id'); // movie or TV id
 const isAnime = params.get('anime') === '1';
@@ -32,6 +31,9 @@ const languageItems = languageDropdown ? [...languageDropdown.querySelectorAll('
 const subtitleBtn = document.getElementById('subtitleBtn');
 const subtitleDropdown = document.getElementById('subtitleDropdown');
 const subtitleItems = subtitleDropdown ? [...subtitleDropdown.querySelectorAll('[data-subtitle]')] : [];
+const autoplayBtn = document.getElementById('autoplayBtn');
+const autoplayDropdown = document.getElementById('autoplayDropdown');
+const autoplayItems = autoplayDropdown ? [...autoplayDropdown.querySelectorAll('[data-autoplay]')] : [];
 
 const initialSettings = window.bilmTheme?.getSettings?.();
 const supportedServers = ['embedmaster', 'multiembed', 'vidking', 'vidsrc'];
@@ -49,10 +51,13 @@ const normalizeServer = (server) => {
 let currentServer = normalizeServer(isAnime ? (initialSettings?.animeDefaultServer || 'vidnest') : (initialSettings?.defaultServer || 'embedmaster'));
 let currentLanguage = params.get('lang') === 'dub' ? 'dub' : 'sub';
 let currentSubtitle = 'off';
+let currentAutoplay = initialSettings?.autoplay === true ? 'on' : 'off';
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const API_COOLDOWN_MS = 250;
 const apiCooldownByHost = new Map();
+const PROVIDER_HEALTH_KEY = 'bilm-player-provider-health-v1';
+const PROVIDER_HEALTH_TTL_MS = 6 * 60 * 1000;
 
 function toSlug(value) {
   return (value || '')
@@ -71,9 +76,27 @@ function getCurrentAccentHexWithoutHash() {
   return getCurrentAccentColor().replace(/^#/, '');
 }
 
+function normalizeEmbedUrlForCompare(rawUrl) {
+  const normalized = String(rawUrl || '').trim();
+  if (!normalized) return '';
+  try {
+    const parsed = new URL(normalized, window.location.href);
+    parsed.searchParams.delete('bilm_refresh');
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+}
+
+function savePlaybackPreference(patch = {}) {
+  if (!window.bilmTheme?.setSettings || !window.bilmTheme?.getSettings) return;
+  const current = window.bilmTheme.getSettings() || {};
+  window.bilmTheme.setSettings({ ...current, ...patch });
+}
+
 function appendVidsrcSubtitleParam(url) {
   const normalized = String(url || '').trim();
-  if (!normalized || currentSubtitle === 'off') return normalized;
+  if (!normalized || isAnime || currentSubtitle === 'off') return normalized;
   try {
     const parsed = new URL(normalized);
     parsed.searchParams.set('ds_lang', currentSubtitle);
@@ -83,9 +106,79 @@ function appendVidsrcSubtitleParam(url) {
   }
 }
 
+function appendVidKingParams(url, { includeEpisodeControls = false } = {}) {
+  const normalized = String(url || '').trim();
+  if (!normalized) return normalized;
+  try {
+    const parsed = new URL(normalized);
+    parsed.searchParams.set('color', getCurrentAccentHexWithoutHash());
+    if (currentAutoplay === 'on') {
+      parsed.searchParams.set('autoPlay', 'true');
+    } else {
+      parsed.searchParams.delete('autoPlay');
+    }
+    if (includeEpisodeControls) {
+      parsed.searchParams.set('nextEpisode', 'true');
+      parsed.searchParams.set('episodeSelector', 'true');
+    }
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+}
+
+function readProviderHealthState() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PROVIDER_HEALTH_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeProviderHealthState(state = {}) {
+  try {
+    localStorage.setItem(PROVIDER_HEALTH_KEY, JSON.stringify(state));
+  } catch {
+    // Best effort health cache.
+  }
+}
+
+function markServerHealth(server, ok, reason = '') {
+  const key = String(server || '').trim();
+  if (!key || isAnime) return;
+  const state = readProviderHealthState();
+  const now = Date.now();
+  if (ok) {
+    delete state[key];
+  } else {
+    state[key] = {
+      failedAtMs: now,
+      reason: String(reason || 'unknown').trim() || 'unknown'
+    };
+  }
+  writeProviderHealthState(state);
+}
+
+function isServerTemporarilyUnhealthy(server) {
+  const key = String(server || '').trim();
+  if (!key || isAnime) return false;
+  const state = readProviderHealthState();
+  const failedAtMs = Number(state?.[key]?.failedAtMs || 0);
+  if (!failedAtMs) return false;
+  if (Date.now() - failedAtMs > PROVIDER_HEALTH_TTL_MS) {
+    delete state[key];
+    writeProviderHealthState(state);
+    return false;
+  }
+  return true;
+}
+
 let imdbId = null;
 let iframeLoadRequestId = 0;
-const EMBED_LOAD_TIMEOUTS_MS = [10000, 12000];
+let lastIframeLoadAtMs = 0;
+let lastIframeLoadedSrc = '';
+const EMBED_LOAD_TIMEOUTS_MS = [13000, 18000];
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
 const FAVORITES_KEY = 'bilm-favorites';
@@ -225,7 +318,7 @@ function buildMovieUrl(server) {
         ? `https://multiembed.mov/directstream.php?video_id=${imdbId}`
         : `https://multiembed.mov/directstream.php?video_id=${contentId}&tmdb=1`;
     case 'vidking':
-      return `https://www.vidking.net/embed/movie/${encodeURIComponent(contentId)}?color=${encodeURIComponent(getCurrentAccentHexWithoutHash())}`;
+      return appendVidKingParams(`https://www.vidking.net/embed/movie/${encodeURIComponent(contentId)}`);
     case 'embedmaster':
       return `https://embedmaster.link/830gqxyfskjlsnbq/movie/${contentId}`;
     default:
@@ -246,8 +339,38 @@ function getServerLabel(server) {
   return String(item?.textContent || server || 'server').trim();
 }
 
+function getFallbackOrder() {
+  return isAnime ? [...animeSupportedServers] : [...supportedServers];
+}
+
+function findNextFallbackServer(fromServer) {
+  const order = getFallbackOrder();
+  if (!order.length) return null;
+  const startIndex = Math.max(0, order.indexOf(fromServer));
+  for (let offset = 1; offset <= order.length; offset += 1) {
+    const candidate = order[(startIndex + offset) % order.length];
+    if (!candidate || candidate === fromServer) continue;
+    if (isServerTemporarilyUnhealthy(candidate)) continue;
+    return candidate;
+  }
+  return null;
+}
+
 function resolveMovieEmbedRequest() {
   let server = currentServer;
+  if (!isAnime && isServerTemporarilyUnhealthy(server)) {
+    const skippedServer = server;
+    const fallbackHealthyServer = findNextFallbackServer(server);
+    if (fallbackHealthyServer) {
+      setActiveServer(fallbackHealthyServer);
+      server = fallbackHealthyServer;
+      console.info('[player] skipping temporarily unhealthy server', {
+        context: 'movie',
+        skippedServer,
+        fallbackServer: fallbackHealthyServer
+      });
+    }
+  }
   let url = buildMovieUrl(server);
 
   if (!url) {
@@ -269,13 +392,13 @@ function resolveMovieEmbedRequest() {
 }
 
 async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
+  const requestStartedAtMs = Date.now();
   const loader = window.BilmIframeLoader;
   if (!loader?.loadWithRetry) {
     iframe.removeAttribute('sandbox');
     iframe.src = url;
     if (server === 'embedmaster') {
-      window.setTimeout(() => applyEmbedMasterAccentColor(), 700);
-      window.setTimeout(() => applyEmbedMasterAccentColor(), 1500);
+      scheduleEmbedMasterAccentSync();
     }
     return;
   }
@@ -285,6 +408,8 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
     iframe,
     url,
     timeoutScheduleMs: EMBED_LOAD_TIMEOUTS_MS,
+    timeoutGraceMs: 1800,
+    lateLoadWindowMs: 3400,
     isCancelled: () => requestId !== iframeLoadRequestId,
     onAttempt: ({ attempt, timeoutMs }) => {
       console.info('[player] load attempt', {
@@ -296,13 +421,23 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
       setPlayerStatus(`Loading ${serverLabel} (attempt ${attempt}/${EMBED_LOAD_TIMEOUTS_MS.length})…`);
     },
     onSuccess: ({ attempt }) => {
+      markServerHealth(server, true, 'success');
       console.info('[player] load success', {
         context: 'movie',
         server,
         attempt
       });
     },
+    onLateSuccess: ({ attempt }) => {
+      markServerHealth(server, true, 'late-success');
+      console.info('[player] late load recovered', {
+        context: 'movie',
+        server,
+        attempt
+      });
+    },
     onFailure: ({ attempt, reason, timeoutMs }) => {
+      markServerHealth(server, false, reason);
       console.warn('[player] load failure', {
         context: 'movie',
         server,
@@ -317,16 +452,32 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
   if (result?.ok) {
     setPlayerStatus('');
     if (server === 'embedmaster') {
-      window.setTimeout(() => applyEmbedMasterAccentColor(), 500);
-      window.setTimeout(() => applyEmbedMasterAccentColor(), 1200);
+      scheduleEmbedMasterAccentSync();
     }
     return;
   }
 
-  setPlayerStatus(
-    `We couldn't load ${serverLabel}. Retry or choose another server.`,
-    'error'
-  );
+  const reconciledFromLoadEvent = lastIframeLoadAtMs >= requestStartedAtMs
+    && normalizeEmbedUrlForCompare(lastIframeLoadedSrc || iframe?.getAttribute('src') || '')
+      .startsWith(normalizeEmbedUrlForCompare(url));
+  if (reconciledFromLoadEvent) {
+    markServerHealth(server, true, 'reconciled-load');
+    setPlayerStatus('');
+    if (server === 'embedmaster') {
+      scheduleEmbedMasterAccentSync();
+    }
+    return;
+  }
+
+  const nextServer = isAnime ? null : findNextFallbackServer(server);
+  if (nextServer) {
+    setPlayerStatus(`Switching from ${serverLabel} to ${getServerLabel(nextServer)}…`, 'warning');
+    setActiveServer(nextServer);
+    updateIframe();
+    return;
+  }
+
+  setPlayerStatus(`We couldn't load ${serverLabel}. Retry or choose another server.`, 'error');
   console.error('[player] load exhausted', {
     context: 'movie',
     server,
@@ -334,24 +485,67 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
   });
 }
 
-function applyEmbedMasterAccentColor() {
-  if (currentServer !== 'embedmaster') return;
+function dispatchEmbedMasterCommand(command, value = null) {
   const embedWindow = iframe?.contentWindow;
   if (!embedWindow) return;
-  const accentHex = getCurrentAccentHexWithoutHash();
+  const safeCommand = String(command || '').trim();
+  if (!safeCommand) return;
+  const safeValue = value == null ? '' : String(value);
+  const hasValue = safeValue.length > 0;
 
   try {
     if (typeof embedWindow.sendCommand === 'function') {
-      embedWindow.sendCommand('color1', accentHex);
+      if (hasValue) {
+        embedWindow.sendCommand(safeCommand, safeValue);
+      } else {
+        embedWindow.sendCommand(safeCommand);
+      }
     }
   } catch {
     // Cross-origin iframe access can fail.
   }
 
-  embedWindow.postMessage({ command: 'color1', value: accentHex }, '*');
-  embedWindow.postMessage({ api: 'command', command: 'color1', value: accentHex }, '*');
-  embedWindow.postMessage(`color1:${accentHex}`, '*');
-  embedWindow.postMessage(`sendCommand('color1','${accentHex}')`, '*');
+  const commandPayload = safeValue
+    ? { command: safeCommand, value: safeValue }
+    : { command: safeCommand };
+  const apiCommandPayload = safeValue
+    ? { api: 'command', cmd: safeCommand, val: safeValue }
+    : { api: 'command', cmd: safeCommand };
+  const shortPayload = safeValue
+    ? { cmd: safeCommand, val: safeValue }
+    : { cmd: safeCommand };
+  [commandPayload, apiCommandPayload, shortPayload].forEach((payload) => {
+    embedWindow.postMessage(payload, '*');
+    embedWindow.postMessage(JSON.stringify(payload), '*');
+  });
+  if (hasValue) {
+    embedWindow.postMessage(`${safeCommand}:${safeValue}`, '*');
+    embedWindow.postMessage(`sendCommand('${safeCommand}','${safeValue}')`, '*');
+  } else {
+    embedWindow.postMessage(safeCommand, '*');
+    embedWindow.postMessage(`sendCommand('${safeCommand}')`, '*');
+  }
+}
+
+function scheduleEmbedMasterAccentSync() {
+  if (currentServer !== 'embedmaster') return;
+  [80, 280, 760, 1500, 2600].forEach((delayMs) => {
+    window.setTimeout(() => {
+      applyEmbedMasterAccentColor();
+    }, delayMs);
+  });
+}
+
+function applyEmbedMasterAccentColor() {
+  if (currentServer !== 'embedmaster') return;
+  const accentHexWithHash = getCurrentAccentColor();
+  const accentHexWithoutHash = getCurrentAccentHexWithoutHash();
+  dispatchEmbedMasterCommand('color1', accentHexWithHash);
+  if (accentHexWithoutHash && accentHexWithoutHash !== accentHexWithHash) {
+    window.setTimeout(() => {
+      dispatchEmbedMasterCommand('color1', accentHexWithoutHash);
+    }, 120);
+  }
 }
 
 function updateIframe() {
@@ -784,38 +978,64 @@ async function loadMovieDetails() {
   }
 }
 
-if (serverBtn) serverBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const isOpen = serverDropdown.style.display === 'flex';
-  if (isOpen) {
-    serverDropdown.style.display = 'none';
-    serverBtn.setAttribute('aria-expanded', 'false');
-  } else {
-    serverDropdown.style.display = 'flex';
-    serverBtn.setAttribute('aria-expanded', 'true');
-  }
-});
+const dropdownRegistry = [
+  { name: 'server', button: serverBtn, dropdown: serverDropdown },
+  { name: 'language', button: languageBtn, dropdown: languageDropdown },
+  { name: 'subtitle', button: subtitleBtn, dropdown: subtitleDropdown },
+  { name: 'autoplay', button: autoplayBtn, dropdown: autoplayDropdown }
+].filter((entry) => entry?.button && entry?.dropdown);
+
+function setDropdownOpenState(name, open) {
+  const target = dropdownRegistry.find((entry) => entry.name === name);
+  if (!target) return;
+  target.dropdown.style.display = open ? 'flex' : 'none';
+  target.button.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function closeAllDropdowns(exceptName = '') {
+  dropdownRegistry.forEach((entry) => {
+    if (exceptName && entry.name === exceptName) return;
+    setDropdownOpenState(entry.name, false);
+  });
+}
+
+function toggleDropdown(name) {
+  const target = dropdownRegistry.find((entry) => entry.name === name);
+  if (!target) return;
+  const isOpen = target.dropdown.style.display === 'flex';
+  closeAllDropdowns(isOpen ? '' : name);
+  setDropdownOpenState(name, !isOpen);
+}
+
+if (serverBtn) {
+  serverBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleDropdown('server');
+  });
+}
 
 if (subtitleBtn && subtitleDropdown) {
   subtitleBtn.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = subtitleDropdown.style.display === 'flex';
-    subtitleDropdown.style.display = isOpen ? 'none' : 'flex';
-    subtitleBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+    toggleDropdown('subtitle');
   });
 }
 
+if (autoplayBtn && autoplayDropdown) {
+  autoplayBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleDropdown('autoplay');
+  });
+}
+
+[serverDropdown, languageDropdown, subtitleDropdown, autoplayDropdown].forEach((dropdown) => {
+  dropdown?.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+});
+
 document.addEventListener('click', () => {
-  serverDropdown.style.display = 'none';
-  serverBtn.setAttribute('aria-expanded', 'false');
-  if (languageDropdown && languageBtn) {
-    languageDropdown.style.display = 'none';
-    languageBtn.setAttribute('aria-expanded', 'false');
-  }
-  if (subtitleDropdown && subtitleBtn) {
-    subtitleDropdown.style.display = 'none';
-    subtitleBtn.setAttribute('aria-expanded', 'false');
-  }
+  closeAllDropdowns();
 });
 
 function setActiveServer(server) {
@@ -824,12 +1044,12 @@ function setActiveServer(server) {
 }
 
 visibleServerItems.forEach((item) => {
-  item.addEventListener('click', () => {
+  item.addEventListener('click', (event) => {
+    event.stopPropagation();
     if (item.classList.contains('active')) return;
     setActiveServer(item.getAttribute('data-server'));
     updateIframe();
-    serverDropdown.style.display = 'none';
-    serverBtn.setAttribute('aria-expanded', 'false');
+    closeAllDropdowns();
   });
 });
 
@@ -839,11 +1059,17 @@ if (currentServer) {
 
 window.addEventListener('bilm:theme-changed', (event) => {
   const newServer = normalizeServer(isAnime ? event.detail?.animeDefaultServer : event.detail?.defaultServer);
+  const nextAutoplay = event.detail?.autoplay === true ? 'on' : 'off';
   let shouldRefresh = false;
 
   if (newServer && newServer !== currentServer) {
     setActiveServer(newServer);
     shouldRefresh = true;
+  }
+
+  if (nextAutoplay !== currentAutoplay) {
+    setActiveAutoplay(nextAutoplay, { persist: false });
+    if (currentServer === 'vidking') shouldRefresh = true;
   }
 
   if (!isAnime && currentServer === 'vidking') {
@@ -853,7 +1079,7 @@ window.addEventListener('bilm:theme-changed', (event) => {
   if (shouldRefresh) {
     updateIframe();
   } else if (currentServer === 'embedmaster') {
-    applyEmbedMasterAccentColor();
+    scheduleEmbedMasterAccentSync();
   }
 
   const nextContinueWatching = event.detail?.continueWatching !== false;
@@ -874,6 +1100,13 @@ function setActiveLanguage(language) {
 }
 
 function setActiveSubtitle(subtitle) {
+  if (isAnime) {
+    currentSubtitle = 'off';
+    subtitleItems.forEach((item) => {
+      item.classList.toggle('active', item.getAttribute('data-subtitle') === 'off');
+    });
+    return;
+  }
   const normalized = String(subtitle || '').trim().toLowerCase();
   currentSubtitle = ['off', 'en', 'es', 'fr'].includes(normalized) ? normalized : 'off';
   subtitleItems.forEach((item) => {
@@ -881,35 +1114,62 @@ function setActiveSubtitle(subtitle) {
   });
 }
 
+function setActiveAutoplay(mode, { persist = true } = {}) {
+  currentAutoplay = mode === 'on' ? 'on' : 'off';
+  autoplayItems.forEach((item) => {
+    item.classList.toggle('active', item.getAttribute('data-autoplay') === currentAutoplay);
+  });
+  if (persist) {
+    savePlaybackPreference({ autoplay: currentAutoplay === 'on' });
+  }
+}
+
 if (languageBtn && languageDropdown) {
   languageBtn.style.display = isAnime ? 'flex' : 'none';
   languageBtn.addEventListener('click', (event) => {
     event.stopPropagation();
-    const isOpen = languageDropdown.style.display === 'flex';
-    languageDropdown.style.display = isOpen ? 'none' : 'flex';
-    languageBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+    toggleDropdown('language');
   });
   languageItems.forEach((item) => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
       setActiveLanguage(item.getAttribute('data-language'));
       updateIframe();
-      languageDropdown.style.display = 'none';
-      languageBtn.setAttribute('aria-expanded', 'false');
+      closeAllDropdowns();
     });
   });
   setActiveLanguage(currentLanguage);
 }
 
 if (subtitleBtn && subtitleDropdown) {
+  subtitleBtn.style.display = isAnime ? 'none' : 'flex';
   subtitleItems.forEach((item) => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const previousSubtitle = currentSubtitle;
       setActiveSubtitle(item.getAttribute('data-subtitle'));
-      updateIframe();
-      subtitleDropdown.style.display = 'none';
-      subtitleBtn.setAttribute('aria-expanded', 'false');
+      if (!isAnime && currentServer === 'vidsrc' && currentSubtitle !== previousSubtitle) {
+        updateIframe();
+      }
+      closeAllDropdowns();
     });
   });
   setActiveSubtitle('off');
+}
+
+if (autoplayBtn && autoplayDropdown) {
+  autoplayItems.forEach((item) => {
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const previousAutoplay = currentAutoplay;
+      setActiveAutoplay(item.getAttribute('data-autoplay'), { persist: true });
+      if (currentServer === 'vidking' && currentAutoplay !== previousAutoplay) {
+        updateIframe();
+      }
+      closeAllDropdowns();
+    });
+  });
+  setActiveAutoplay(currentAutoplay, { persist: false });
 }
 if (favoriteBtn) {
   favoriteBtn.addEventListener('click', (event) => {
@@ -976,23 +1236,7 @@ if (moreLikeBox) {
 
 function tryEmbedMasterFullscreenCommand() {
   if (currentServer !== 'embedmaster') return;
-  const embedWindow = iframe?.contentWindow;
-  if (!embedWindow) return;
-
-  // EmbedMaster fullscreen responds to sendCommand('fullscreen') from its own player controls:
-  // <button onclick="sendCommand('fullscreen')">Fullscreen</button>
-  try {
-    if (typeof embedWindow.sendCommand === 'function') {
-      embedWindow.sendCommand('fullscreen');
-      return;
-    }
-  } catch (_) {
-    // Cross-origin iframe access is expected to fail on direct function calls.
-  }
-
-  embedWindow.postMessage({ command: 'fullscreen' }, '*');
-  embedWindow.postMessage('fullscreen', '*');
-  embedWindow.postMessage("sendCommand('fullscreen')", '*');
+  dispatchEmbedMasterCommand('fullscreen');
 }
 
 function requestElementFullscreen(element) {
@@ -1048,6 +1292,22 @@ document.addEventListener('fullscreenchange', () => {
     navbarContainer.classList.remove('hide-navbar');
   }
 });
+
+if (iframe) {
+  iframe.addEventListener('load', () => {
+    const src = String(iframe.getAttribute('src') || '').trim();
+    if (src && src !== 'about:blank') {
+      lastIframeLoadAtMs = Date.now();
+      lastIframeLoadedSrc = src;
+    }
+    if (src && src !== 'about:blank' && playerStatus?.classList.contains('is-error')) {
+      setPlayerStatus('');
+    }
+    if (currentServer === 'embedmaster') {
+      scheduleEmbedMasterAccentSync();
+    }
+  });
+}
 
 // Initial load
 updateIframe();

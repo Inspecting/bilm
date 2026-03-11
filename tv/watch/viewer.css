@@ -326,6 +326,7 @@ iframe {
 #serverBtn,
 #languageBtn,
 #subtitleBtn,
+#autoplayBtn,
 #favoriteBtn,
 #watchLaterBtn {
   background: transparent;
@@ -345,12 +346,14 @@ iframe {
 
 #serverBtn,
 #languageBtn,
-#subtitleBtn {
+#subtitleBtn,
+#autoplayBtn {
   position: relative;
 }
 
 #languageBtn,
-#subtitleBtn {
+#subtitleBtn,
+#autoplayBtn {
   width: auto;
   min-width: 72px;
   padding: 0 10px;
@@ -363,6 +366,7 @@ iframe {
 #serverBtn:hover,
 #languageBtn:hover,
 #subtitleBtn:hover,
+#autoplayBtn:hover,
 #favoriteBtn:hover,
 #watchLaterBtn:hover {
   background-color: var(--accent);
@@ -386,7 +390,8 @@ iframe {
 
 #serverDropdown,
 #languageDropdown,
-#subtitleDropdown {
+#subtitleDropdown,
+#autoplayDropdown {
   position: absolute;
   top: 100%;
   left: 50%;

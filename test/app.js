@@ -1,4 +1,3 @@
-const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const CUSTOM_SERVERS_KEY = 'bilm-test-custom-servers';
 
 function detectBasePath() {
@@ -16,7 +15,6 @@ function withBase(path) {
 
 async function tmdb(path, params = {}) {
   const url = new URL(`https://storage-api.watchbilm.org/media/tmdb${path}`);
-  url.searchParams.set('api_key', TMDB_API_KEY);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       url.searchParams.set(key, value);

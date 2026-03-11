@@ -52,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const WATCH_LATER_KEY = 'bilm-watch-later';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
   const MEDIA_LIST_KEYS = new Set([CONTINUE_KEY, FAVORITES_KEY, WATCH_LATER_KEY]);
-  const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
   const storage = window.bilmTheme?.storage || {
     getJSON: (key, fallback = []) => {
       try {
@@ -218,12 +217,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
         if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
         const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
-        const backup = new URL(`https://api.themoviedb.org/3/${tmdbPath}`);
+        const backup = new URL(`${window.location.origin}${withBase(`/api/tmdb/${tmdbPath}`)}`);
         parsed.searchParams.forEach((value, key) => {
           if (String(key || '').toLowerCase() === 'api_key') return;
           backup.searchParams.append(key, value);
         });
-        backup.searchParams.set('api_key', TMDB_API_KEY);
         return backup.toString();
       } catch {
         return '';

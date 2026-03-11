@@ -365,6 +365,7 @@
   const SYNC_IDLE_PAUSE_MS = 5 * 60 * 1000;
   const SYNC_HIDDEN_PAUSE_MS = 60 * 1000;
   const SYNC_PAUSE_RECHECK_MS = 30000;
+  const CLOUD_DRIFT_REPAIR_COOLDOWN_MS = 10 * 60 * 1000;
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
   const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
   const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
@@ -1360,6 +1361,83 @@
     }
   }
 
+  function evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source = 'none') {
+    const transferSignature = snapshotSignature(transferSnapshot);
+    const firestoreSignature = snapshotSignature(firestoreSnapshot);
+    const hasComparableSnapshots = Boolean(transferSignature && firestoreSignature);
+    const detected = hasComparableSnapshots && transferSignature !== firestoreSignature;
+    const nowMs = Date.now();
+    const previousMeta = readSyncMeta();
+    const sourceValue = String(source || 'none').trim() || 'none';
+
+    if (!detected) {
+      writeSyncMeta({
+        cloudDriftRepairPending: false,
+        lastCloudDriftDetectedAt: Number(previousMeta?.lastCloudDriftDetectedAt || 0) || 0,
+        lastCloudDriftSourceChosen: sourceValue
+      });
+      return {
+        detected: false,
+        detectedAtMs: Number(previousMeta?.lastCloudDriftDetectedAt || 0) || 0
+      };
+    }
+
+    const previousTransfer = String(previousMeta?.lastCloudDriftTransferHash || '').trim();
+    const previousFirestore = String(previousMeta?.lastCloudDriftFirestoreHash || '').trim();
+    const signaturesChanged = previousTransfer !== transferSignature || previousFirestore !== firestoreSignature;
+    const detectedAtMs = signaturesChanged
+      ? nowMs
+      : (Number(previousMeta?.lastCloudDriftDetectedAt || 0) || nowMs);
+
+    writeSyncMeta({
+      cloudDriftRepairPending: true,
+      lastCloudDriftDetectedAt: detectedAtMs,
+      lastCloudDriftTransferHash: transferSignature,
+      lastCloudDriftFirestoreHash: firestoreSignature,
+      lastCloudDriftSourceChosen: sourceValue
+    });
+
+    return {
+      detected: true,
+      detectedAtMs,
+      transferSignature,
+      firestoreSignature
+    };
+  }
+
+  async function runOneShotDriftRepairPullIfNeeded(driftState, reason = 'cloud-drift') {
+    if (!driftState?.detected) return false;
+    const meta = readSyncMeta();
+    const detectedAtMs = Number(driftState.detectedAtMs || 0) || 0;
+    const lastRepairAtMs = Number(meta?.lastCloudDriftAutoRepairAt || 0) || 0;
+
+    if (lastRepairAtMs >= detectedAtMs && (Date.now() - lastRepairAtMs) < CLOUD_DRIFT_REPAIR_COOLDOWN_MS) {
+      return false;
+    }
+
+    writeSyncMeta({
+      lastCloudDriftAutoRepairAt: Date.now(),
+      lastCloudDriftAutoRepairReason: String(reason || 'cloud-drift').trim() || 'cloud-drift'
+    });
+
+    try {
+      await syncListsFromCloudNow();
+      writeSyncMeta({
+        cloudDriftRepairPending: false,
+        lastCloudDriftAutoRepairResult: 'ok',
+        lastCloudDriftAutoRepairResultAt: Date.now()
+      });
+      return true;
+    } catch (error) {
+      writeSyncMeta({
+        cloudDriftRepairPending: true,
+        lastCloudDriftAutoRepairResult: String(error?.code || error?.message || 'failed').trim() || 'failed',
+        lastCloudDriftAutoRepairResultAt: Date.now()
+      });
+      return false;
+    }
+  }
+
   function applyListOperationsToLocalStorage(operations = []) {
     if (!Array.isArray(operations) || operations.length === 0) return false;
     const grouped = new Map();
@@ -1828,6 +1906,13 @@
         retryable: error?.retryable !== false,
         requestId: error?.requestId || null
       });
+    }
+    const meta = readSyncMeta();
+    if (meta?.cloudDriftRepairPending === true) {
+      void runOneShotDriftRepairPullIfNeeded({
+        detected: true,
+        detectedAtMs: Number(meta?.lastCloudDriftDetectedAt || 0) || Date.now()
+      }, 'sync-loop');
     }
     return listSyncApplied;
   }
@@ -2298,8 +2383,12 @@
         const source = transferSnapshot
           ? 'data-api'
           : (firestoreSnapshot ? 'firestore-fallback' : 'none');
+        const driftState = evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source);
+        if (driftState.detected) {
+          void runOneShotDriftRepairPullIfNeeded(driftState, `snapshot:${source}`);
+        }
         return includeSource
-          ? { snapshot, source, transferError }
+          ? { snapshot, source, transferError, driftDetected: driftState.detected }
           : snapshot;
       }
 
@@ -2318,8 +2407,12 @@
             ? 'data-api'
             : (firestoreSnapshot ? 'firestore' : 'none')
         );
+      const driftState = evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source);
+      if (driftState.detected) {
+        void runOneShotDriftRepairPullIfNeeded(driftState, `snapshot:${source}`);
+      }
       return includeSource
-        ? { snapshot, source, transferError }
+        ? { snapshot, source, transferError, driftDetected: driftState.detected }
         : snapshot;
     },
     async syncFromCloudNow() {

@@ -1,0 +1,13 @@
+{
+  "name": "bilm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test:smoke": "playwright test",
+    "test:smoke:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0"
+  }
+}

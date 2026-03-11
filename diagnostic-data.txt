@@ -1,60 +1,63 @@
-Anime Routing + Backup Diagnostic Report
+Watch Player + Sync Diagnostic Report
 Generated: 2026-03-10 (America/Chicago)
 Workspace: C:\Users\reidm\bilm
 
 Broken / At Risk
-1) Third-party stream domains remain a runtime availability risk.
-- Affected domains include `vidsrc-embed.ru`, `multiembed.mov`, `godriveplayer.com`, `embedmaster.link`, and `vidnest.fun`.
-- Impact: button clicks can still fail when upstream providers are down or blocked regionally, even when local routing is correct.
-- Current mitigation: deterministic server fallback exists, but if all providers fail, playback fails.
+1) Third-party streaming providers remain the top runtime risk.
+- Domains: `vidsrc-embed.ru`, `multiembed.mov`, `embedmaster.link`, `www.vidking.net`, `vidnest.fun`.
+- Impact: playback can fail even with correct local routing if upstream providers are blocked, throttled, or down.
 
-2) One-time migration intentionally drops malformed legacy media items with no resolvable provider/type/id key.
-- Source: canonical dedupe only keeps entries with a valid canonical key.
-- Impact: corrupted historical entries may disappear after migration (favors correctness over keeping broken records).
+2) TMDB proxy fallback is intentionally env-gated.
+- `TMDB_API_KEY` is now server-only and required for `/api/tmdb/*`.
+- Impact: when the env var is missing, TMDB fallback routes return unavailable by design.
 
-3) Full browser automation coverage is not present in this repo for desktop/mobile click-paths.
-- Impact: viewport/click regressions are still possible between manual checks.
-- Current status: static smoke checks and syntax validation were completed, but no Playwright/Cypress suite exists in-project.
+3) Cross-origin iframe command acceptance is provider-dependent.
+- EmbedMaster `color1` dispatch now sends multiple safe formats with staged retries.
+- Impact: if provider-side API behavior changes, runtime color sync can still degrade.
 
 Potential Future Issues
-1) Client-side TMDB key exposure.
-- TMDB fallback calls use a public key in frontend code paths.
-- Risk: key rotation/quota abuse can degrade fallback behavior.
+1) Provider health memory may over-skip in short outage windows.
+- Current TTL is short-lived and self-clearing, but aggressive fail caching can temporarily avoid a provider that already recovered.
 
-2) Dual-cloud persistence model complexity (`data-api` + Firestore mirror).
-- Current behavior is stable, but long-term schema drift between operation sync and snapshot mirror paths is a maintenance risk.
+2) Dual-cloud drift repair is best-effort.
+- Drift guard and one-shot repair are in place, but major upstream API behavior changes can still require manual intervention.
 
-3) Cross-domain dependency surface is broad.
-- Detected external hosts: `storage-api.watchbilm.org`, `data-api.watchbilm.org`, `api.themoviedb.org`, `graphql.anilist.co`, `image.tmdb.org`, `youtube.com`, and multiple streaming domains.
-- Risk: DNS/CORS/outage changes outside app control can cause intermittent failures.
+3) Smoke automation is focused, not exhaustive.
+- Playwright smoke checks cover core desktop/mobile paths, but deep edge cases still need targeted tests.
 
 Working As Expected
-1) Provider-aware canonical identity is implemented and wired into core flows.
-- Keys now normalize to: `tmdb:movie:<id>`, `tmdb:tv:<id>`, `anilist:movie:<id>`, `anilist:tv:<id>`.
-- Favorites, Watch Later, Continue Watching, and Watch History now use provider-aware matching.
+1) Anime/non-anime identity routing is provider-aware and canonical.
+- Keys and matching use provider+type IDs.
+- Anime routes preserve `anime=1&aid=...&type=...` and no longer collapse into TMDB `id` routes.
 
-2) Anime route preservation is enforced.
-- Anime details links remain `...anime=1&aid=...&type=...` and are no longer rewritten to TMDB `?id=` links.
-- Anime `tmdbId` poisoning is prevented for AniList-backed records.
+2) Player provider cleanup and stack updates are applied.
+- `superembed` and `godrive` are removed from active player flow.
+- `VidKing` is available for non-anime movie/TV routes with accent color support.
+- `se_player.php` and `embedmaster_verify.txt` are removed.
 
-3) One-time local migration is active.
-- Migration key: `bilm-media-identity-migration-v2`.
-- Target lists: favorites, watch later, continue watching, watch history, and legacy history buckets.
-- Deduplication keeps newest record by `updatedAt`.
+3) Subtitle behavior is isolated correctly.
+- Anime watch pages keep subtitles disabled (`off`) and do not mutate subtitle params.
+- Non-anime subtitle params are VidSrc-only via `ds_lang=en|es|fr`.
 
-4) Anime trailer and “More Like This” now follow AniList-first behavior.
-- Trailer/recommendations/relations pull from AniList first.
-- TMDB fallback is strict (normalized title + tight year tolerance + media-type endpoint matching) and safely shows unavailable when confidence is low.
+4) Player bar interaction reliability is improved.
+- `Language`, `Subtitles`, `Autoplay`, and `Server` menus are mutually exclusive.
+- Menu click propagation is controlled to avoid overlap/reopen edge cases.
 
-5) Daily Firebase backup mirror guard is implemented.
-- Sync meta fields added/updated: `lastFirebaseMirrorAtMs`, `lastFirebaseMirrorReason`.
-- Mirror runs only when at least 24 hours have elapsed, triggered after successful sync-capable pushes.
-- Firebase mirror failures are non-blocking when primary data-api sync succeeds.
+5) EmbedMaster accent sync is hardened.
+- `color1` dispatch runs on iframe load, server switch to EmbedMaster, and theme accent changes.
+- Staged retries are included for slower device/player boot timing.
 
-6) API suite checks passed.
-- `data-api`: 23/23 tests passed.
-- `storage-api`: 3/3 tests passed.
+6) Retry false-failure handling is improved.
+- Iframe retries use grace windows and late-load reconciliation.
+- Load-event reconciliation helps prevent false error states on slower systems.
 
-7) Desktop/mobile static smoke checks passed for core pages.
-- Verified viewport meta on home, movie details, movie watch, TV details, TV watch, settings, and history pages.
-- JavaScript syntax checks passed for all modified frontend/shared files.
+7) Daily Firebase mirror guard is active.
+- Snapshot mirroring is limited to at most once per 24 hours and does not block primary sync paths.
+
+8) Migration quarantine and manual restore are available.
+- Malformed migration entries are quarantined, not silently dropped.
+- Settings includes local restore/clear controls for quarantine recovery.
+
+9) Local diagnostics and smoke automation are in repo.
+- Settings includes Connection Health checks for critical dependencies.
+- Playwright smoke tests run for desktop and mobile core flows.

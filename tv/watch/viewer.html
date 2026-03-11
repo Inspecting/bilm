@@ -70,6 +70,13 @@
             <div class="serverDropdownItem" data-subtitle="fr" role="menuitem" tabindex="0">French</div>
           </div>
         </button>
+        <button id="autoplayBtn" title="Autoplay" aria-haspopup="true" aria-expanded="false" aria-controls="autoplayDropdown" aria-label="Autoplay options">
+          AUTO
+          <div id="autoplayDropdown" role="menu" aria-label="Autoplay selection">
+            <div class="serverDropdownItem active" data-autoplay="off" role="menuitem" tabindex="0">Off</div>
+            <div class="serverDropdownItem" data-autoplay="on" role="menuitem" tabindex="0">On</div>
+          </div>
+        </button>
         <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>

@@ -329,6 +329,60 @@
       overflow-wrap: anywhere;
     }
 
+    .maintenance-tools {
+      display: grid;
+      gap: 10px;
+    }
+
+    .maintenance-inline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .health-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .health-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .health-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--surface-2) 90%, #000 10%);
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+
+    .health-row .label {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .health-row .state {
+      color: var(--text-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    }
+
+    .health-row[data-state="ok"] .state {
+      color: #22c55e;
+    }
+
+    .health-row[data-state="error"] .state {
+      color: #f87171;
+    }
+
     .data-modal {
       position: fixed;
       inset: 0;
@@ -550,6 +604,16 @@
       </div>
       <div class="control-row">
         <div>
+          <label>Autoplay</label>
+          <small>Default player autoplay behavior on watch pages.</small>
+        </div>
+        <label class="toggle">
+          <input id="autoplayToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
+      <div class="control-row">
+        <div>
           <label>Proxied Playback</label>
           <small>Save your preference for proxied playback.</small>
         </div>
@@ -593,6 +657,34 @@
       <div class="actions-row">
         <button class="btn btn-outline" id="resetThemeBtn">Reset Theme</button>
         <button class="btn btn-danger" id="resetDataBtn">Reset Data</button>
+      </div>
+
+      <div class="maintenance-tools">
+        <div class="maintenance-inline">
+          <div>
+            <label>Migration Recovery</label>
+            <small id="migrationRecoveryCount">No quarantined items found.</small>
+          </div>
+          <div class="actions-row">
+            <button class="btn btn-outline" id="restoreMigrationBtn" type="button">Restore Quarantine</button>
+            <button class="btn btn-outline" id="clearMigrationBtn" type="button">Clear Quarantine</button>
+          </div>
+        </div>
+        <span class="backup-status" id="migrationRecoveryStatus" aria-live="polite"></span>
+      </div>
+
+      <div class="maintenance-tools">
+        <div class="maintenance-inline">
+          <div>
+            <label>Connection Health</label>
+            <small>Run local checks for API and playback dependencies.</small>
+          </div>
+          <div class="health-actions">
+            <button class="btn btn-outline" id="runHealthCheckBtn" type="button">Run Check</button>
+          </div>
+        </div>
+        <span class="backup-status" id="healthCheckStatus" aria-live="polite">No checks run yet.</span>
+        <div class="health-list" id="healthCheckList" aria-live="polite"></div>
       </div>
 
       <div class="sync-debug-panel" id="syncDebugPanel" aria-live="polite">
@@ -669,6 +761,7 @@
 </div>
 
 <script src="../shared/toast.js" defer></script>
+<script src="../shared/media-identity.js" defer></script>
 <script src="../shared/auth.js" defer></script>
 <script src="../shared/navbar.js" defer></script>
 
@@ -698,6 +791,7 @@
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
   const animeServerSelect = document.getElementById('animeServerSelect');
+  const autoplayToggle = document.getElementById('autoplayToggle');
   const proxyEnabledToggle = document.getElementById('proxyEnabledToggle');
   const resetThemeBtn = document.getElementById('resetThemeBtn');
   const resetDataBtn = document.getElementById('resetDataBtn');
@@ -749,11 +843,30 @@
   const toggleSignUpPasswordBtn = document.getElementById('toggleSignUpPasswordBtn');
   const backToLoginBtn = document.getElementById('backToLoginBtn');
   const closeSignUpModalBtn = document.getElementById('closeSignUpModalBtn');
+  const restoreMigrationBtn = document.getElementById('restoreMigrationBtn');
+  const clearMigrationBtn = document.getElementById('clearMigrationBtn');
+  const migrationRecoveryCount = document.getElementById('migrationRecoveryCount');
+  const migrationRecoveryStatus = document.getElementById('migrationRecoveryStatus');
+  const runHealthCheckBtn = document.getElementById('runHealthCheckBtn');
+  const healthCheckStatus = document.getElementById('healthCheckStatus');
+  const healthCheckList = document.getElementById('healthCheckList');
   const supportedServers = ['embedmaster', 'multiembed', 'vidking', 'vidsrc'];
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const DEBUG_ISSUE_LOCAL_KEY = 'debug-local-issue';
+  const MIGRATION_QUARANTINE_KEY = 'bilm-media-identity-quarantine-v1';
+  const MIGRATION_QUARANTINE_META_KEY = 'bilm-media-identity-quarantine-meta-v1';
   const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^tmdb-/, /^theme-/];
   const BACKUP_SESSION_ALLOWLIST = [/^bilm-/, /^tmdb-/];
+  const HEALTH_CHECK_TARGETS = [
+    { label: 'Storage API', url: 'https://storage-api.watchbilm.org/media/tmdb/configuration' },
+    { label: 'Data API', url: 'https://data-api.watchbilm.org' },
+    { label: 'AniList', url: 'https://graphql.anilist.co' },
+    { label: 'VidSrc', url: 'https://vidsrc-embed.ru' },
+    { label: 'EmbedMaster', url: 'https://embedmaster.link' },
+    { label: 'MultiEmbed', url: 'https://multiembed.mov' },
+    { label: 'VidKing', url: 'https://www.vidking.net' },
+    { label: 'VidNest', url: 'https://vidnest.fun' }
+  ];
   let pendingImportPayload = null;
   let syncDebounceTimer = null;
   let applyingRemoteSync = false;
@@ -927,6 +1040,7 @@
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'embedmaster';
     const preferredAnimeServer = settings.animeDefaultServer || 'vidnest';
     animeServerSelect.value = preferredAnimeServer === 'vidnest' ? 'vidnest' : 'vidnest';
+    autoplayToggle.checked = settings.autoplay === true;
     proxyEnabledToggle.checked = settings.proxyEnabled === true;
     updatePresetVisuals();
   }
@@ -1116,6 +1230,134 @@
     });
   }
 
+  function readMigrationQuarantineEntries() {
+    try {
+      const identityApi = window.BilmMediaIdentity;
+      if (typeof identityApi?.readQuarantineEntries === 'function') {
+        const entries = identityApi.readQuarantineEntries();
+        return Array.isArray(entries) ? entries : [];
+      }
+      const parsed = JSON.parse(localStorage.getItem(MIGRATION_QUARANTINE_KEY) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function updateMigrationRecoveryUi() {
+    const entries = readMigrationQuarantineEntries();
+    if (!migrationRecoveryCount) return;
+    if (!entries.length) {
+      migrationRecoveryCount.textContent = 'No quarantined items found.';
+    } else {
+      migrationRecoveryCount.textContent = `${entries.length} quarantined item${entries.length === 1 ? '' : 's'} available for manual recovery.`;
+    }
+    if (restoreMigrationBtn) restoreMigrationBtn.disabled = entries.length === 0;
+    if (clearMigrationBtn) clearMigrationBtn.disabled = entries.length === 0;
+  }
+
+  function clearMigrationQuarantine() {
+    try {
+      localStorage.removeItem(MIGRATION_QUARANTINE_KEY);
+      localStorage.setItem(MIGRATION_QUARANTINE_META_KEY, JSON.stringify({
+        clearedAtMs: Date.now(),
+        count: 0
+      }));
+      migrationRecoveryStatus.textContent = 'Quarantine cleared.';
+      updateMigrationRecoveryUi();
+    } catch (error) {
+      migrationRecoveryStatus.textContent = `Could not clear quarantine: ${error.message}`;
+    }
+  }
+
+  function restoreMigrationQuarantine() {
+    const identityApi = window.BilmMediaIdentity;
+    if (typeof identityApi?.restoreQuarantinedItems !== 'function') {
+      migrationRecoveryStatus.textContent = 'Recovery API unavailable. Reload and try again.';
+      return;
+    }
+    const result = identityApi.restoreQuarantinedItems();
+    const restored = Number(result?.restored || 0) || 0;
+    migrationRecoveryStatus.textContent = restored > 0
+      ? `Restored ${restored} item${restored === 1 ? '' : 's'} from quarantine.`
+      : 'No recoverable items were found.';
+    updateMigrationRecoveryUi();
+  }
+
+  function renderHealthResults(results = []) {
+    if (!healthCheckList) return;
+    healthCheckList.innerHTML = '';
+    results.forEach((result) => {
+      const row = document.createElement('div');
+      row.className = 'health-row';
+      row.dataset.state = result.ok ? 'ok' : 'error';
+
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = result.label;
+
+      const state = document.createElement('span');
+      state.className = 'state';
+      state.textContent = result.ok
+        ? `reachable (${result.latencyMs} ms)`
+        : `unreachable (${result.error || 'network'})`;
+
+      row.appendChild(label);
+      row.appendChild(state);
+      healthCheckList.appendChild(row);
+    });
+  }
+
+  async function checkHealthTarget(target) {
+    const startedAt = performance.now();
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 7000);
+    try {
+      await fetch(target.url, {
+        method: 'GET',
+        cache: 'no-store',
+        mode: 'no-cors',
+        signal: abortController.signal
+      });
+      const latencyMs = Math.max(1, Math.round(performance.now() - startedAt));
+      return { label: target.label, ok: true, latencyMs };
+    } catch (error) {
+      const latencyMs = Math.max(1, Math.round(performance.now() - startedAt));
+      return {
+        label: target.label,
+        ok: false,
+        latencyMs,
+        error: error?.name === 'AbortError' ? 'timeout' : (error?.message || 'request_failed')
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async function runConnectionHealthChecks() {
+    if (!runHealthCheckBtn || !healthCheckStatus) return;
+    runHealthCheckBtn.disabled = true;
+    healthCheckStatus.textContent = 'Running checks...';
+    try {
+      const results = [];
+      for (const target of HEALTH_CHECK_TARGETS) {
+        const result = await checkHealthTarget(target);
+        results.push(result);
+      }
+      renderHealthResults(results);
+      const failed = results.filter((entry) => !entry.ok).length;
+      if (failed === 0) {
+        healthCheckStatus.textContent = `All ${results.length} checks reached their targets.`;
+      } else {
+        healthCheckStatus.textContent = `${failed}/${results.length} checks failed. Use a different server if playback issues continue.`;
+      }
+    } catch (error) {
+      healthCheckStatus.textContent = `Health checks failed to run: ${error.message}`;
+    } finally {
+      runHealthCheckBtn.disabled = false;
+    }
+  }
+
   async function saveCredentialsForAutofill(email, password) {
     if (!('credentials' in navigator) || !window.PasswordCredential) return;
     try {
@@ -1294,6 +1536,10 @@
 
   animeServerSelect.addEventListener('change', (event) => {
     applySettings({ animeDefaultServer: event.target.value });
+  });
+
+  autoplayToggle.addEventListener('change', (event) => {
+    applySettings({ autoplay: event.target.checked });
   });
 
   proxyEnabledToggle.addEventListener('change', (event) => {
@@ -1626,6 +1872,19 @@
     resetSyncDebugPanel();
   });
 
+  restoreMigrationBtn?.addEventListener('click', () => {
+    restoreMigrationQuarantine();
+  });
+
+  clearMigrationBtn?.addEventListener('click', () => {
+    if (!confirm('Clear all quarantined migration entries?')) return;
+    clearMigrationQuarantine();
+  });
+
+  runHealthCheckBtn?.addEventListener('click', () => {
+    runConnectionHealthChecks();
+  });
+
   window.addEventListener('error', (event) => {
     const runtimeReason = event?.error || { message: event?.message, code: 'window_error' };
     reportRuntimeDebugIssue(runtimeReason, 'window.error');
@@ -1638,6 +1897,7 @@
   window.addEventListener('DOMContentLoaded', () => {
     restoreDebugIssuePanel();
     syncUI();
+    updateMigrationRecoveryUi();
     setSyncEnabled(isSyncEnabled());
     initCloudAuthUi();
   });

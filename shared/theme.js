@@ -52,6 +52,7 @@ function withBase(path) {
     loading: true,
     defaultServer: 'embedmaster',
     animeDefaultServer: 'vidnest',
+    autoplay: false,
     proxyEnabled: false,
     searchHistory: true,
     continueWatching: true,

@@ -6,7 +6,6 @@ function detectBasePath() {
   return '';
 }
 
-const TMDB_API_KEY = '3ade810499876bb5672f40e54960e6a2';
 const ANILIST_GRAPHQL_URL = 'https://storage-api.watchbilm.org/media/anilist';
 const BASE_URL = detectBasePath();
 const showsPerLoad = 15;
@@ -95,12 +94,11 @@ function getStorageApiBackupGetUrl(rawUrl) {
     if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
     if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
     const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
-    const backup = new URL(`https://api.themoviedb.org/3/${tmdbPath}`);
+    const backup = new URL(`${window.location.origin}${BASE_URL}/api/tmdb/${tmdbPath}`);
     parsed.searchParams.forEach((value, key) => {
       if (String(key || '').toLowerCase() === 'api_key') return;
       backup.searchParams.append(key, value);
     });
-    backup.searchParams.set('api_key', TMDB_API_KEY);
     return backup.toString();
   } catch {
     return '';

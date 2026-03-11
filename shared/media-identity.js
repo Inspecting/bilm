@@ -12,7 +12,9 @@
     'index.html'
   ]);
   const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
-  const MIGRATION_META_KEY = 'bilm-media-identity-migration-v2';
+  const MIGRATION_META_KEY = 'bilm-media-identity-migration-v3';
+  const MIGRATION_QUARANTINE_KEY = 'bilm-media-identity-quarantine-v1';
+  const MIGRATION_QUARANTINE_META_KEY = 'bilm-media-identity-quarantine-meta-v1';
   const MIGRATED_LIST_KEYS = Object.freeze([
     'bilm-favorites',
     'bilm-watch-later',
@@ -305,15 +307,141 @@
     global.localStorage?.setItem(storageKey, JSON.stringify(value));
   }
 
-  function migrateList(storageKey) {
+  function readQuarantineEntries() {
+    return readJsonArray(MIGRATION_QUARANTINE_KEY);
+  }
+
+  function writeQuarantineEntries(entries) {
+    writeJsonArray(MIGRATION_QUARANTINE_KEY, entries);
+  }
+
+  function getQuarantineCount() {
+    return readQuarantineEntries().length;
+  }
+
+  function setQuarantineMeta(partial = {}) {
+    try {
+      const previous = JSON.parse(global.localStorage?.getItem(MIGRATION_QUARANTINE_META_KEY) || '{}') || {};
+      global.localStorage?.setItem(MIGRATION_QUARANTINE_META_KEY, JSON.stringify({
+        ...previous,
+        ...partial
+      }));
+    } catch {
+      // Best effort meta write.
+    }
+  }
+
+  function hashLegacyItem(value) {
+    const text = String(value || '');
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return Math.abs(hash >>> 0);
+  }
+
+  function makeLegacyFallbackItem(rawItem, restoreIndex = 0) {
+    const source = rawItem && typeof rawItem === 'object' ? rawItem : {};
+    const type = normalizeType(source.type) || 'movie';
+    const provider = normalizeProvider(source.provider) || 'tmdb';
+    const seeded = hashLegacyItem(JSON.stringify(source)) + Math.max(0, Number(restoreIndex) || 0);
+    const fallbackId = (seeded % 900000000) + 100000000;
+    return {
+      ...source,
+      provider,
+      type,
+      id: toPositiveInt(source.id) || fallbackId,
+      updatedAt: Number(source.updatedAt || 0) || Date.now()
+    };
+  }
+
+  function appendQuarantineEntries(entries = []) {
+    const incoming = Array.isArray(entries) ? entries : [];
+    if (!incoming.length) return 0;
+    const current = readQuarantineEntries();
+    const next = [...incoming, ...current].slice(0, 500);
+    writeQuarantineEntries(next);
+    setQuarantineMeta({
+      lastUpdatedAtMs: Date.now(),
+      count: next.length
+    });
+    return incoming.length;
+  }
+
+  function migrateList(storageKey, quarantineEntries = []) {
     const current = readJsonArray(storageKey);
-    if (!current.length) return false;
-    const migrated = dedupeCanonicalItems(current);
+    if (!current.length) return { changed: false, quarantined: 0 };
+    const map = new Map();
+    let quarantined = 0;
+    current.forEach((item) => {
+      const canonical = canonicalizeStoredItem(item);
+      const key = String(canonical?.key || '').trim();
+      if (!canonical || !key) {
+        quarantined += 1;
+        quarantineEntries.push({
+          storageKey,
+          reason: 'missing_identity_key',
+          quarantinedAtMs: Date.now(),
+          item
+        });
+        return;
+      }
+      const currentEntry = map.get(key);
+      const currentUpdatedAt = Number(currentEntry?.updatedAt || 0) || 0;
+      const candidateUpdatedAt = Number(canonical.updatedAt || 0) || 0;
+      if (!currentEntry || candidateUpdatedAt >= currentUpdatedAt) {
+        map.set(key, canonical);
+      }
+    });
+    const migrated = [...map.values()].sort((a, b) => (Number(b?.updatedAt || 0) || 0) - (Number(a?.updatedAt || 0) || 0));
     const before = JSON.stringify(current);
     const after = JSON.stringify(migrated);
-    if (before === after) return false;
-    writeJsonArray(storageKey, migrated);
-    return true;
+    const changed = before !== after;
+    if (changed) {
+      writeJsonArray(storageKey, migrated);
+    }
+    return { changed, quarantined };
+  }
+
+  function restoreQuarantinedItems() {
+    const entries = readQuarantineEntries();
+    if (!entries.length) {
+      return { restored: 0, remaining: 0 };
+    }
+
+    const grouped = new Map();
+    entries.forEach((entry, index) => {
+      const storageKey = String(entry?.storageKey || '').trim();
+      if (!storageKey) return;
+      const fallbackItem = makeLegacyFallbackItem(entry?.item, index);
+      const canonical = canonicalizeStoredItem(fallbackItem, {
+        preferProvider: fallbackItem.provider,
+        preferType: fallbackItem.type,
+        allowAnimeTmdbId: true
+      }) || {
+        ...fallbackItem,
+        key: `legacy:${fallbackItem.type}:${fallbackItem.id || (Date.now() + index)}`
+      };
+      if (!grouped.has(storageKey)) grouped.set(storageKey, []);
+      grouped.get(storageKey).push(canonical);
+    });
+
+    let restored = 0;
+    grouped.forEach((items, storageKey) => {
+      const existing = readJsonArray(storageKey);
+      const merged = dedupeCanonicalItems([...(Array.isArray(items) ? items : []), ...existing]);
+      writeJsonArray(storageKey, merged);
+      restored += Array.isArray(items) ? items.length : 0;
+    });
+
+    global.localStorage?.removeItem(MIGRATION_QUARANTINE_KEY);
+    setQuarantineMeta({
+      restoredAtMs: Date.now(),
+      restoredCount: restored,
+      count: 0
+    });
+    return { restored, remaining: 0 };
   }
 
   function migrateLocalListsOnce() {
@@ -322,12 +450,20 @@
       if (String(previous || '').trim()) return false;
 
       let changed = false;
+      const quarantinedEntries = [];
+      let quarantined = 0;
       MIGRATED_LIST_KEYS.forEach((storageKey) => {
-        if (migrateList(storageKey)) changed = true;
+        const result = migrateList(storageKey, quarantinedEntries);
+        if (result.changed) changed = true;
+        quarantined += Number(result.quarantined || 0) || 0;
       });
+      if (quarantinedEntries.length) {
+        appendQuarantineEntries(quarantinedEntries);
+      }
       global.localStorage?.setItem(MIGRATION_META_KEY, JSON.stringify({
         migratedAtMs: Date.now(),
-        changed
+        changed,
+        quarantined
       }));
       return changed;
     } catch {
@@ -348,6 +484,10 @@
     findIndexByIdentity,
     hasIdentity,
     dedupeCanonicalItems,
+    MIGRATION_QUARANTINE_KEY,
+    getQuarantineCount,
+    readQuarantineEntries,
+    restoreQuarantinedItems,
     migrateLocalListsOnce,
     normalizeInternalAppPath,
     normalizeSameOriginLink,
