@@ -34,11 +34,14 @@ const serverItems = [...serverDropdown.querySelectorAll('.serverDropdownItem')];
 const languageBtn = document.getElementById('languageBtn');
 const languageDropdown = document.getElementById('languageDropdown');
 const languageItems = languageDropdown ? [...languageDropdown.querySelectorAll('[data-language]')] : [];
+const subtitleBtn = document.getElementById('subtitleBtn');
+const subtitleDropdown = document.getElementById('subtitleDropdown');
+const subtitleItems = subtitleDropdown ? [...subtitleDropdown.querySelectorAll('[data-subtitle]')] : [];
 
 let currentSeason = 1;
 let currentEpisode = 1;
 const initialSettings = window.bilmTheme?.getSettings?.();
-const supportedServers = ['embedmaster', 'superembed', 'multiembed', 'vidsrc', 'godrive'];
+const supportedServers = ['embedmaster', 'multiembed', 'vidking', 'vidsrc'];
 const animeSupportedServers = ['vidnest'];
 const visibleServerItems = serverItems.filter((item) => {
   const server = item.getAttribute('data-server');
@@ -52,6 +55,7 @@ const normalizeServer = (server) => {
 };
 let currentServer = normalizeServer(isAnime ? (initialSettings?.animeDefaultServer || 'vidnest') : (initialSettings?.defaultServer || 'embedmaster'));
 let currentLanguage = params.get('lang') === 'dub' ? 'dub' : 'sub';
+let currentSubtitle = 'off';
 let totalSeasons = 1;
 let episodesPerSeason = {};
 let seasonEpisodeMemory = {};
@@ -59,13 +63,34 @@ let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const API_COOLDOWN_MS = 250;
 const apiCooldownByHost = new Map();
-const canUseLocalSePlayerRoute = () => !/\.github\.io$/i.test(String(window.location.hostname || ''));
 
 function toSlug(value) {
   return (value || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'trending';
+}
+
+function getCurrentAccentColor() {
+  const settings = window.bilmTheme?.getSettings?.() || {};
+  const accent = String(settings?.accent || '#a855f7').trim();
+  return /^#[0-9a-f]{6}$/i.test(accent) ? accent : '#a855f7';
+}
+
+function getCurrentAccentHexWithoutHash() {
+  return getCurrentAccentColor().replace(/^#/, '');
+}
+
+function appendVidsrcSubtitleParam(url) {
+  const normalized = String(url || '').trim();
+  if (!normalized || currentSubtitle === 'off') return normalized;
+  try {
+    const parsed = new URL(normalized);
+    parsed.searchParams.set('ds_lang', currentSubtitle);
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
 }
 
 const CONTINUE_KEY = 'bilm-continue-watching';
@@ -584,6 +609,15 @@ if (serverBtn) serverBtn.addEventListener('click', (e) => {
   }
 });
 
+if (subtitleBtn && subtitleDropdown) {
+  subtitleBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = subtitleDropdown.style.display === 'flex';
+    subtitleDropdown.style.display = isOpen ? 'none' : 'flex';
+    subtitleBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+  });
+}
+
 // Close server dropdown on outside click
 document.addEventListener('click', () => {
   serverDropdown.style.display = 'none';
@@ -591,6 +625,10 @@ document.addEventListener('click', () => {
   if (languageDropdown && languageBtn) {
     languageDropdown.style.display = 'none';
     languageBtn.setAttribute('aria-expanded', 'false');
+  }
+  if (subtitleDropdown && subtitleBtn) {
+    subtitleDropdown.style.display = 'none';
+    subtitleBtn.setAttribute('aria-expanded', 'false');
   }
 });
 
@@ -625,8 +663,14 @@ window.addEventListener('bilm:theme-changed', (event) => {
     shouldRefresh = true;
   }
 
+  if (!isAnime && currentServer === 'vidking') {
+    shouldRefresh = true;
+  }
+
   if (shouldRefresh) {
     updateIframe();
+  } else if (currentServer === 'embedmaster') {
+    applyEmbedMasterAccentColor();
   }
 
   const nextContinueWatching = event.detail?.continueWatching !== false;
@@ -717,26 +761,18 @@ function buildTvUrl(server) {
   }
   if (!tmdbId && !imdbId) return '';
   switch (server) {
-    case 'superembed':
-      return tmdbId
-        ? (
-          canUseLocalSePlayerRoute()
-            ? `${appWithBase('/se_player.php')}?video_id=${encodeURIComponent(tmdbId)}&tmdb=1&s=${encodeURIComponent(season)}&e=${encodeURIComponent(episode)}`
-            : ''
-        )
-        : '';
     case 'vidsrc': {
       const id = imdbId || tmdbId;
-      return `https://vidsrc-embed.ru/embed/tv/${id}/${season}-${episode}`;
+      return appendVidsrcSubtitleParam(`https://vidsrc-embed.ru/embed/tv/${id}/${season}-${episode}`);
     }
-    case 'godrive':
-      return tmdbId
-        ? `https://godriveplayer.com/player.php?type=series&tmdb=${tmdbId}&season=${season}&episode=${episode}`
-        : '';
     case 'multiembed':
       return imdbId
         ? `https://multiembed.mov/directstream.php?video_id=${imdbId}&s=${season}&e=${episode}`
         : `https://multiembed.mov/directstream.php?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`;
+    case 'vidking':
+      return tmdbId
+        ? `https://www.vidking.net/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season)}/${encodeURIComponent(episode)}?color=${encodeURIComponent(getCurrentAccentHexWithoutHash())}&nextEpisode=true&episodeSelector=true`
+        : '';
     case 'embedmaster':
       return tmdbId ? `https://embedmaster.link/830gqxyfskjlsnbq/tv/${tmdbId}/${season}/${episode}` : '';
     default:
@@ -761,25 +797,7 @@ function resolveTvEmbedRequest() {
   let server = currentServer;
   let url = buildTvUrl(server);
 
-  if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
-    setPlayerStatus('SuperEmbed route is not available on this host. Choose another server manually.', 'warning');
-  }
-
-  if (!url && server === 'godrive' && !tmdbId) {
-    const fallbackServer = normalizeServer('vidsrc');
-    setActiveServer(fallbackServer);
-    server = fallbackServer;
-    url = buildTvUrl(server);
-    console.info('[player] deterministic fallback', {
-      context: 'tv',
-      reason: 'godrive_missing_tmdb',
-      selectedServer: 'godrive',
-      fallbackServer
-    });
-    setPlayerStatus('GoDrive requires TMDB ID here. Switched to VidSrc for this episode.', 'warning');
-  }
-
-  if (!url && server !== 'superembed') {
+  if (!url) {
     const fallbackServer = normalizeServer('vidsrc');
     if (fallbackServer !== server) {
       setActiveServer(fallbackServer);
@@ -802,6 +820,10 @@ async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
   if (!loader?.loadWithRetry) {
     iframe.removeAttribute('sandbox');
     iframe.src = url;
+    if (server === 'embedmaster') {
+      window.setTimeout(() => applyEmbedMasterAccentColor(), 700);
+      window.setTimeout(() => applyEmbedMasterAccentColor(), 1500);
+    }
     return;
   }
 
@@ -841,6 +863,10 @@ async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
   if (requestId !== iframeLoadRequestId || result?.cancelled) return;
   if (result?.ok) {
     setPlayerStatus('');
+    if (server === 'embedmaster') {
+      window.setTimeout(() => applyEmbedMasterAccentColor(), 500);
+      window.setTimeout(() => applyEmbedMasterAccentColor(), 1200);
+    }
     return;
   }
 
@@ -853,6 +879,26 @@ async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
     server,
     attempts: EMBED_LOAD_TIMEOUTS_MS.length
   });
+}
+
+function applyEmbedMasterAccentColor() {
+  if (currentServer !== 'embedmaster') return;
+  const embedWindow = iframe?.contentWindow;
+  if (!embedWindow) return;
+  const accentHex = getCurrentAccentHexWithoutHash();
+
+  try {
+    if (typeof embedWindow.sendCommand === 'function') {
+      embedWindow.sendCommand('color1', accentHex);
+    }
+  } catch {
+    // Cross-origin iframe access can fail.
+  }
+
+  embedWindow.postMessage({ command: 'color1', value: accentHex }, '*');
+  embedWindow.postMessage({ api: 'command', command: 'color1', value: accentHex }, '*');
+  embedWindow.postMessage(`color1:${accentHex}`, '*');
+  embedWindow.postMessage(`sendCommand('color1','${accentHex}')`, '*');
 }
 
 function updateIframe() {
@@ -872,11 +918,7 @@ function updateIframe() {
   if (!url) {
     iframe.removeAttribute('sandbox');
     iframe.src = '';
-    if (server === 'superembed' && !canUseLocalSePlayerRoute()) {
-      setPlayerStatus('SuperEmbed route is not available on this host. Choose another server manually.', 'error');
-    } else {
-      setPlayerStatus('No playable URL for this episode on the selected server.', 'error');
-    }
+    setPlayerStatus('No playable URL for this episode on the selected server.', 'error');
     return;
   }
 
@@ -1257,6 +1299,14 @@ function setActiveLanguage(language) {
   languageItems.forEach(i => i.classList.toggle('active', i.getAttribute('data-language') === currentLanguage));
 }
 
+function setActiveSubtitle(subtitle) {
+  const normalized = String(subtitle || '').trim().toLowerCase();
+  currentSubtitle = ['off', 'en', 'es', 'fr'].includes(normalized) ? normalized : 'off';
+  subtitleItems.forEach((item) => {
+    item.classList.toggle('active', item.getAttribute('data-subtitle') === currentSubtitle);
+  });
+}
+
 if (languageBtn && languageDropdown) {
   languageBtn.style.display = isAnime ? 'flex' : 'none';
   languageBtn.addEventListener('click', (event) => {
@@ -1274,6 +1324,18 @@ if (languageBtn && languageDropdown) {
     });
   });
   setActiveLanguage(currentLanguage);
+}
+
+if (subtitleBtn && subtitleDropdown) {
+  subtitleItems.forEach((item) => {
+    item.addEventListener('click', () => {
+      setActiveSubtitle(item.getAttribute('data-subtitle'));
+      updateIframe();
+      subtitleDropdown.style.display = 'none';
+      subtitleBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
+  setActiveSubtitle('off');
 }
 if (favoriteBtn) {
   favoriteBtn.addEventListener('click', (event) => {

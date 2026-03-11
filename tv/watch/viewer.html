@@ -61,6 +61,15 @@
             <div class="serverDropdownItem" data-language="dub" role="menuitem" tabindex="0">Dub</div>
           </div>
         </button>
+        <button id="subtitleBtn" title="Subtitles" aria-haspopup="true" aria-expanded="false" aria-controls="subtitleDropdown" aria-label="Subtitle options">
+          SUBS
+          <div id="subtitleDropdown" role="menu" aria-label="Subtitle selection">
+            <div class="serverDropdownItem active" data-subtitle="off" role="menuitem" tabindex="0">Off</div>
+            <div class="serverDropdownItem" data-subtitle="en" role="menuitem" tabindex="0">English</div>
+            <div class="serverDropdownItem" data-subtitle="es" role="menuitem" tabindex="0">Spanish</div>
+            <div class="serverDropdownItem" data-subtitle="fr" role="menuitem" tabindex="0">French</div>
+          </div>
+        </button>
         <button id="serverBtn" title="Select Server" aria-haspopup="true" aria-expanded="false" aria-controls="serverDropdown" aria-label="Select server">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="4" width="20" height="7" rx="2" ry="2"></rect>
@@ -70,10 +79,9 @@
           </svg>
           <div id="serverDropdown" role="menu" aria-label="Server selection">
             <div class="serverDropdownItem active" data-server="embedmaster" role="menuitem" tabindex="0">EmbedMaster</div>
-            <div class="serverDropdownItem" data-server="superembed" role="menuitem" tabindex="0">SuperEmbed</div>
             <div class="serverDropdownItem" data-server="multiembed" role="menuitem" tabindex="0">MultiEmbed</div>
+            <div class="serverDropdownItem" data-server="vidking" role="menuitem" tabindex="0">VidKing</div>
             <div class="serverDropdownItem" data-server="vidsrc" role="menuitem" tabindex="0">VidSrc</div>
-            <div class="serverDropdownItem" data-server="godrive" role="menuitem" tabindex="0">GoDrive</div>
             <div class="serverDropdownItem" data-server="vidnest" role="menuitem" tabindex="0">VidNest</div>
           </div>
         </button>

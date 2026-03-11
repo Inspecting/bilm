@@ -325,6 +325,7 @@ iframe {
 #fullscreenBtn,
 #serverBtn,
 #languageBtn,
+#subtitleBtn,
 #favoriteBtn,
 #watchLaterBtn {
   background: transparent;
@@ -343,11 +344,13 @@ iframe {
 }
 
 #serverBtn,
-#languageBtn {
+#languageBtn,
+#subtitleBtn {
   position: relative;
 }
 
-#languageBtn {
+#languageBtn,
+#subtitleBtn {
   width: auto;
   min-width: 72px;
   padding: 0 10px;
@@ -359,6 +362,7 @@ iframe {
 #fullscreenBtn:hover,
 #serverBtn:hover,
 #languageBtn:hover,
+#subtitleBtn:hover,
 #favoriteBtn:hover,
 #watchLaterBtn:hover {
   background-color: var(--accent);
@@ -381,7 +385,8 @@ iframe {
 }
 
 #serverDropdown,
-#languageDropdown {
+#languageDropdown,
+#subtitleDropdown {
   position: absolute;
   top: 100%;
   left: 50%;
