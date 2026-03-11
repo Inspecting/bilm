@@ -359,6 +359,7 @@
   let snapshotListenerReady = false;
   let firebaseAutoBackupTimer = null;
   let snapshotRecoveryCheckedThisSession = false;
+  let sectorBootstrapCheckedThisSession = false;
 
   const MIN_SAVE_INTERVAL_MS = 15000;
   const AUTOSYNC_HEARTBEAT_MS = 15000;
@@ -983,16 +984,20 @@
     }
   }
 
-  async function ensureSectorBootstrapForUser(user) {
+  async function ensureSectorBootstrapForUser(user, options = {}) {
+    const forceCheck = options?.forceCheck === true;
     if (!user || transferApiDisabled || !isSyncEnabled()) return false;
-    if (hasSectorMigrationCompleted()) return false;
+    const localMigrated = hasSectorMigrationCompleted();
+    if (localMigrated && sectorBootstrapCheckedThisSession && !forceCheck) return false;
+    if (sectorBootstrapCheckedThisSession && !forceCheck) return false;
+    sectorBootstrapCheckedThisSession = true;
 
     const userId = getTransferUserId(user);
     let existingState = null;
     try {
-      const seedPull = await pullListOperationsFromTransferApi(user, userId, 0, 1);
-      existingState = seedPull?.state || null;
-      if (Number(existingState?.migratedAtMs || 0) > 0 || (seedPull?.operations?.length || 0) > 0) {
+        const seedPull = await pullListOperationsFromTransferApi(user, userId, 0, 1);
+        existingState = seedPull?.state || null;
+        if (Number(existingState?.migratedAtMs || 0) > 0 || (seedPull?.operations?.length || 0) > 0) {
         writeSyncMeta({
           [LIST_SYNC_MIGRATED_META_KEY]: Number(existingState?.migratedAtMs || Date.now()) || Date.now()
         });
@@ -2094,6 +2099,7 @@
     let sinceMs = getListSyncCursorMs();
     let pages = 0;
     let applied = false;
+    let attemptedBootstrapRecovery = false;
 
     while (pages < 4) {
       pages += 1;
@@ -2113,6 +2119,23 @@
       if (sectorOperations.length > 0) {
         const didApplyStorage = applyStorageSectorOperationsToLocalStorage(sectorOperations);
         applied = applied || didApplyStorage;
+      }
+      if (
+        !attemptedBootstrapRecovery
+        && sinceMs <= 0
+        && operations.length === 0
+        && sectorOperations.length === 0
+        && migratedAtMs <= 0
+      ) {
+        attemptedBootstrapRecovery = true;
+        try {
+          const bootstrapped = await ensureSectorBootstrapForUser(user, { forceCheck: true });
+          if (bootstrapped) {
+            continue;
+          }
+        } catch (error) {
+          console.warn('Bootstrap recovery attempt failed:', error);
+        }
       }
       sinceMs = Math.max(sinceMs, cursorMs);
       setListSyncCursorMs(sinceMs);
@@ -2465,6 +2488,7 @@
         m.onAuthStateChanged(auth, (user) => {
           currentUser = user || null;
           snapshotRecoveryCheckedThisSession = false;
+          sectorBootstrapCheckedThisSession = false;
           startCloudSnapshotListener(currentUser);
           scheduleNextAutomaticFirebaseBackup();
           if (currentUser && isSyncEnabled()) {
@@ -2914,7 +2938,9 @@
       if (isIncognitoSyncPaused()) {
         throw buildIncognitoPausedError('sync now');
       }
-      return flushPendingListOperationsToCloud(reason);
+      const pushed = await flushPendingListOperationsToCloud(reason);
+      const pulled = await syncListsFromCloudNow();
+      return pushed || pulled;
     },
     async pushSectorOperationsNow(operations = [], reason = 'manual') {
       await init();
