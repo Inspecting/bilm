@@ -14,11 +14,4 @@ Explore titles before choosing where to watch them
 
 BILM is built for discovery and convenience, helping users find what to watch without jumping between multiple platforms.
 
-Visit the site here:
-👉 https://inspecting.github.io/bilm/
-
-👉 https://watchbilm.org (Recommended)
-
-👉 Direct Link: https://inspecting.github.io/bilm/home/
-
-👉 https://watchbilm.org/home/ (Recommended)
+Even includes anime for wide variation between your preferences.
