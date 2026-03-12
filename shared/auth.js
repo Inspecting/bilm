@@ -76,8 +76,7 @@
     }
     const body = JSON.stringify({
       userId,
-      data: normalizedSnapshot,
-      value: JSON.stringify(normalizedSnapshot)
+      data: normalizedSnapshot
     });
     const headers = {
       'content-type': 'application/json',
@@ -396,9 +395,17 @@
   ]);
   const BACKUP_LOCAL_ALLOWLIST = [
     /^bilm-/,
-    /^tmdb-/,
     /^theme-/
   ];
+  const BACKUP_SESSION_ALLOWLIST = [
+    /^bilm-/
+  ];
+  const BACKUP_EXCLUDED_STORAGE_KEY_PATTERNS = [
+    /^tmdb-/i,
+    /^debug-/i
+  ];
+  const FIRESTORE_MIRROR_MAX_BYTES = 900000;
+  const FIRESTORE_FORBIDDEN_KEY_PATTERN = /[~*/\[\]]/;
   const LOCAL_ONLY_LOCAL_STORAGE_KEYS = new Set([
     'bilm-global-message-dismissed-migrating-data'
   ]);
@@ -407,10 +414,6 @@
     INCOGNITO_SEARCH_MAP_KEY,
     DEBUG_ISSUE_LOCAL_KEY
   ]);
-  const BACKUP_SESSION_ALLOWLIST = [
-    /^bilm-/,
-    /^tmdb-/
-  ];
   const LIST_KEY_TO_SECTOR_KEY = Object.freeze({
     'bilm-favorites': 'favorites',
     'bilm-watch-later': 'watch_later',
@@ -1267,6 +1270,14 @@
     return allowlist.some((pattern) => pattern.test(String(key || '')));
   }
 
+  function isBackupStorageKeyExcluded(key) {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey) return true;
+    if (normalizedKey.includes('/') || normalizedKey.includes('\\')) return true;
+    if (BACKUP_EXCLUDED_STORAGE_KEY_PATTERNS.some((pattern) => pattern.test(normalizedKey))) return true;
+    return false;
+  }
+
   function isSnapshotExcludedStorageKey(key) {
     const normalizedKey = String(key || '').trim();
     if (!normalizedKey) return true;
@@ -1303,12 +1314,93 @@
       if (allowlist.length && !shouldIncludeStorageKey(key, allowlist)) {
         return all;
       }
+      if (isBackupStorageKeyExcluded(key)) {
+        return all;
+      }
       if (isSnapshotExcludedStorageKey(key)) {
         return all;
       }
       all[key] = value;
       return all;
     }, {});
+  }
+
+  function estimateJsonSizeBytes(value) {
+    try {
+      const json = JSON.stringify(value ?? null);
+      return new TextEncoder().encode(json).byteLength;
+    } catch {
+      return Number.MAX_SAFE_INTEGER;
+    }
+  }
+
+  function isFirestoreMapKeySafe(key) {
+    const normalized = String(key || '').trim();
+    if (!normalized) return false;
+    if (normalized.startsWith('__') && normalized.endsWith('__')) return false;
+    if (FIRESTORE_FORBIDDEN_KEY_PATTERN.test(normalized)) return false;
+    return true;
+  }
+
+  function pickEssentialLocalStorageKeysForFirebase(localState = {}) {
+    const essential = {};
+    MERGEABLE_LIST_KEYS.forEach((storageKey) => {
+      if (Object.prototype.hasOwnProperty.call(localState, storageKey)) {
+        essential[storageKey] = localState[storageKey];
+      }
+    });
+    Object.keys(STORAGE_KEY_TO_SECTOR_CONFIG).forEach((storageKey) => {
+      if (Object.prototype.hasOwnProperty.call(localState, storageKey)) {
+        essential[storageKey] = localState[storageKey];
+      }
+    });
+    Object.entries(localState).forEach(([storageKey, value]) => {
+      if (Object.prototype.hasOwnProperty.call(essential, storageKey)) return;
+      if (storageKey.startsWith('bilm-tv-progress-') || storageKey.startsWith('theme-')) {
+        essential[storageKey] = value;
+      }
+    });
+    return essential;
+  }
+
+  function buildFirebaseMirrorSnapshot(snapshot) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return null;
+
+    const sanitizeStorageState = (state = {}) => Object.entries(state || {}).reduce((all, [key, value]) => {
+      const normalizedKey = String(key || '').trim();
+      if (!normalizedKey) return all;
+      if (isBackupStorageKeyExcluded(normalizedKey)) return all;
+      if (!isFirestoreMapKeySafe(normalizedKey)) return all;
+      if (typeof value === 'undefined' || value === null) return all;
+      all[normalizedKey] = String(value);
+      return all;
+    }, {});
+
+    const base = {
+      ...snapshot,
+      localStorage: sanitizeStorageState(snapshot.localStorage || {}),
+      sessionStorage: sanitizeStorageState(snapshot.sessionStorage || {}),
+      meta: {
+        ...(snapshot?.meta || {}),
+        updatedAtMs: normalizeOperationUpdatedAt(snapshot?.meta?.updatedAtMs, Date.now()),
+        deviceId: String(snapshot?.meta?.deviceId || getOrCreateDeviceId()).trim() || getOrCreateDeviceId(),
+        version: Number(snapshot?.meta?.version || 1) || 1
+      }
+    };
+
+    if (estimateJsonSizeBytes(base) <= FIRESTORE_MIRROR_MAX_BYTES) {
+      return base;
+    }
+
+    const trimmed = {
+      ...base,
+      localStorage: pickEssentialLocalStorageKeysForFirebase(base.localStorage || {}),
+      sessionStorage: {}
+    };
+    if (estimateJsonSizeBytes(trimmed) <= FIRESTORE_MIRROR_MAX_BYTES) {
+      return trimmed;
+    }
+    return null;
   }
 
   function collectBackupData() {
@@ -1448,12 +1540,17 @@
         backupSnapshotSource: snapshotSource
       }
     };
+    const firebaseSnapshot = buildFirebaseMirrorSnapshot(payload);
+    if (!firebaseSnapshot) {
+      console.warn('Skipping Firebase mirror write: snapshot exceeded safe limits after trimming.');
+      return { ok: false, skipped: true, reason: 'firebase_snapshot_too_large' };
+    }
 
     await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
       cloudBackup: {
         schema: 'bilm-cloud-sync-v1',
         updatedAt: modules.serverTimestamp(),
-        snapshot: payload,
+        snapshot: firebaseSnapshot,
         transferApiMirrored: true
       }
     }, { merge: true });
@@ -1760,86 +1857,31 @@
   function choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot) {
     const transferValid = transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1';
     const firestoreValid = firestoreSnapshot && firestoreSnapshot.schema === 'bilm-backup-v1';
+    const transferItemCount = transferValid ? getSnapshotMergeableItemCount(transferSnapshot) : 0;
+    const firestoreItemCount = firestoreValid ? getSnapshotMergeableItemCount(firestoreSnapshot) : 0;
 
-    if (transferValid && !firestoreValid) {
+    if (transferValid) {
       return {
         snapshot: transferSnapshot,
         source: 'data-api',
-        reason: 'data_api_only',
-        transferItemCount: getSnapshotMergeableItemCount(transferSnapshot),
-        firestoreItemCount: 0
-      };
-    }
-    if (firestoreValid && !transferValid) {
-      return {
-        snapshot: firestoreSnapshot,
-        source: 'firestore-fallback',
-        reason: 'firestore_only',
-        transferItemCount: 0,
-        firestoreItemCount: getSnapshotMergeableItemCount(firestoreSnapshot)
-      };
-    }
-    if (!transferValid && !firestoreValid) {
-      return {
-        snapshot: null,
-        source: 'none',
-        reason: 'no_snapshot',
-        transferItemCount: 0,
-        firestoreItemCount: 0
-      };
-    }
-
-    const transferItemCount = getSnapshotMergeableItemCount(transferSnapshot);
-    const firestoreItemCount = getSnapshotMergeableItemCount(firestoreSnapshot);
-    const transferUpdatedAtMs = getSnapshotUpdatedAtMs(transferSnapshot);
-    const firestoreUpdatedAtMs = getSnapshotUpdatedAtMs(firestoreSnapshot);
-    const transferHasData = transferItemCount > 0;
-    const firestoreHasData = firestoreItemCount > 0;
-
-    // Recovery-first guard: if Data API has an empty or thin snapshot while Firebase has richer history,
-    // prefer Firebase so older account data can be restored without payload merges.
-    if (!transferHasData && firestoreHasData) {
-      return {
-        snapshot: firestoreSnapshot,
-        source: 'firestore-fallback',
-        reason: 'firestore_richer_transfer_empty',
+        reason: firestoreValid ? 'data_api_primary_firestore_backup' : 'data_api_only',
         transferItemCount,
         firestoreItemCount
       };
     }
-
-    if (
-      firestoreHasData
-      && firestoreItemCount >= Math.max(10, Math.ceil(Math.max(transferItemCount, 1) * 1.5))
-      && firestoreItemCount >= transferItemCount + 25
-    ) {
+    if (firestoreValid) {
       return {
         snapshot: firestoreSnapshot,
         source: 'firestore-fallback',
-        reason: 'firestore_richer_by_volume',
+        reason: 'firestore_backup_fallback',
         transferItemCount,
         firestoreItemCount
       };
     }
-
-    if (
-      firestoreHasData
-      && firestoreUpdatedAtMs > (transferUpdatedAtMs + (6 * 60 * 60 * 1000))
-      && firestoreItemCount >= transferItemCount
-    ) {
-      return {
-        snapshot: firestoreSnapshot,
-        source: 'firestore-fallback',
-        reason: 'firestore_newer_and_not_smaller',
-        transferItemCount,
-        firestoreItemCount
-      };
-    }
-
     return {
-      snapshot: transferSnapshot,
-      source: 'data-api',
-      reason: 'data_api_preferred',
+      snapshot: null,
+      source: 'none',
+      reason: 'no_snapshot',
       transferItemCount,
       firestoreItemCount
     };
@@ -2096,7 +2138,6 @@
     lastAppliedCloudSignature = '';
     lastUploadedCloudSignature = '';
     lastLocalSnapshotSignature = '';
-    console.debug('[sync] cleared pending state after auth change', { reason });
   }
 
   function scheduleListSyncRetry(error, operations = []) {
@@ -2958,6 +2999,7 @@
       let savedToTransferApi = false;
       let lastTransferError = null;
       let firebaseMirrored = false;
+      const firebaseSnapshot = mirrorToFirebase ? buildFirebaseMirrorSnapshot(payload) : null;
       try {
         await saveSnapshotToTransferApi(user, userId, payload);
         savedToTransferApi = true;
@@ -2966,13 +3008,13 @@
         console.warn('Data API save failed:', error);
       }
 
-      if (mirrorToFirebase && modules?.setDoc && modules?.doc && firestore) {
+      if (mirrorToFirebase && modules?.setDoc && modules?.doc && firestore && firebaseSnapshot) {
         try {
           await modules.setDoc(modules.doc(firestore, 'users', user.uid), {
             cloudBackup: {
               schema: 'bilm-cloud-sync-v1',
               updatedAt: modules.serverTimestamp(),
-              snapshot: payload,
+              snapshot: firebaseSnapshot,
               transferApiMirrored: savedToTransferApi
             }
           }, { merge: true });
@@ -2983,8 +3025,15 @@
             throw firebaseError;
           }
         }
-      } else if (!savedToTransferApi && lastTransferError) {
-        throw lastTransferError;
+      } else if (mirrorToFirebase && !firebaseSnapshot) {
+        console.warn('Firebase backup mirror skipped: snapshot exceeded safe size limits.');
+      }
+
+      if (!savedToTransferApi && !firebaseMirrored) {
+        if (lastTransferError) throw lastTransferError;
+        const error = new Error('Cloud snapshot save failed.');
+        error.code = 'cloud_snapshot_save_failed';
+        throw error;
       }
 
       writeSyncMeta({
@@ -3001,7 +3050,7 @@
       assertIncognitoSyncAllowed('load cloud backup');
       const user = await requireAuth();
       const userId = getTransferUserId(user);
-      const mode = String(options?.mode || 'data-api-first-fallback-firestore').trim().toLowerCase();
+      const mode = String(options?.mode || 'data-api-primary-fallback-firestore').trim().toLowerCase();
       const includeSource = options?.includeSource === true;
       let transferSnapshot = null;
       let transferError = null;
@@ -3009,31 +3058,37 @@
         transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
       } catch (error) {
         transferError = error;
-        console.warn('Data API load failed (falling back to Firestore data):', error);
+        console.warn('Data API load failed (falling back to backup source):', error);
       }
       const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
+      const transferItemCount = transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1'
+        ? getSnapshotMergeableItemCount(transferSnapshot)
+        : 0;
+      const firestoreItemCount = firestoreSnapshot && firestoreSnapshot.schema === 'bilm-backup-v1'
+        ? getSnapshotMergeableItemCount(firestoreSnapshot)
+        : 0;
 
-      if (mode === 'data-api-first-fallback-firestore' || mode === 'merged') {
-        const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
-        const snapshot = selected.snapshot;
-        const source = selected.source;
-        const driftState = evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source);
-        if (driftState.detected) {
-          void runOneShotDriftRepairPullIfNeeded(driftState, `snapshot:${source}`);
-        }
-        return includeSource
-          ? {
-            snapshot,
-            source,
-            transferError,
-            driftDetected: driftState.detected,
-            selectionReason: selected.reason,
-            transferItemCount: selected.transferItemCount,
-            firestoreItemCount: selected.firestoreItemCount
-          }
-          : snapshot;
+      let selected;
+      if (mode === 'data-api-only' || mode === 'dataapi-only') {
+        selected = {
+          snapshot: transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1' ? transferSnapshot : null,
+          source: transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1' ? 'data-api' : 'none',
+          reason: transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1' ? 'data_api_only' : 'no_snapshot',
+          transferItemCount,
+          firestoreItemCount
+        };
+      } else if (mode === 'firestore-only' || mode === 'firebase-only') {
+        selected = {
+          snapshot: firestoreSnapshot && firestoreSnapshot.schema === 'bilm-backup-v1' ? firestoreSnapshot : null,
+          source: firestoreSnapshot && firestoreSnapshot.schema === 'bilm-backup-v1' ? 'firestore-fallback' : 'none',
+          reason: firestoreSnapshot && firestoreSnapshot.schema === 'bilm-backup-v1' ? 'firestore_only' : 'no_snapshot',
+          transferItemCount,
+          firestoreItemCount
+        };
+      } else {
+        selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
       }
-      const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
+
       const snapshot = selected.snapshot;
       const source = selected.source;
       const driftState = evaluateCloudSnapshotDrift(transferSnapshot, firestoreSnapshot, source);

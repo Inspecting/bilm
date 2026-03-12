@@ -30,9 +30,55 @@ document.addEventListener('DOMContentLoaded', () => {
   const DEBUG_ISSUE_LOCAL_KEY = 'debug-local-issue';
   const MIGRATION_QUARANTINE_KEY = 'bilm-media-identity-quarantine-v1';
   const MIGRATION_QUARANTINE_META_KEY = 'bilm-media-identity-quarantine-meta-v1';
+  const HEALTH_CHECK_SAMPLE_USER_ID = '12345678901234567890123456';
   const HEALTH_CHECK_TARGETS = [
     { label: 'Storage API', url: 'https://storage-api.watchbilm.org/media/tmdb/configuration' },
-    { label: 'Data API', url: 'https://data-api.watchbilm.org' },
+    { label: 'Data API (health)', url: 'https://data-api.watchbilm.org/health' },
+    {
+      label: 'Data API Login Gate',
+      url: `https://data-api.watchbilm.org/?userId=${HEALTH_CHECK_SAMPLE_USER_ID}`,
+      method: 'GET',
+      expectedStatuses: [200, 401, 404]
+    },
+    {
+      label: 'Data API Sync Pull Gate',
+      url: `https://data-api.watchbilm.org/sync/sectors/pull?userId=${HEALTH_CHECK_SAMPLE_USER_ID}&since=0&limit=1`,
+      method: 'GET',
+      expectedStatuses: [200, 401]
+    },
+    {
+      label: 'Data API Export Route',
+      url: 'https://data-api.watchbilm.org/',
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: {
+        userId: HEALTH_CHECK_SAMPLE_USER_ID,
+        data: {
+          schema: 'bilm-backup-v1',
+          meta: {
+            updatedAtMs: Date.now(),
+            deviceId: 'health-check'
+          },
+          localStorage: {},
+          sessionStorage: {}
+        }
+      },
+      expectedStatuses: [200, 401]
+    },
+    {
+      label: 'Data API Import Guard',
+      url: 'https://data-api.watchbilm.org/?import=true',
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: {
+        users: {}
+      },
+      expectedStatuses: [200, 401, 403]
+    },
     { label: 'AniList', url: 'https://graphql.anilist.co' },
     { label: 'VidSrc', url: 'https://vidsrc-embed.ru' },
     { label: 'EmbedMaster', url: 'https://embedmaster.link' },

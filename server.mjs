@@ -301,6 +301,7 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
 
 function sanitizeHealthTargets(rawTargets = []) {
   if (!Array.isArray(rawTargets)) return [];
+  const allowedMethods = new Set(['HEAD', 'GET', 'POST', 'OPTIONS']);
   return rawTargets
     .slice(0, 20)
     .map((target) => {
@@ -324,9 +325,52 @@ function sanitizeHealthTargets(rawTargets = []) {
           invalid: true
         };
       }
+      const requestedMethod = String(target?.method || 'HEAD').trim().toUpperCase();
+      const method = allowedMethods.has(requestedMethod) ? requestedMethod : 'HEAD';
+      const timeoutMsRaw = Number(target?.timeoutMs || 7000);
+      const timeoutMs = Number.isFinite(timeoutMsRaw)
+        ? Math.max(1000, Math.min(15000, Math.floor(timeoutMsRaw)))
+        : 7000;
+      const expectedStatuses = Array.isArray(target?.expectedStatuses)
+        ? [...new Set(
+          target.expectedStatuses
+            .map((status) => Number(status || 0))
+            .filter((status) => Number.isInteger(status) && status >= 100 && status <= 599)
+            .slice(0, 10)
+        )]
+        : [];
+      let headers = null;
+      if (target?.headers && typeof target.headers === 'object' && !Array.isArray(target.headers)) {
+        headers = {};
+        for (const [rawKey, rawValue] of Object.entries(target.headers)) {
+          const headerKey = String(rawKey || '').trim().toLowerCase();
+          if (!headerKey || !/^[a-z0-9-]+$/.test(headerKey)) continue;
+          headers[headerKey] = String(rawValue ?? '').slice(0, 1024);
+        }
+      }
+      let body = null;
+      if (method === 'POST' || method === 'OPTIONS') {
+        if (typeof target?.body === 'string') {
+          body = target.body.slice(0, 8192);
+        } else if (typeof target?.body !== 'undefined') {
+          try {
+            body = JSON.stringify(target.body).slice(0, 8192);
+            if (headers && typeof headers['content-type'] === 'undefined') {
+              headers['content-type'] = 'application/json';
+            }
+          } catch {
+            body = null;
+          }
+        }
+      }
       return {
         label,
         url: parsed.toString(),
+        method,
+        timeoutMs,
+        headers,
+        body,
+        expectedStatuses,
         invalid: false
       };
     })
@@ -347,40 +391,51 @@ async function checkHealthTarget(target) {
 
   const startedAt = Date.now();
   const abortController = new AbortController();
-  const timeoutId = setTimeout(() => abortController.abort(), 7000);
+  const timeoutId = setTimeout(() => abortController.abort(), Number(target.timeoutMs || 7000));
   try {
-    let response = await fetch(target.url, {
-      method: 'HEAD',
+    const requestHeaders = {
+      accept: 'application/json, text/plain, */*',
+      ...(target.headers || {})
+    };
+    const requestInit = {
+      method: target.method || 'HEAD',
       redirect: 'follow',
       signal: abortController.signal,
-      headers: {
-        accept: 'application/json, text/plain, */*'
-      }
-    });
+      headers: requestHeaders
+    };
+    if ((requestInit.method === 'POST' || requestInit.method === 'OPTIONS') && typeof target.body === 'string') {
+      requestInit.body = target.body;
+    }
 
-    if (response.status === 405 || response.status === 501) {
+    let response = await fetch(target.url, requestInit);
+
+    if ((target.method || 'HEAD') === 'HEAD' && (response.status === 405 || response.status === 501)) {
       response = await fetch(target.url, {
         method: 'GET',
         redirect: 'follow',
         signal: abortController.signal,
-        headers: {
-          accept: 'application/json, text/plain, */*'
-        }
+        headers: requestHeaders
       });
     }
+    const expectedStatuses = Array.isArray(target.expectedStatuses) ? target.expectedStatuses : [];
+    const ok = expectedStatuses.length
+      ? expectedStatuses.includes(Number(response.status || 0))
+      : response.ok;
 
     return {
       label: target.label,
       url: target.url,
-      ok: response.ok,
+      method: target.method || 'HEAD',
+      ok,
       status: response.status,
       latencyMs: Math.max(1, Date.now() - startedAt),
-      error: response.ok ? null : `http_${response.status}`
+      error: ok ? null : `http_${response.status}`
     };
   } catch (error) {
     return {
       label: target.label,
       url: target.url,
+      method: target.method || 'HEAD',
       ok: false,
       status: null,
       latencyMs: Math.max(1, Date.now() - startedAt),

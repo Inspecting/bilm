@@ -93,8 +93,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const CLEAR_ON_LOGOUT_KEY = 'bilm-clear-local-on-logout';
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
-  const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^tmdb-/, /^theme-/];
-  const BACKUP_SESSION_ALLOWLIST = [/^bilm-/, /^tmdb-/];
+  const SYNC_DEVICE_ID_KEY = 'bilm-sync-device-id';
+  const INCOGNITO_BACKUP_KEY = 'bilm-incognito-backup';
+  const INCOGNITO_SEARCH_MAP_KEY = 'bilm-incognito-search-map';
+  const DEBUG_ISSUE_LOCAL_KEY = 'debug-local-issue';
+  const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^theme-/];
+  const BACKUP_SESSION_ALLOWLIST = [/^bilm-/];
+  const BACKUP_EXCLUDED_STORAGE_KEY_PATTERNS = [/^tmdb-/i, /^debug-/i];
 
   function showToast(message, tone = 'info', duration = 1000) {
     window.bilmToast?.show?.(message, { tone, duration });
@@ -132,22 +137,40 @@ document.addEventListener('DOMContentLoaded', () => {
     return allowlist.some((pattern) => pattern.test(String(key || '')));
   }
 
+  function isBackupStorageKeyExcluded(key) {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey) return true;
+    if (normalizedKey.includes('/') || normalizedKey.includes('\\')) return true;
+    return BACKUP_EXCLUDED_STORAGE_KEY_PATTERNS.some((pattern) => pattern.test(normalizedKey));
+  }
+
   function readStorage(storage, allowlist = []) {
     return Object.entries(storage).reduce((all, [key, value]) => {
       if (allowlist.length && !shouldIncludeStorageKey(key, allowlist)) return all;
+      if (isBackupStorageKeyExcluded(key)) return all;
       all[key] = value;
       return all;
     }, {});
   }
 
   function collectBackupData() {
+    const localState = readStorage(localStorage, BACKUP_LOCAL_ALLOWLIST);
+    const sessionState = readStorage(sessionStorage, BACKUP_SESSION_ALLOWLIST);
+    delete localState[SYNC_ENABLED_KEY];
+    delete localState[SYNC_META_KEY];
+    delete localState[SYNC_DEVICE_ID_KEY];
+    delete localState[INCOGNITO_BACKUP_KEY];
+    delete localState[INCOGNITO_SEARCH_MAP_KEY];
+    delete localState[DEBUG_ISSUE_LOCAL_KEY];
+    delete sessionState[INCOGNITO_BACKUP_KEY];
+    delete sessionState[INCOGNITO_SEARCH_MAP_KEY];
     return {
       schema: 'bilm-backup-v1',
       exportedAt: new Date().toISOString(),
       origin: location.origin,
       pathname: location.pathname,
-      localStorage: readStorage(localStorage, BACKUP_LOCAL_ALLOWLIST),
-      sessionStorage: readStorage(sessionStorage, BACKUP_SESSION_ALLOWLIST)
+      localStorage: localState,
+      sessionStorage: sessionState
     };
   }
 
@@ -652,7 +675,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const canProceed = await requestCloudLoginPermission();
       if (!canProceed) throw new Error('Cloud import cancelled until you choose to log in.');
       const result = await window.bilmAuth.getCloudSnapshot({
-        mode: 'data-api-first-fallback-firestore',
+        mode: 'data-api-primary-fallback-firestore',
         includeSource: true
       });
       const snapshot = result?.snapshot || null;
@@ -666,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const selectionReason = String(result?.selectionReason || '').trim();
       console.info('[cloud-import] source selected', {
         source: result?.source || 'none',
-        mode: 'data-api-first-fallback-firestore',
+        mode: 'data-api-primary-fallback-firestore',
         selectionReason,
         transferCount,
         firestoreCount
