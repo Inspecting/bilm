@@ -542,6 +542,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  const HISTORY_SYNC_KEYS = new Set([SEARCH_HISTORY_KEY, WATCH_HISTORY_KEY, LEGACY_WATCH_HISTORY_KEY]);
+  window.addEventListener('storage', (event) => {
+    const key = String(event?.key || '').trim();
+    if (!HISTORY_SYNC_KEYS.has(key)) return;
+    resetSelection();
+    resetVisibleWindow();
+    render();
+  });
+  window.addEventListener('bilm:sync-applied', (event) => {
+    const listKeys = Array.isArray(event?.detail?.listKeys) ? event.detail.listKeys : [];
+    if (!listKeys.some((key) => HISTORY_SYNC_KEYS.has(String(key || '').trim()))) {
+      return;
+    }
+    resetSelection();
+    resetVisibleWindow();
+    render();
+  });
+
   loadPrefs();
   migrateLegacyWatchHistory();
   resetVisibleWindow();

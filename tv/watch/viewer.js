@@ -784,6 +784,24 @@ window.addEventListener('bilm:theme-changed', (event) => {
   }
 });
 
+window.addEventListener('bilm:sync-applied', (event) => {
+  const listKeys = Array.isArray(event?.detail?.listKeys) ? event.detail.listKeys : [];
+  const storageKeys = Array.isArray(event?.detail?.storageKeys) ? event.detail.storageKeys : [];
+  const relevantListKeyUpdated = listKeys.some((key) => {
+    const normalized = String(key || '').trim();
+    return normalized === FAVORITES_KEY
+      || normalized === WATCH_LATER_KEY
+      || normalized === CONTINUE_KEY
+      || normalized === WATCH_HISTORY_KEY;
+  });
+  if (relevantListKeyUpdated) {
+    syncFavoriteAndWatchLaterButtons();
+  }
+  if (storageKeys.some((key) => String(key || '').trim() === PLAYBACK_NOTE_KEY)) {
+    loadPlaybackNote();
+  }
+});
+
 if (moreLikeBox) {
   if (!tmdbId) {
     setMoreLikeStatus('Recommendations unavailable.');

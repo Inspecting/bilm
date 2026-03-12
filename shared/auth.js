@@ -375,6 +375,7 @@
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
   const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
   const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
+  const SYNC_USER_STATE_META_KEY = 'userSyncState';
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -808,6 +809,31 @@
     });
   }
 
+  function emitSyncAppliedEvent(detail = {}) {
+    try {
+      const listKeys = Array.isArray(detail?.listKeys)
+        ? [...new Set(detail.listKeys.map((key) => String(key || '').trim()).filter(Boolean))]
+        : [];
+      const storageKeys = Array.isArray(detail?.storageKeys)
+        ? [...new Set(detail.storageKeys.map((key) => String(key || '').trim()).filter(Boolean))]
+        : [];
+      const source = String(detail?.source || 'sync').trim() || 'sync';
+      const atMs = normalizeOperationUpdatedAt(detail?.atMs, Date.now());
+      const reason = String(detail?.reason || '').trim() || null;
+      window.dispatchEvent(new CustomEvent('bilm:sync-applied', {
+        detail: {
+          source,
+          atMs,
+          reason,
+          listKeys,
+          storageKeys
+        }
+      }));
+    } catch (error) {
+      console.warn('Sync applied event dispatch failed:', error);
+    }
+  }
+
   function buildListMapFromRaw(raw) {
     const list = readJsonArray(raw);
     const map = new Map();
@@ -913,32 +939,31 @@
   }
 
   function getListSyncCursorMs() {
-    const meta = readSyncMeta();
-    return normalizeOperationUpdatedAt(meta?.[LIST_SYNC_CURSOR_META_KEY], 0);
+    return getScopedSyncMetaNumber(LIST_SYNC_CURSOR_META_KEY, 0);
   }
 
   function setListSyncCursorMs(nextCursorMs) {
-    const current = getListSyncCursorMs();
-    const next = Math.max(current, normalizeOperationUpdatedAt(nextCursorMs, 0));
-    writeSyncMeta({ [LIST_SYNC_CURSOR_META_KEY]: next });
-    return next;
+    return setScopedSyncMetaNumber(LIST_SYNC_CURSOR_META_KEY, nextCursorMs);
   }
 
   function getChatSyncCursorMs() {
-    const meta = readSyncMeta();
-    return normalizeOperationUpdatedAt(meta?.[CHAT_SYNC_CURSOR_META_KEY], 0);
+    return getScopedSyncMetaNumber(CHAT_SYNC_CURSOR_META_KEY, 0);
   }
 
   function setChatSyncCursorMs(nextCursorMs) {
-    const current = getChatSyncCursorMs();
-    const next = Math.max(current, normalizeOperationUpdatedAt(nextCursorMs, 0));
-    writeSyncMeta({ [CHAT_SYNC_CURSOR_META_KEY]: next });
-    return next;
+    return setScopedSyncMetaNumber(CHAT_SYNC_CURSOR_META_KEY, nextCursorMs);
+  }
+
+  function getSectorMigrationCompletedAtMs() {
+    return getScopedSyncMetaNumber(LIST_SYNC_MIGRATED_META_KEY, 0);
+  }
+
+  function setSectorMigrationCompletedAtMs(nextValue) {
+    return setScopedSyncMetaNumber(LIST_SYNC_MIGRATED_META_KEY, nextValue);
   }
 
   function hasSectorMigrationCompleted() {
-    const meta = readSyncMeta();
-    return normalizeOperationUpdatedAt(meta?.[LIST_SYNC_MIGRATED_META_KEY], 0) > 0;
+    return getSectorMigrationCompletedAtMs() > 0;
   }
 
   function listOperationsFromSnapshot(snapshot, nowMs = Date.now()) {
@@ -995,12 +1020,10 @@
     const userId = getTransferUserId(user);
     let existingState = null;
     try {
-        const seedPull = await pullListOperationsFromTransferApi(user, userId, 0, 1);
-        existingState = seedPull?.state || null;
-        if (Number(existingState?.migratedAtMs || 0) > 0 || (seedPull?.operations?.length || 0) > 0) {
-        writeSyncMeta({
-          [LIST_SYNC_MIGRATED_META_KEY]: Number(existingState?.migratedAtMs || Date.now()) || Date.now()
-        });
+      const seedPull = await pullListOperationsFromTransferApi(user, userId, 0, 1);
+      existingState = seedPull?.state || null;
+      if (Number(existingState?.migratedAtMs || 0) > 0 || (seedPull?.operations?.length || 0) > 0) {
+        setSectorMigrationCompletedAtMs(Number(existingState?.migratedAtMs || Date.now()) || Date.now());
         return false;
       }
     } catch (error) {
@@ -1031,9 +1054,7 @@
     try {
       const response = await bootstrapSectorOperationsToTransferApi(user, userId, operations, migrationSource);
       if (response?.ok) {
-        writeSyncMeta({
-          [LIST_SYNC_MIGRATED_META_KEY]: Number(response?.state?.migratedAtMs || Date.now()) || Date.now()
-        });
+        setSectorMigrationCompletedAtMs(Number(response?.state?.migratedAtMs || Date.now()) || Date.now());
         if (Number(response?.cursorMs || 0) > 0) setListSyncCursorMs(response.cursorMs);
         return true;
       }
@@ -1171,6 +1192,74 @@
     } finally {
       suppressMutationHook = false;
     }
+    return next;
+  }
+
+  function normalizeSyncScopeUserId(value) {
+    return String(value || '').trim().replace(/^user-/i, '');
+  }
+
+  function getSyncScopeUserId(user = auth?.currentUser || currentUser) {
+    const normalized = normalizeSyncScopeUserId(user?.uid);
+    return normalized || '';
+  }
+
+  function readScopedSyncState(user = auth?.currentUser || currentUser) {
+    const userId = getSyncScopeUserId(user);
+    if (!userId) return { userId: '', state: null };
+    const scoped = readSyncMeta()?.[SYNC_USER_STATE_META_KEY];
+    if (!scoped || typeof scoped !== 'object' || Array.isArray(scoped)) {
+      return { userId, state: null };
+    }
+    const state = scoped[userId];
+    if (!state || typeof state !== 'object' || Array.isArray(state)) {
+      return { userId, state: null };
+    }
+    return { userId, state };
+  }
+
+  function writeScopedSyncState(partial = {}, user = auth?.currentUser || currentUser) {
+    const userId = getSyncScopeUserId(user);
+    if (!userId) return null;
+    const meta = readSyncMeta();
+    const scoped = meta?.[SYNC_USER_STATE_META_KEY];
+    const nextScoped = scoped && typeof scoped === 'object' && !Array.isArray(scoped)
+      ? { ...scoped }
+      : {};
+    const previousState = nextScoped[userId] && typeof nextScoped[userId] === 'object' && !Array.isArray(nextScoped[userId])
+      ? nextScoped[userId]
+      : {};
+    const nextState = {
+      ...previousState,
+      ...partial
+    };
+    nextScoped[userId] = nextState;
+    writeSyncMeta({ [SYNC_USER_STATE_META_KEY]: nextScoped });
+    return nextState;
+  }
+
+  function getScopedSyncMetaNumber(metaKey, fallback = 0, user = auth?.currentUser || currentUser) {
+    const { userId, state } = readScopedSyncState(user);
+    if (userId) {
+      return normalizeOperationUpdatedAt(state?.[metaKey], fallback);
+    }
+    const meta = readSyncMeta();
+    return normalizeOperationUpdatedAt(meta?.[metaKey], fallback);
+  }
+
+  function setScopedSyncMetaNumber(metaKey, nextValue, user = auth?.currentUser || currentUser) {
+    const normalizedNext = normalizeOperationUpdatedAt(nextValue, 0);
+    if (normalizedNext <= 0) return 0;
+    const userId = getSyncScopeUserId(user);
+    if (!userId) {
+      const current = normalizeOperationUpdatedAt(readSyncMeta()?.[metaKey], 0);
+      const next = Math.max(current, normalizedNext);
+      writeSyncMeta({ [metaKey]: next });
+      return next;
+    }
+    const current = getScopedSyncMetaNumber(metaKey, 0, user);
+    const next = Math.max(current, normalizedNext);
+    writeScopedSyncState({ [metaKey]: next }, user);
     return next;
   }
 
@@ -1580,22 +1669,41 @@
     });
   }
 
-  function applyRemoteSnapshot(snapshot) {
-    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return;
+  function getSnapshotSyncListKeys(snapshot) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return [];
+    // Snapshot apply clears and repopulates storage, so any mergeable list can be affected.
+    return [...MERGEABLE_LIST_KEYS];
+  }
+
+  function applyRemoteSnapshot(snapshot, options = {}) {
+    if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return false;
     try {
+      const force = options?.force === true;
+      if (!shouldApplyRemoteSnapshot(snapshot, { force })) return false;
+      const applyReason = String(options?.reason || 'remote-cloud-apply').trim() || 'remote-cloud-apply';
+      const source = String(options?.source || 'remote-snapshot').trim() || 'remote-snapshot';
       const applied = applySnapshotTransaction(snapshot, {
-        reason: 'remote-cloud-apply',
+        reason: applyReason,
         preserveSyncPreference: true,
         preserveSyncMeta: true
       });
-      if (!applied) return;
+      if (!applied) return false;
+      const appliedAtMs = Date.now();
       writeSyncMeta({
-        lastCloudPullAt: Date.now(),
-        lastCloudSnapshotAt: Number(snapshot?.meta?.updatedAtMs || 0) || Date.now(),
+        lastCloudPullAt: appliedAtMs,
+        lastCloudSnapshotAt: Number(snapshot?.meta?.updatedAtMs || 0) || appliedAtMs,
         lastAppliedFromDeviceId: snapshot?.meta?.deviceId || null
       });
+      emitSyncAppliedEvent({
+        source,
+        atMs: appliedAtMs,
+        reason: applyReason,
+        listKeys: getSnapshotSyncListKeys(snapshot)
+      });
+      return true;
     } catch (error) {
       console.warn('Applying cloud snapshot failed:', error);
+      return false;
     }
   }
 
@@ -1618,8 +1726,9 @@
     return false;
   }
 
-  function shouldApplyRemoteSnapshot(snapshot) {
+  function shouldApplyRemoteSnapshot(snapshot, options = {}) {
     if (!snapshot || snapshot.schema !== 'bilm-backup-v1') return false;
+    if (options?.force === true) return true;
     if (!hasMeaningfulLocalData()) return true;
     if (hasLocalMergeableData()) return false;
 
@@ -1900,10 +2009,17 @@
       suppressMutationHook = false;
     }
 
-    writeSyncMeta({ lastCloudPullAt: Date.now() });
+    const appliedAtMs = Date.now();
+    const appliedListKeys = [...grouped.keys()];
+    writeSyncMeta({ lastCloudPullAt: appliedAtMs });
     emitListSyncApplied({
-      listKeys: [...grouped.keys()],
-      atMs: Date.now()
+      listKeys: appliedListKeys,
+      atMs: appliedAtMs
+    });
+    emitSyncAppliedEvent({
+      source: 'list-sync',
+      atMs: appliedAtMs,
+      listKeys: appliedListKeys
     });
     return true;
   }
@@ -1940,7 +2056,18 @@
       suppressMutationHook = false;
     }
 
-    writeSyncMeta({ lastCloudPullAt: Date.now() });
+    const appliedAtMs = Date.now();
+    const appliedStorageKeys = [...new Set(
+      [...latestByStorageKey.values()]
+        .map((operation) => String(operation?.storageKey || '').trim())
+        .filter(Boolean)
+    )];
+    writeSyncMeta({ lastCloudPullAt: appliedAtMs });
+    emitSyncAppliedEvent({
+      source: 'sector-sync',
+      atMs: appliedAtMs,
+      storageKeys: appliedStorageKeys
+    });
     return true;
   }
 
@@ -1949,6 +2076,27 @@
       window.clearTimeout(listSyncRetryTimer);
       listSyncRetryTimer = null;
     }
+  }
+
+  function clearPendingSyncStateForAuthChange(reason = 'auth-state-change') {
+    pendingListOperations.clear();
+    pendingSectorOperations.clear();
+    clearListSyncRetryTimer();
+    listSyncRetryDelayMs = 0;
+    if (listSyncDebounceTimer) {
+      clearTimeout(listSyncDebounceTimer);
+      listSyncDebounceTimer = null;
+    }
+    if (autosyncDebounceTimer) {
+      clearTimeout(autosyncDebounceTimer);
+      autosyncDebounceTimer = null;
+    }
+    pendingListSync = false;
+    pendingAutosync = false;
+    lastAppliedCloudSignature = '';
+    lastUploadedCloudSignature = '';
+    lastLocalSnapshotSignature = '';
+    console.debug('[sync] cleared pending state after auth change', { reason });
   }
 
   function scheduleListSyncRetry(error, operations = []) {
@@ -2110,7 +2258,7 @@
       const cursorMs = normalizeOperationUpdatedAt(response.cursorMs, sinceMs);
       const migratedAtMs = normalizeOperationUpdatedAt(response?.state?.migratedAtMs, 0);
       if (migratedAtMs > 0) {
-        writeSyncMeta({ [LIST_SYNC_MIGRATED_META_KEY]: migratedAtMs });
+        setSectorMigrationCompletedAtMs(migratedAtMs);
       }
       if (operations.length > 0) {
         const didApply = applyListOperationsToLocalStorage(operations);
@@ -2309,9 +2457,11 @@
     clearSyncPauseRecheckTimer();
   }
 
-  async function syncFromCloudNow() {
+  async function syncFromCloudNow(options = {}) {
     await init();
     const user = auth?.currentUser;
+    const forceHydration = options?.forceHydration === true;
+    const syncSource = String(options?.source || 'manual').trim() || 'manual';
     if (isIncognitoSyncPaused()) return false;
     if (isSyncTemporarilyPaused()) {
       scheduleSyncPauseRecheck();
@@ -2322,6 +2472,26 @@
         await ensureSectorBootstrapForUser(user);
       } catch (error) {
         console.warn('Sector bootstrap check failed:', error);
+      }
+    }
+
+    let forcedSnapshotApplied = false;
+    if (forceHydration && user && isSyncEnabled()) {
+      snapshotRecoveryCheckedThisSession = true;
+      try {
+        const userId = getTransferUserId(user);
+        const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
+        const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
+        const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
+        if (selected.snapshot) {
+          forcedSnapshotApplied = applyRemoteSnapshot(selected.snapshot, {
+            force: true,
+            reason: `auth-hydration:${syncSource}`,
+            source: selected.source
+          });
+        }
+      } catch (error) {
+        console.warn('Forced cloud hydration failed:', error);
       }
     }
 
@@ -2347,7 +2517,10 @@
         const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
         const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
         if (shouldApplyRemoteSnapshot(selected.snapshot)) {
-          applyRemoteSnapshot(selected.snapshot);
+          applyRemoteSnapshot(selected.snapshot, {
+            reason: 'snapshot-recovery',
+            source: selected.source
+          });
         }
       } catch (error) {
         console.warn('One-shot snapshot recovery check failed:', error);
@@ -2360,7 +2533,7 @@
         detectedAtMs: Number(meta?.lastCloudDriftDetectedAt || 0) || Date.now()
       }, 'sync-loop');
     }
-    return listSyncApplied;
+    return listSyncApplied || forcedSnapshotApplied;
   }
 
   function emitCloudSnapshotEvent(event) {
@@ -2486,13 +2659,18 @@
         }
 
         m.onAuthStateChanged(auth, (user) => {
+          const previousUserId = getSyncScopeUserId(currentUser);
+          const nextUserId = getSyncScopeUserId(user);
+          if (previousUserId !== nextUserId) {
+            clearPendingSyncStateForAuthChange('auth-state-user-change');
+          }
           currentUser = user || null;
           snapshotRecoveryCheckedThisSession = false;
           sectorBootstrapCheckedThisSession = false;
           startCloudSnapshotListener(currentUser);
           scheduleNextAutomaticFirebaseBackup();
           if (currentUser && isSyncEnabled()) {
-            syncFromCloudNow().catch((error) => {
+            syncFromCloudNow({ forceHydration: true, source: 'auth-state' }).catch((error) => {
               console.warn('Cloud import failed:', error);
             });
             runAutomaticFirebaseBackupIfDue('auth-state').catch((error) => {
@@ -2874,10 +3052,10 @@
         }
         : snapshot;
     },
-    async syncFromCloudNow() {
+    async syncFromCloudNow(options = {}) {
       await init();
       if (isIncognitoSyncPaused()) return false;
-      return syncFromCloudNow();
+      return syncFromCloudNow(options);
     },
     async pullChatNow(options = {}) {
       await init();

@@ -690,5 +690,12 @@ document.addEventListener('DOMContentLoaded', () => {
   updateFilterButtons('favorites');
   updateFilterButtons('watchLater');
 
+  window.addEventListener('bilm:sync-applied', (event) => {
+    const listKeys = Array.isArray(event?.detail?.listKeys) ? event.detail.listKeys : [];
+    if (!listKeys.some((key) => MEDIA_LIST_KEYS.has(String(key || '').trim()))) {
+      return;
+    }
+    renderSections();
+  });
   window.addEventListener('storage', renderSections);
 });
