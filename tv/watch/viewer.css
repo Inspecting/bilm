@@ -326,6 +326,7 @@ iframe {
 #serverBtn,
 #languageBtn,
 #subtitleBtn,
+#refreshBtn,
 #favoriteBtn,
 #watchLaterBtn {
   background: transparent;
@@ -373,6 +374,7 @@ iframe {
 #serverBtn:hover,
 #languageBtn:hover,
 #subtitleBtn:hover,
+#refreshBtn:hover,
 #favoriteBtn:hover,
 #watchLaterBtn:hover {
   background-color: var(--accent);

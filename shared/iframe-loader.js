@@ -13,6 +13,20 @@
     return `${url}${url.includes('?') ? '&' : '?'}${encodeURIComponent(key)}=${Date.now()}`;
   }
 
+  function readFrameLocationHref(iframe) {
+    try {
+      return String(iframe?.contentWindow?.location?.href || '').trim();
+    } catch {
+      // Cross-origin navigations can throw; treat as non-blank and continue.
+      return '';
+    }
+  }
+
+  function isBlankFrameLocation(locationHref) {
+    const normalizedHref = String(locationHref || '').trim().toLowerCase();
+    return !normalizedHref || normalizedHref === 'about:blank' || normalizedHref === 'about:srcdoc';
+  }
+
   async function loadWithRetry({
     iframe,
     url,
@@ -102,6 +116,12 @@
         }
 
         function onLoad() {
+          const frameLocationHref = readFrameLocationHref(iframe);
+          if (isBlankFrameLocation(frameLocationHref)) {
+            // Ignore reset/intermediate blank loads and keep waiting for real content.
+            iframe.addEventListener('load', onLoad, { once: true });
+            return;
+          }
           finish({
             ok: true,
             reason: inLateWindow
@@ -110,7 +130,8 @@
             attempt,
             timeoutMs,
             attemptUrl,
-            late: inLateWindow
+            late: inLateWindow,
+            frameLocationHref
           });
         }
 
@@ -123,6 +144,10 @@
         iframe.removeAttribute('sandbox');
         iframe.src = attemptUrl;
       });
+
+      if (typeof isCancelled === 'function' && isCancelled()) {
+        return { ok: false, cancelled: true, attempt };
+      }
 
       if (result.ok) {
         if (typeof onSuccess === 'function') {

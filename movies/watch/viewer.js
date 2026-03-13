@@ -7,6 +7,7 @@ const animeId = params.get('aid') || contentId;
 
 const iframe = document.getElementById('videoPlayer');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
+const refreshBtn = document.getElementById('refreshBtn');
 const playerContainer = document.getElementById('playerContainer');
 const navbarContainer = document.getElementById('navbarContainer');
 const closeBtn = document.getElementById('closeBtn');
@@ -82,6 +83,21 @@ function normalizeEmbedUrlForCompare(rawUrl) {
   } catch {
     return normalized;
   }
+}
+
+function readIframeLocationHref() {
+  try {
+    return String(iframe?.contentWindow?.location?.href || '').trim();
+  } catch {
+    // Cross-origin iframe locations are unreadable.
+    return null;
+  }
+}
+
+function isKnownBlankIframeLocation(locationHref) {
+  if (locationHref == null) return false;
+  const normalized = String(locationHref || '').trim().toLowerCase();
+  return !normalized || normalized === 'about:blank' || normalized === 'about:srcdoc';
 }
 
 function appendVidsrcSubtitleParam(url) {
@@ -343,9 +359,9 @@ function findNextFallbackServer(fromServer) {
   return null;
 }
 
-function resolveMovieEmbedRequest() {
+function resolveMovieEmbedRequest({ ignoreHealth = false } = {}) {
   let server = currentServer;
-  if (!isAnime && isServerTemporarilyUnhealthy(server)) {
+  if (!isAnime && !ignoreHealth && isServerTemporarilyUnhealthy(server)) {
     const skippedServer = server;
     const fallbackHealthyServer = findNextFallbackServer(server);
     if (fallbackHealthyServer) {
@@ -536,7 +552,7 @@ function applyEmbedMasterAccentColor() {
   }, 120);
 }
 
-function updateIframe() {
+function updateIframe({ forceCurrentServer = false } = {}) {
   const idToUse = isAnime ? animeId : (imdbId || contentId);
   if (!idToUse) {
     console.warn('No valid ID parameter provided.');
@@ -546,7 +562,7 @@ function updateIframe() {
     return;
   }
 
-  const { server, url } = resolveMovieEmbedRequest();
+  const { server, url } = resolveMovieEmbedRequest({ ignoreHealth: forceCurrentServer });
   if (!url) {
     iframe.removeAttribute('sandbox');
     iframe.src = '';
@@ -560,6 +576,17 @@ function updateIframe() {
   if (continueWatchingReady) {
     updateContinueWatching();
   }
+}
+
+function refreshCurrentServer() {
+  if (!currentServer) {
+    setPlayerStatus('Select a server before refreshing.', 'warning');
+    return;
+  }
+  markServerHealth(currentServer, true, 'manual-refresh');
+  setPlayerStatus(`Refreshing ${getServerLabel(currentServer)}…`);
+  closeAllDropdowns();
+  updateIframe({ forceCurrentServer: true });
 }
 
 function loadList(key) {
@@ -1001,6 +1028,13 @@ if (serverBtn) {
   });
 }
 
+if (refreshBtn) {
+  refreshBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    refreshCurrentServer();
+  });
+}
+
 if (subtitleBtn && subtitleDropdown) {
   subtitleBtn.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1267,11 +1301,13 @@ document.addEventListener('fullscreenchange', () => {
 if (iframe) {
   iframe.addEventListener('load', () => {
     const src = String(iframe.getAttribute('src') || '').trim();
-    if (src && src !== 'about:blank') {
+    const locationHref = readIframeLocationHref();
+    const knownBlankLocation = isKnownBlankIframeLocation(locationHref);
+    if (src && src !== 'about:blank' && !knownBlankLocation) {
       lastIframeLoadAtMs = Date.now();
       lastIframeLoadedSrc = src;
     }
-    if (src && src !== 'about:blank' && playerStatus?.classList.contains('is-error')) {
+    if (src && src !== 'about:blank' && !knownBlankLocation && playerStatus?.classList.contains('is-error')) {
       setPlayerStatus('');
     }
     if (currentServer === 'embedmaster') {
