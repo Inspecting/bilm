@@ -990,6 +990,7 @@ async function loadMovieDetails() {
     console.error('Error fetching movie details:', error);
     mediaTitle.textContent = 'Unknown title';
     mediaMeta.textContent = 'Release date unavailable';
+    updateIframe();
   }
 }
 
@@ -1316,7 +1317,5 @@ if (iframe) {
   });
 }
 
-// Initial load
-updateIframe();
 loadMovieDetails();
 startContinueWatchingTimer();

@@ -17,12 +17,13 @@
     try {
       return String(iframe?.contentWindow?.location?.href || '').trim();
     } catch {
-      // Cross-origin navigations can throw; treat as non-blank and continue.
-      return '';
+      // Cross-origin navigations can throw; unknown should not be treated as blank.
+      return null;
     }
   }
 
   function isBlankFrameLocation(locationHref) {
+    if (locationHref == null) return false;
     const normalizedHref = String(locationHref || '').trim().toLowerCase();
     return !normalizedHref || normalizedHref === 'about:blank' || normalizedHref === 'about:srcdoc';
   }
