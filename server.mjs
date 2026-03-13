@@ -6,6 +6,34 @@ import path from 'node:path';
 const rootDir = path.resolve(process.cwd());
 const port = Number(process.env.PORT || 8080);
 const STATIC_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=86400';
+const DEFAULT_HEALTH_CHECK_ALLOWED_HOSTS = new Set([
+  'storage-api.watchbilm.org',
+  'data-api.watchbilm.org',
+  'graphql.anilist.co',
+  'api.themoviedb.org',
+  'www.omdbapi.com',
+  'api.tvmaze.com'
+]);
+
+function resolveHealthCheckAllowedHosts() {
+  const envValue = String(process.env.HEALTH_CHECK_ALLOWED_HOSTS || '').trim();
+  const hosts = new Set([...DEFAULT_HEALTH_CHECK_ALLOWED_HOSTS]);
+  if (!envValue) return hosts;
+  envValue
+    .split(',')
+    .map((entry) => String(entry || '').trim().toLowerCase())
+    .filter(Boolean)
+    .forEach((entry) => hosts.add(entry));
+  return hosts;
+}
+
+const HEALTH_CHECK_ALLOWED_HOSTS = resolveHealthCheckAllowedHosts();
+const BASE_SECURITY_HEADERS = Object.freeze({
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'x-frame-options': 'SAMEORIGIN',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()'
+});
 
 const mimeTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -39,7 +67,7 @@ function safeJoin(base, target) {
 function sendJson(res, status, payload, headers = {}) {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
-    'x-content-type-options': 'nosniff',
+    ...BASE_SECURITY_HEADERS,
     ...headers
   });
   res.end(JSON.stringify(payload));
@@ -57,8 +85,7 @@ function staticHeaders(filePath, stat) {
       'cache-control': isHtml ? 'no-cache' : STATIC_CACHE_CONTROL,
       'last-modified': stat.mtime.toUTCString(),
       etag,
-      'x-content-type-options': 'nosniff',
-      'referrer-policy': 'strict-origin-when-cross-origin'
+      ...BASE_SECURITY_HEADERS
     }
   };
 }
@@ -318,7 +345,14 @@ function sanitizeHealthTargets(rawTargets = []) {
           invalid: true
         };
       }
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
+      const normalizedHost = String(parsed.hostname || '').trim().toLowerCase();
+      const normalizedProtocol = String(parsed.protocol || '').trim().toLowerCase();
+      const isLoopbackHost = normalizedHost === 'localhost'
+        || normalizedHost === '127.0.0.1'
+        || normalizedHost === '::1';
+      const protocolAllowed = normalizedProtocol === 'https:' || (normalizedProtocol === 'http:' && isLoopbackHost);
+      const hostAllowed = isLoopbackHost || HEALTH_CHECK_ALLOWED_HOSTS.has(normalizedHost);
+      if (!protocolAllowed || !hostAllowed) {
         return {
           label,
           url: rawUrl,
