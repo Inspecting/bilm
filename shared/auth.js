@@ -374,6 +374,8 @@
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
   const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
   const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
+  const LIST_SYNC_ONE_TIME_RECOVERY_META_KEY = 'oneTimeRecoveryPullCompletedAtMs';
+  const ONE_TIME_RECOVERY_MAX_PAGES = 8;
   const SYNC_USER_STATE_META_KEY = 'userSyncState';
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
@@ -474,6 +476,7 @@
   let listSyncRetryDelayMs = 0;
   let syncActivityBindingsInstalled = false;
   let syncPauseRecheckTimer = null;
+  let oneTimeRecoveryPromise = null;
   let lastUserActivityAt = Date.now();
   let hiddenSinceAt = document.visibilityState === 'hidden' ? Date.now() : 0;
 
@@ -963,6 +966,14 @@
 
   function setSectorMigrationCompletedAtMs(nextValue) {
     return setScopedSyncMetaNumber(LIST_SYNC_MIGRATED_META_KEY, nextValue);
+  }
+
+  function getListSyncOneTimeRecoveryCompletedAtMs() {
+    return getScopedSyncMetaNumber(LIST_SYNC_ONE_TIME_RECOVERY_META_KEY, 0);
+  }
+
+  function setListSyncOneTimeRecoveryCompletedAtMs(nextValue = Date.now()) {
+    return setScopedSyncMetaNumber(LIST_SYNC_ONE_TIME_RECOVERY_META_KEY, nextValue);
   }
 
   function hasSectorMigrationCompleted() {
@@ -1515,21 +1526,17 @@
       }
     }
 
-    let snapshot = null;
-    let snapshotSource = 'local-fallback';
+    const localSnapshot = collectBackupData();
+    let transferSnapshot = null;
     try {
       const userId = getTransferUserId(user);
-      const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
-      if (transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1') {
-        snapshot = transferSnapshot;
-        snapshotSource = 'data-api';
-      }
+      transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
     } catch (error) {
       console.warn('Using local fallback for Firebase backup snapshot:', error);
     }
-    if (!snapshot) {
-      snapshot = collectBackupData();
-    }
+    const selectedSnapshot = chooseSnapshotForFirebaseMirror(transferSnapshot, localSnapshot, meta);
+    const snapshot = selectedSnapshot?.snapshot || localSnapshot;
+    const snapshotSource = String(selectedSnapshot?.source || 'local-fallback').trim() || 'local-fallback';
     const payload = {
       ...(snapshot || {}),
       meta: {
@@ -1859,21 +1866,68 @@
     const firestoreValid = firestoreSnapshot && firestoreSnapshot.schema === 'bilm-backup-v1';
     const transferItemCount = transferValid ? getSnapshotMergeableItemCount(transferSnapshot) : 0;
     const firestoreItemCount = firestoreValid ? getSnapshotMergeableItemCount(firestoreSnapshot) : 0;
+    const transferUpdatedAtMs = transferValid ? getSnapshotUpdatedAtMs(transferSnapshot) : 0;
+    const firestoreUpdatedAtMs = firestoreValid ? getSnapshotUpdatedAtMs(firestoreSnapshot) : 0;
 
-    if (transferValid) {
+    if (transferValid && !firestoreValid) {
       return {
         snapshot: transferSnapshot,
         source: 'data-api',
-        reason: firestoreValid ? 'data_api_primary_firestore_backup' : 'data_api_only',
+        reason: 'data_api_only',
         transferItemCount,
         firestoreItemCount
       };
     }
-    if (firestoreValid) {
+    if (!transferValid && firestoreValid) {
       return {
         snapshot: firestoreSnapshot,
         source: 'firestore-fallback',
         reason: 'firestore_backup_fallback',
+        transferItemCount,
+        firestoreItemCount
+      };
+    }
+    if (transferValid && firestoreValid) {
+      if (transferUpdatedAtMs > firestoreUpdatedAtMs) {
+        return {
+          snapshot: transferSnapshot,
+          source: 'data-api',
+          reason: 'data_api_newer',
+          transferItemCount,
+          firestoreItemCount
+        };
+      }
+      if (firestoreUpdatedAtMs > transferUpdatedAtMs) {
+        return {
+          snapshot: firestoreSnapshot,
+          source: 'firestore-fallback',
+          reason: 'firestore_newer',
+          transferItemCount,
+          firestoreItemCount
+        };
+      }
+      if (transferItemCount > firestoreItemCount) {
+        return {
+          snapshot: transferSnapshot,
+          source: 'data-api',
+          reason: 'timestamps_tied_data_api_richer',
+          transferItemCount,
+          firestoreItemCount
+        };
+      }
+      if (firestoreItemCount > transferItemCount) {
+        return {
+          snapshot: firestoreSnapshot,
+          source: 'firestore-fallback',
+          reason: 'timestamps_tied_firestore_richer',
+          transferItemCount,
+          firestoreItemCount
+        };
+      }
+      return {
+        snapshot: transferSnapshot,
+        source: 'data-api',
+        reason: 'timestamps_and_counts_tied_data_api_primary',
         transferItemCount,
         firestoreItemCount
       };
@@ -1884,6 +1938,74 @@
       reason: 'no_snapshot',
       transferItemCount,
       firestoreItemCount
+    };
+  }
+
+  function chooseSnapshotForFirebaseMirror(transferSnapshot, localSnapshot, syncMeta = readSyncMeta()) {
+    const transferValid = transferSnapshot && transferSnapshot.schema === 'bilm-backup-v1';
+    const localValid = localSnapshot && localSnapshot.schema === 'bilm-backup-v1';
+    const transferItemCount = transferValid ? getSnapshotMergeableItemCount(transferSnapshot) : 0;
+    const localItemCount = localValid ? getSnapshotMergeableItemCount(localSnapshot) : 0;
+    const transferUpdatedAtMs = transferValid ? getSnapshotUpdatedAtMs(transferSnapshot) : 0;
+    const localFreshnessMs = Math.max(
+      Number(syncMeta?.lastLocalChangeAt || 0) || 0,
+      Number(syncMeta?.lastCloudPullAt || 0) || 0,
+      Number(syncMeta?.lastCloudPushAt || 0) || 0
+    );
+
+    if (!transferValid && localValid) {
+      return {
+        snapshot: localSnapshot,
+        source: 'local-fallback',
+        reason: 'local_only'
+      };
+    }
+    if (transferValid && !localValid) {
+      return {
+        snapshot: transferSnapshot,
+        source: 'data-api',
+        reason: 'data_api_only'
+      };
+    }
+    if (!transferValid && !localValid) {
+      return {
+        snapshot: null,
+        source: 'none',
+        reason: 'no_snapshot'
+      };
+    }
+    if (localFreshnessMs > transferUpdatedAtMs) {
+      return {
+        snapshot: localSnapshot,
+        source: 'local-fallback',
+        reason: 'local_fresher_than_data_api'
+      };
+    }
+    if (transferUpdatedAtMs > localFreshnessMs) {
+      return {
+        snapshot: transferSnapshot,
+        source: 'data-api',
+        reason: 'data_api_fresher_than_local'
+      };
+    }
+    if (transferItemCount > localItemCount) {
+      return {
+        snapshot: transferSnapshot,
+        source: 'data-api',
+        reason: 'freshness_tied_data_api_richer'
+      };
+    }
+    if (localItemCount > transferItemCount) {
+      return {
+        snapshot: localSnapshot,
+        source: 'local-fallback',
+        reason: 'freshness_tied_local_richer'
+      };
+    }
+    return {
+      snapshot: localSnapshot,
+      source: 'local-fallback',
+      reason: 'freshness_and_counts_tied_local_preferred'
     };
   }
 
@@ -2290,6 +2412,95 @@
     let applied = false;
     let attemptedBootstrapRecovery = false;
 
+    const runOneTimeRecovery = async () => {
+      if (getListSyncOneTimeRecoveryCompletedAtMs() > 0) {
+        return {
+          applied: false,
+          cursorMs: sinceMs
+        };
+      }
+      if (oneTimeRecoveryPromise) {
+        return oneTimeRecoveryPromise;
+      }
+      oneTimeRecoveryPromise = (async () => {
+        let recoverySinceMs = 0;
+        let recoveryPages = 0;
+        let recoveryApplied = false;
+        let recoveryCursorMs = 0;
+        let sawValidResponse = false;
+
+        while (recoveryPages < ONE_TIME_RECOVERY_MAX_PAGES) {
+          recoveryPages += 1;
+          const response = await pullListOperationsFromTransferApi(user, userId, recoverySinceMs, 250);
+          if (!response || !Array.isArray(response.operations)) break;
+          sawValidResponse = true;
+          const operations = response.operations;
+          const sectorOperations = Array.isArray(response.sectorOperations) ? response.sectorOperations : [];
+          const migratedAtMs = normalizeOperationUpdatedAt(response?.state?.migratedAtMs, 0);
+          if (migratedAtMs > 0) {
+            setSectorMigrationCompletedAtMs(migratedAtMs);
+          }
+          if (operations.length > 0) {
+            const didApply = applyListOperationsToLocalStorage(operations);
+            recoveryApplied = recoveryApplied || didApply;
+          }
+          if (sectorOperations.length > 0) {
+            const didApplyStorage = applyStorageSectorOperationsToLocalStorage(sectorOperations);
+            recoveryApplied = recoveryApplied || didApplyStorage;
+          }
+
+          const operationCursorMs = operations.reduce(
+            (max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)),
+            0
+          );
+          const sectorCursorMs = sectorOperations.reduce(
+            (max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)),
+            0
+          );
+          const responseCursorMs = Math.max(
+            normalizeOperationUpdatedAt(response?.cursorMs, recoverySinceMs),
+            operationCursorMs,
+            sectorCursorMs
+          );
+          recoveryCursorMs = Math.max(recoveryCursorMs, responseCursorMs);
+          const batchCount = operations.length + sectorOperations.length;
+          if (batchCount < 250 || responseCursorMs <= recoverySinceMs) break;
+          recoverySinceMs = responseCursorMs;
+        }
+
+        if (!sawValidResponse) {
+          return {
+            applied: false,
+            cursorMs: sinceMs
+          };
+        }
+
+        const nextCursorMs = Math.max(sinceMs, recoveryCursorMs);
+        if (nextCursorMs > 0) {
+          setListSyncCursorMs(nextCursorMs);
+        }
+        setListSyncOneTimeRecoveryCompletedAtMs(Date.now());
+        return {
+          applied: recoveryApplied,
+          cursorMs: nextCursorMs
+        };
+      })();
+
+      try {
+        return await oneTimeRecoveryPromise;
+      } finally {
+        oneTimeRecoveryPromise = null;
+      }
+    };
+
+    try {
+      const recovery = await runOneTimeRecovery();
+      applied = applied || Boolean(recovery?.applied);
+      sinceMs = Math.max(sinceMs, normalizeOperationUpdatedAt(recovery?.cursorMs, sinceMs));
+    } catch (error) {
+      console.warn('One-time full recovery pull failed:', error);
+    }
+
     while (pages < 4) {
       pages += 1;
       const response = await pullListOperationsFromTransferApi(user, userId, sinceMs, 250);
@@ -2501,8 +2712,6 @@
   async function syncFromCloudNow(options = {}) {
     await init();
     const user = auth?.currentUser;
-    const forceHydration = options?.forceHydration === true;
-    const syncSource = String(options?.source || 'manual').trim() || 'manual';
     if (isIncognitoSyncPaused()) return false;
     if (isSyncTemporarilyPaused()) {
       scheduleSyncPauseRecheck();
@@ -2513,26 +2722,6 @@
         await ensureSectorBootstrapForUser(user);
       } catch (error) {
         console.warn('Sector bootstrap check failed:', error);
-      }
-    }
-
-    let forcedSnapshotApplied = false;
-    if (forceHydration && user && isSyncEnabled()) {
-      snapshotRecoveryCheckedThisSession = true;
-      try {
-        const userId = getTransferUserId(user);
-        const transferSnapshot = await loadSnapshotFromTransferApi(user, userId);
-        const firestoreSnapshot = await readFirebaseBackupSnapshot(user);
-        const selected = choosePreferredCloudSnapshot(transferSnapshot, firestoreSnapshot);
-        if (selected.snapshot) {
-          forcedSnapshotApplied = applyRemoteSnapshot(selected.snapshot, {
-            force: true,
-            reason: `auth-hydration:${syncSource}`,
-            source: selected.source
-          });
-        }
-      } catch (error) {
-        console.warn('Forced cloud hydration failed:', error);
       }
     }
 
@@ -2550,7 +2739,7 @@
         requestId: error?.requestId || null
       });
     }
-    if (!listSyncApplied && !snapshotRecoveryCheckedThisSession && user && isSyncEnabled()) {
+    if (!listSyncApplied && !snapshotRecoveryCheckedThisSession && user && isSyncEnabled() && !hasLocalMergeableData()) {
       snapshotRecoveryCheckedThisSession = true;
       try {
         const userId = getTransferUserId(user);
@@ -2574,7 +2763,7 @@
         detectedAtMs: Number(meta?.lastCloudDriftDetectedAt || 0) || Date.now()
       }, 'sync-loop');
     }
-    return listSyncApplied || forcedSnapshotApplied;
+    return listSyncApplied;
   }
 
   function emitCloudSnapshotEvent(event) {
@@ -2711,7 +2900,7 @@
           startCloudSnapshotListener(currentUser);
           scheduleNextAutomaticFirebaseBackup();
           if (currentUser && isSyncEnabled()) {
-            syncFromCloudNow({ forceHydration: true, source: 'auth-state' }).catch((error) => {
+            syncFromCloudNow({ source: 'auth-state' }).catch((error) => {
               console.warn('Cloud import failed:', error);
             });
             runAutomaticFirebaseBackupIfDue('auth-state').catch((error) => {
