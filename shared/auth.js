@@ -377,6 +377,13 @@
   const LIST_SYNC_ONE_TIME_RECOVERY_META_KEY = 'oneTimeRecoveryPullCompletedAtMs';
   const ONE_TIME_RECOVERY_MAX_PAGES = 8;
   const SYNC_USER_STATE_META_KEY = 'userSyncState';
+  const SYNC_QUARANTINE_DIAGNOSTICS_META_KEY = 'syncQuarantineDiagnostics';
+  const SYNC_TIMESTAMP_CLAMP_WARNING_META_KEY = 'timestampClampWarningAtMs';
+  const SYNC_TIMESTAMP_SKEW_DETECTED_META_KEY = 'timestampSkewDetectedAtMs';
+  const SYNC_FUTURE_TIME_WINDOW_MS = 10 * 60 * 1000;
+  const SYNC_PENDING_DIAGNOSTIC_LIMIT = 20;
+  const SYNC_MAX_ITEM_KEY_LENGTH = 255;
+  const SYNC_CHAT_MAX_TEXT_LENGTH = 2000;
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -444,6 +451,13 @@
     tv_progress: 'tv_progress',
     ui_prefs: 'ui_prefs'
   });
+  const SECTOR_PAYLOAD_LIMITS = Object.freeze({
+    default: 12000,
+    [EXTRA_SYNC_SECTOR_KEYS.settings_profile]: 16000,
+    [EXTRA_SYNC_SECTOR_KEYS.playback_notes]: 24000,
+    [EXTRA_SYNC_SECTOR_KEYS.tv_progress]: 8000,
+    [EXTRA_SYNC_SECTOR_KEYS.ui_prefs]: 6000
+  });
   const STORAGE_KEY_TO_SECTOR_CONFIG = Object.freeze({
     'bilm-theme-settings': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.settings_profile, itemKey: 'theme_settings' },
     'bilm-playback-note': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.playback_notes, itemKey: 'playback_note' },
@@ -479,6 +493,7 @@
   let oneTimeRecoveryPromise = null;
   let lastUserActivityAt = Date.now();
   let hiddenSinceAt = document.visibilityState === 'hidden' ? Date.now() : 0;
+  const handledTimestampClampScopes = new Set();
 
   function readJsonArray(raw) {
     try {
@@ -642,10 +657,96 @@
     return Number(item?.updatedAt || item?.createdAtMs || item?.timestamp || item?.savedAt || 0) || 0;
   }
 
-  function normalizeOperationUpdatedAt(value, fallback = Date.now()) {
+  function parseSyncTimestampMs(value, fallback = 0) {
     const parsed = Number(value || 0);
     if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
     return Math.floor(parsed);
+  }
+
+  function getFutureTimestampUpperBound(nowMs = Date.now()) {
+    return nowMs + SYNC_FUTURE_TIME_WINDOW_MS;
+  }
+
+  function getSyncWarningScope(user = auth?.currentUser || currentUser) {
+    const userId = getSyncScopeUserId(user);
+    if (userId) return `user:${userId}`;
+    return `device:${getOrCreateDeviceId()}`;
+  }
+
+  function hasTimestampClampWarning(user = auth?.currentUser || currentUser) {
+    const warningAtMs = parseSyncTimestampMs(getScopedSyncMetaValue(SYNC_TIMESTAMP_CLAMP_WARNING_META_KEY, 0, user), 0);
+    return warningAtMs > 0;
+  }
+
+  function markTimestampClampWarning(user = auth?.currentUser || currentUser, atMs = Date.now()) {
+    const warningAtMs = parseSyncTimestampMs(atMs, Date.now());
+    setScopedSyncMetaValue(SYNC_TIMESTAMP_CLAMP_WARNING_META_KEY, warningAtMs, user);
+    return warningAtMs;
+  }
+
+  function markTimestampSkewDetected(user = auth?.currentUser || currentUser, atMs = Date.now()) {
+    const detectedAtMs = parseSyncTimestampMs(atMs, Date.now());
+    const userId = getSyncScopeUserId(user);
+    if (userId) {
+      writeScopedSyncState({
+        [LIST_SYNC_ONE_TIME_RECOVERY_META_KEY]: 0,
+        [SYNC_TIMESTAMP_SKEW_DETECTED_META_KEY]: detectedAtMs
+      }, user);
+      return detectedAtMs;
+    }
+    writeSyncMeta({
+      [LIST_SYNC_ONE_TIME_RECOVERY_META_KEY]: 0,
+      [SYNC_TIMESTAMP_SKEW_DETECTED_META_KEY]: detectedAtMs
+    });
+    return detectedAtMs;
+  }
+
+  function handleTimestampClamp({
+    context = 'sync-timestamp',
+    originalMs = 0,
+    clampedMs = 0
+  } = {}) {
+    const user = auth?.currentUser || currentUser || null;
+    const scopeKey = getSyncWarningScope(user);
+    if (!handledTimestampClampScopes.has(scopeKey)) {
+      handledTimestampClampScopes.add(scopeKey);
+      markTimestampSkewDetected(user, Date.now());
+    }
+
+    if (!hasTimestampClampWarning(user)) {
+      markTimestampClampWarning(user, Date.now());
+      emitSyncIssue({
+        scope: 'sync',
+        code: 'timestamp_clamped',
+        message: 'Detected device clock skew. Sync timestamps were adjusted and a recovery pull will run.',
+        retryable: true
+      });
+    }
+
+    console.warn('[sync] clamped future timestamp', {
+      context,
+      originalMs,
+      clampedMs
+    });
+  }
+
+  function normalizeOperationUpdatedAt(value, fallback = Date.now(), options = {}) {
+    const parsed = Number(value || 0);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    const normalized = Math.floor(parsed);
+    const maxFutureAtMs = getFutureTimestampUpperBound(Date.now());
+    if (normalized > maxFutureAtMs) {
+      const clamped = maxFutureAtMs;
+      if (options?.onClamp !== false) {
+        handleTimestampClamp({
+          context: String(options?.context || 'sync-timestamp').trim() || 'sync-timestamp',
+          originalMs: normalized,
+          clampedMs: clamped
+        });
+      }
+      return clamped;
+    }
+    return normalized;
   }
 
   function normalizeListOperationPayload(payload, updatedAtMs) {
@@ -701,7 +802,7 @@
       sectorKey,
       itemKey,
       deleted: operation?.deleted === true,
-      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs),
+      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs, Date.now(), { context: 'sync-op:to-sector' }),
       opId: String(operation?.opId || '').trim() || createOperationId('sec')
     };
     if (!normalized.deleted) {
@@ -726,7 +827,7 @@
       listKey,
       itemKey,
       deleted: operation?.deleted === true,
-      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)
+      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs, 0, { context: 'sync-op:to-list' })
     };
     if (!normalized.deleted) {
       const payload = normalizeListOperationPayload(operation?.payload, normalized.updatedAtMs);
@@ -749,7 +850,7 @@
       sectorKey,
       itemKey,
       deleted,
-      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs, 0),
+      updatedAtMs: normalizeOperationUpdatedAt(operation?.updatedAtMs, 0, { context: 'sync-op:to-storage' }),
       storageKey: deleted ? itemKey : storageKey,
       value: deleted ? null : (typeof value === 'string' ? value : JSON.stringify(value ?? ''))
     };
@@ -1255,14 +1356,14 @@
   function getScopedSyncMetaNumber(metaKey, fallback = 0, user = auth?.currentUser || currentUser) {
     const { userId, state } = readScopedSyncState(user);
     if (userId) {
-      return normalizeOperationUpdatedAt(state?.[metaKey], fallback);
+      return normalizeOperationUpdatedAt(state?.[metaKey], fallback, { context: `sync-meta:${metaKey}` });
     }
     const meta = readSyncMeta();
-    return normalizeOperationUpdatedAt(meta?.[metaKey], fallback);
+    return normalizeOperationUpdatedAt(meta?.[metaKey], fallback, { context: `sync-meta:${metaKey}` });
   }
 
   function setScopedSyncMetaNumber(metaKey, nextValue, user = auth?.currentUser || currentUser) {
-    const normalizedNext = normalizeOperationUpdatedAt(nextValue, 0);
+    const normalizedNext = normalizeOperationUpdatedAt(nextValue, 0, { context: `sync-meta:${metaKey}` });
     if (normalizedNext <= 0) return 0;
     const userId = getSyncScopeUserId(user);
     if (!userId) {
@@ -1274,6 +1375,36 @@
     const current = getScopedSyncMetaNumber(metaKey, 0, user);
     const next = Math.max(current, normalizedNext);
     writeScopedSyncState({ [metaKey]: next }, user);
+    return next;
+  }
+
+  function getScopedSyncMetaValue(metaKey, fallback = null, user = auth?.currentUser || currentUser) {
+    const { userId, state } = readScopedSyncState(user);
+    if (userId) {
+      return typeof state?.[metaKey] === 'undefined' ? fallback : state[metaKey];
+    }
+    const meta = readSyncMeta();
+    return typeof meta?.[metaKey] === 'undefined' ? fallback : meta[metaKey];
+  }
+
+  function setScopedSyncMetaValue(metaKey, value, user = auth?.currentUser || currentUser) {
+    const userId = getSyncScopeUserId(user);
+    if (!userId) {
+      writeSyncMeta({ [metaKey]: value });
+      return value;
+    }
+    writeScopedSyncState({ [metaKey]: value }, user);
+    return value;
+  }
+
+  function appendSyncQuarantineDiagnostic(record, user = auth?.currentUser || currentUser) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return [];
+    const existing = getScopedSyncMetaValue(SYNC_QUARANTINE_DIAGNOSTICS_META_KEY, [], user);
+    const history = Array.isArray(existing)
+      ? existing.filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
+      : [];
+    const next = [...history, record].slice(-SYNC_PENDING_DIAGNOSTIC_LIMIT);
+    setScopedSyncMetaValue(SYNC_QUARANTINE_DIAGNOSTICS_META_KEY, next, user);
     return next;
   }
 
@@ -2262,6 +2393,297 @@
     lastLocalSnapshotSignature = '';
   }
 
+  function isRetryableSyncFailure(error) {
+    if (error?.retryable === true) return true;
+    if (error?.retryable === false) return false;
+    const status = Number(error?.status || 0) || 0;
+    if (!status) return true;
+    if (status === 429 || status >= 500) return true;
+    if (status >= 400 && status < 500) return false;
+    return true;
+  }
+
+  function getSectorPayloadLimit(sectorKey) {
+    const normalizedSectorKey = String(sectorKey || '').trim().toLowerCase();
+    return Number(SECTOR_PAYLOAD_LIMITS[normalizedSectorKey] || SECTOR_PAYLOAD_LIMITS.default) || SECTOR_PAYLOAD_LIMITS.default;
+  }
+
+  function getOperationSyncScope(operation = {}) {
+    const sectorKey = String(operation?.sectorKey || '').trim().toLowerCase();
+    const listKey = String(operation?.listKey || sectorKeyToListKey(sectorKey) || '').trim();
+    if (listKey === 'bilm-shared-chat' || sectorKey === 'chat_messages') return 'chat';
+    return 'sync';
+  }
+
+  function getOperationIdentity(operation = {}) {
+    const sectorKey = String(operation?.sectorKey || '').trim().toLowerCase();
+    const listKey = String(operation?.listKey || sectorKeyToListKey(sectorKey) || '').trim() || null;
+    const normalizedSectorKey = sectorKey || listKeyToSectorKey(listKey) || null;
+    const itemKey = String(operation?.itemKey || '').trim() || null;
+    const updatedAtMs = normalizeOperationUpdatedAt(operation?.updatedAtMs, 0, { context: 'sync-op:identity' });
+    const payload = operation?.payload;
+    const payloadBytes = (() => {
+      if (payload === null || typeof payload === 'undefined') return 0;
+      try {
+        return JSON.stringify(payload).length;
+      } catch {
+        return 0;
+      }
+    })();
+    return {
+      listKey,
+      sectorKey: normalizedSectorKey,
+      itemKey,
+      deleted: operation?.deleted === true,
+      updatedAtMs,
+      opId: String(operation?.opId || '').trim() || null,
+      payloadBytes
+    };
+  }
+
+  function validateOutgoingSectorOperation(operation = {}) {
+    const sectorKey = String(operation?.sectorKey || '').trim().toLowerCase();
+    const itemKey = String(operation?.itemKey || '').trim();
+    if (!sectorKey || !ALL_PULL_SECTOR_KEYS.includes(sectorKey)) {
+      return {
+        code: 'invalid_sector_key',
+        message: 'Operation has an invalid sector key.',
+        status: 400,
+        retryable: false
+      };
+    }
+    if (!itemKey || itemKey.length > SYNC_MAX_ITEM_KEY_LENGTH) {
+      return {
+        code: 'invalid_item_key',
+        message: 'Operation item key is missing or too long.',
+        status: 400,
+        retryable: false
+      };
+    }
+    if (operation?.deleted === true) {
+      return null;
+    }
+    const payload = operation?.payload;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return {
+        code: sectorKey === 'chat_messages' ? 'chat_payload_invalid' : 'invalid_payload',
+        message: 'Operation payload must be an object.',
+        status: 400,
+        retryable: false
+      };
+    }
+    if (sectorKey === 'chat_messages') {
+      const text = String(payload?.text || '').trim();
+      if (!text) {
+        return {
+          code: 'chat_payload_invalid',
+          message: 'Chat payload text is required.',
+          status: 400,
+          retryable: false
+        };
+      }
+      if (text.length > SYNC_CHAT_MAX_TEXT_LENGTH) {
+        return {
+          code: 'chat_message_too_large',
+          message: `Chat payload text exceeds ${SYNC_CHAT_MAX_TEXT_LENGTH} characters.`,
+          status: 413,
+          retryable: false
+        };
+      }
+      return null;
+    }
+
+    let serialized = '';
+    try {
+      serialized = JSON.stringify(payload);
+    } catch {
+      return {
+        code: 'invalid_payload',
+        message: 'Operation payload could not be serialized.',
+        status: 400,
+        retryable: false
+      };
+    }
+    if (serialized.length > getSectorPayloadLimit(sectorKey)) {
+      return {
+        code: 'sector_payload_too_large',
+        message: 'Operation payload exceeds sector size limit.',
+        status: 413,
+        retryable: false
+      };
+    }
+    return null;
+  }
+
+  function isPendingEntryCurrent(entry) {
+    if (!entry || !entry.key) return false;
+    const map = entry.queueType === 'sector' ? pendingSectorOperations : pendingListOperations;
+    return map.get(entry.key) === entry.queuedOperation;
+  }
+
+  function removePendingEntryIfCurrent(entry) {
+    if (!entry || !entry.key) return false;
+    const map = entry.queueType === 'sector' ? pendingSectorOperations : pendingListOperations;
+    if (map.get(entry.key) !== entry.queuedOperation) return false;
+    map.delete(entry.key);
+    return true;
+  }
+
+  function quarantinePendingSyncEntry(entry, issue = {}, user = auth?.currentUser || currentUser) {
+    const operation = entry?.operation || entry?.queuedOperation || {};
+    const identity = getOperationIdentity(operation);
+    const removed = removePendingEntryIfCurrent(entry);
+    const status = Number(issue?.status || 0) || null;
+    const code = String(issue?.code || 'sync_operation_quarantined').trim() || 'sync_operation_quarantined';
+    const message = String(issue?.message || 'Skipped a malformed sync operation to keep sync running.').trim()
+      || 'Skipped a malformed sync operation to keep sync running.';
+    const retryable = issue?.retryable === true;
+    const requestId = String(issue?.requestId || '').trim() || null;
+    const nowMs = Date.now();
+
+    appendSyncQuarantineDiagnostic({
+      atMs: nowMs,
+      reason: code,
+      status,
+      retryable,
+      requestId,
+      queueType: entry?.queueType || null,
+      removed,
+      ...identity
+    }, user);
+
+    emitSyncIssue({
+      scope: getOperationSyncScope(operation),
+      listKey: identity.listKey,
+      sectorKey: identity.sectorKey,
+      code,
+      message,
+      status,
+      retryable,
+      requestId
+    });
+    return removed;
+  }
+
+  function preparePendingOperationsForPush(listBatchEntries = [], sectorBatchEntries = [], user = auth?.currentUser || currentUser) {
+    const candidates = [
+      ...listBatchEntries.map(([key, queuedOperation]) => ({
+        queueType: 'list',
+        key,
+        queuedOperation
+      })),
+      ...sectorBatchEntries.map(([key, queuedOperation]) => ({
+        queueType: 'sector',
+        key,
+        queuedOperation
+      }))
+    ];
+    const readyEntries = [];
+    let quarantinedCount = 0;
+
+    candidates.forEach((candidate) => {
+      if (!isPendingEntryCurrent(candidate)) return;
+      const normalized = toSectorOperation(candidate.queuedOperation);
+      if (!normalized) {
+        quarantinedCount += quarantinePendingSyncEntry(candidate, {
+          code: 'invalid_operation',
+          message: 'Skipped invalid sync operation before upload.',
+          status: 400,
+          retryable: false
+        }, user) ? 1 : 0;
+        return;
+      }
+      const validationIssue = validateOutgoingSectorOperation(normalized);
+      if (validationIssue) {
+        quarantinedCount += quarantinePendingSyncEntry({
+          ...candidate,
+          operation: normalized
+        }, validationIssue, user) ? 1 : 0;
+        return;
+      }
+      readyEntries.push({
+        ...candidate,
+        operation: normalized
+      });
+    });
+
+    return {
+      readyEntries,
+      operations: readyEntries.map((entry) => entry.operation),
+      quarantinedCount
+    };
+  }
+
+  function applyPushSuccessMeta(reason, operations = [], cursorMs = 0) {
+    const maxUpdatedAt = operations.reduce(
+      (max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0, { context: 'sync-op:push-success' })),
+      0
+    );
+    const nextCursorMs = Math.max(
+      normalizeOperationUpdatedAt(cursorMs, 0, { context: 'sync-cursor:push-success' }),
+      maxUpdatedAt
+    );
+    if (nextCursorMs > 0) {
+      setListSyncCursorMs(nextCursorMs);
+    }
+    writeSyncMeta({
+      lastListSyncPushAt: Date.now(),
+      lastListSyncPushReason: reason
+    });
+    void mirrorSnapshotToFirebaseIfDue(`list-sync:${reason}`);
+    return nextCursorMs;
+  }
+
+  async function retryPendingOperationsIndividually({
+    user,
+    userId,
+    reason = 'list-mutation',
+    entries = []
+  } = {}) {
+    const pushedOperations = [];
+    let quarantinedCount = 0;
+    const retryableOperations = [];
+    let retryableError = null;
+    let maxCursorMs = 0;
+
+    for (const entry of entries) {
+      if (!isPendingEntryCurrent(entry)) continue;
+      try {
+        const response = await pushListOperationsToTransferApi(user, userId, [entry.operation]);
+        removePendingEntryIfCurrent(entry);
+        pushedOperations.push(entry.operation);
+        maxCursorMs = Math.max(
+          maxCursorMs,
+          normalizeOperationUpdatedAt(response?.cursorMs, 0, { context: 'sync-cursor:single-op' })
+        );
+      } catch (error) {
+        if (isRetryableSyncFailure(error)) {
+          retryableOperations.push(entry.operation);
+          retryableError = error;
+          continue;
+        }
+        quarantinedCount += quarantinePendingSyncEntry(entry, {
+          code: error?.code || error?.error || 'sync_operation_rejected',
+          message: error?.message || 'Skipped a sync operation rejected by the cloud service.',
+          status: error?.status || null,
+          retryable: false,
+          requestId: error?.requestId || null
+        }, user) ? 1 : 0;
+      }
+    }
+
+    if (pushedOperations.length) {
+      applyPushSuccessMeta(`${reason}:isolate`, pushedOperations, maxCursorMs);
+    }
+
+    return {
+      pushedOperations,
+      quarantinedCount,
+      retryableOperations,
+      retryableError
+    };
+  }
+
   function scheduleListSyncRetry(error, operations = []) {
     clearListSyncRetryTimer();
     listSyncRetryDelayMs = listSyncRetryDelayMs > 0
@@ -2345,12 +2767,19 @@
 
     const listBatchEntries = [...pendingListOperations.entries()];
     const sectorBatchEntries = [...pendingSectorOperations.entries()];
-    const operations = [
-      ...listBatchEntries.map(([, operation]) => operation),
-      ...sectorBatchEntries.map(([, operation]) => operation)
-    ];
-    if (!operations.length) return false;
+    const prepared = preparePendingOperationsForPush(listBatchEntries, sectorBatchEntries, user);
+    const operations = prepared.operations;
+    const readyEntries = prepared.readyEntries;
+    if (!operations.length) {
+      if (prepared.quarantinedCount > 0) {
+        listSyncRetryDelayMs = 0;
+        clearListSyncRetryTimer();
+        return true;
+      }
+      return false;
+    }
     const hasNonDeleteOperation = operations.some((operation) => operation?.deleted !== true);
+    const userId = getTransferUserId(user);
 
     pendingListSync = true;
     try {
@@ -2359,31 +2788,11 @@
         count: operations.length,
         deleteOnly: !hasNonDeleteOperation
       });
-      const userId = getTransferUserId(user);
       const response = await pushListOperationsToTransferApi(user, userId, operations);
-      listBatchEntries.forEach(([key, operation]) => {
-        if (pendingListOperations.get(key) === operation) {
-          pendingListOperations.delete(key);
-        }
+      readyEntries.forEach((entry) => {
+        removePendingEntryIfCurrent(entry);
       });
-      sectorBatchEntries.forEach(([key, operation]) => {
-        if (pendingSectorOperations.get(key) === operation) {
-          pendingSectorOperations.delete(key);
-        }
-      });
-      const maxUpdatedAt = operations.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0);
-      const cursorMs = Math.max(
-        normalizeOperationUpdatedAt(response?.cursorMs, 0),
-        maxUpdatedAt
-      );
-      if (cursorMs > 0) {
-        setListSyncCursorMs(cursorMs);
-      }
-      writeSyncMeta({
-        lastListSyncPushAt: Date.now(),
-        lastListSyncPushReason: reason
-      });
-      void mirrorSnapshotToFirebaseIfDue(`list-sync:${reason}`);
+      applyPushSuccessMeta(reason, operations, response?.cursorMs);
       console.debug('[sync] flush success', {
         reason,
         count: operations.length
@@ -2392,6 +2801,42 @@
       clearListSyncRetryTimer();
       return true;
     } catch (error) {
+      if (!isRetryableSyncFailure(error)) {
+        if (readyEntries.length === 1) {
+          quarantinePendingSyncEntry(readyEntries[0], {
+            code: error?.code || error?.error || 'sync_operation_rejected',
+            message: error?.message || 'Skipped a sync operation rejected by the cloud service.',
+            status: error?.status || null,
+            retryable: false,
+            requestId: error?.requestId || null
+          }, user);
+          listSyncRetryDelayMs = 0;
+          clearListSyncRetryTimer();
+          return true;
+        }
+
+        const isolated = await retryPendingOperationsIndividually({
+          user,
+          userId,
+          reason,
+          entries: readyEntries
+        });
+        const madeProgress = (
+          isolated.pushedOperations.length > 0
+          || isolated.quarantinedCount > 0
+          || prepared.quarantinedCount > 0
+        );
+        if (isolated.retryableOperations.length > 0 && isolated.retryableError) {
+          scheduleListSyncRetry(isolated.retryableError, isolated.retryableOperations);
+          if (!madeProgress) {
+            throw isolated.retryableError;
+          }
+        } else {
+          listSyncRetryDelayMs = 0;
+          clearListSyncRetryTimer();
+        }
+        if (madeProgress) return true;
+      }
       scheduleListSyncRetry(error, operations);
       throw error;
     } finally {
@@ -2408,6 +2853,14 @@
 
     const userId = getTransferUserId(user);
     let sinceMs = getListSyncCursorMs();
+    const skewDetectedAtMs = parseSyncTimestampMs(
+      getScopedSyncMetaValue(SYNC_TIMESTAMP_SKEW_DETECTED_META_KEY, 0, user),
+      0
+    );
+    const recoveryCompletedAtMs = getListSyncOneTimeRecoveryCompletedAtMs();
+    if (skewDetectedAtMs > recoveryCompletedAtMs) {
+      sinceMs = 0;
+    }
     let pages = 0;
     let applied = false;
     let attemptedBootstrapRecovery = false;
