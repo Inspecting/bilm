@@ -75,7 +75,49 @@ function loadToastScript() {
   });
 }
 
+function loadProxyGateScript() {
+  return new Promise((resolve, reject) => {
+    if (window.bilmProxyGate) {
+      resolve(window.bilmProxyGate);
+      return;
+    }
+    const src = withBase('/shared/proxy-gate.js');
+    const existing = document.querySelector(`script[data-bilm-proxy-gate="${src}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.bilmProxyGate), { once: true });
+      existing.addEventListener('error', () => reject(new Error('Failed to load proxy gate module.')), { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.defer = true;
+    script.dataset.bilmProxyGate = src;
+    script.addEventListener('load', () => resolve(window.bilmProxyGate), { once: true });
+    script.addEventListener('error', () => reject(new Error('Failed to load proxy gate module.')), { once: true });
+    document.head.appendChild(script);
+  });
+}
+
+async function maybeActivateProxiedMode() {
+  try {
+    const proxyGate = await loadProxyGateScript();
+    if (!proxyGate?.activateProxiedMode) return false;
+    return await proxyGate.activateProxiedMode({
+      targetUrl: 'https://bilm-scramjet.fly.dev/',
+      timeoutMs: 7000,
+      stateTimeoutMs: 1800
+    });
+  } catch {
+    return false;
+  }
+}
+
 (async () => {
+  if (await maybeActivateProxiedMode()) {
+    return;
+  }
+
   const container = document.getElementById('navbar-placeholder') || document.getElementById('navbarContainer');
   if (!container) return;
 

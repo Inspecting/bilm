@@ -18,6 +18,7 @@
 
   <script src="shared/access.js"></script>
   <script src="shared/theme.js"></script>
+  <script src="shared/proxy-gate.js"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -284,7 +285,13 @@
 
     skipButton.addEventListener('click', redirectToHome);
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      const proxiedActive = await window.bilmProxyGate?.activateProxiedMode?.({
+        targetUrl: 'https://bilm-scramjet.fly.dev/',
+        timeoutMs: 7000,
+        stateTimeoutMs: 1800
+      });
+      if (proxiedActive) return;
       updateToggleLabel();
       if (!isLoadingEnabled()) {
         redirectToHome();

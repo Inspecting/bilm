@@ -602,6 +602,16 @@
           <option value="vidnest">Vidnest</option>
         </select>
       </div>
+      <div class="control-row" id="proxiedControlRow" style="display: none;">
+        <div>
+          <label>Proxied</label>
+          <small>Load Bilm in embedded proxy mode using your account setting.</small>
+        </div>
+        <label class="toggle">
+          <input id="proxiedToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </div>
     </section>
 
     <section class="settings-card">
@@ -748,6 +758,8 @@
   const incognitoToggle = document.getElementById('incognitoToggle');
   const serverSelect = document.getElementById('serverSelect');
   const animeServerSelect = document.getElementById('animeServerSelect');
+  const proxiedControlRow = document.getElementById('proxiedControlRow');
+  const proxiedToggle = document.getElementById('proxiedToggle');
   const openMaintenanceBtn = document.getElementById('openMaintenanceBtn');
   const exportDataBtn = document.getElementById('exportDataBtn');
   const importDataBtn = document.getElementById('importDataBtn');
@@ -946,6 +958,17 @@
     window.bilmTheme?.setSettings?.({ ...current, ...partial });
   }
 
+  function updateProxiedControl(user) {
+    const loggedIn = Boolean(user);
+    if (proxiedControlRow) {
+      proxiedControlRow.style.display = loggedIn ? 'flex' : 'none';
+    }
+    if (proxiedToggle) {
+      proxiedToggle.disabled = !loggedIn;
+      proxiedToggle.setAttribute('aria-disabled', loggedIn ? 'false' : 'true');
+    }
+  }
+
   function updatePresetVisuals() {
     accentPresetsSelect.style.setProperty('--preview-color', accentPicker.value || '#a855f7');
     const selectedBackground = backgroundSelect.value;
@@ -989,6 +1012,7 @@
     serverSelect.value = supportedServers.includes(preferredServer) ? preferredServer : 'embedmaster';
     const preferredAnimeServer = settings.animeDefaultServer || 'vidnest';
     animeServerSelect.value = preferredAnimeServer === 'vidnest' ? 'vidnest' : 'vidnest';
+    proxiedToggle.checked = settings.proxied === true;
     updatePresetVisuals();
   }
 
@@ -1224,6 +1248,7 @@
       openSignUpBtn.hidden = true;
       logoutBtn.hidden = false;
       openAccountSettingsBtn.disabled = false;
+      updateProxiedControl(user);
       cloudStatus.textContent = isSyncEnabled()
         ? 'Account ready. Live sync is active on this device.'
         : 'Account ready. Live sync is paused on this device.';
@@ -1234,6 +1259,7 @@
       openSignUpBtn.hidden = false;
       logoutBtn.hidden = true;
       openAccountSettingsBtn.disabled = false;
+      updateProxiedControl(null);
       cloudStatus.textContent = 'Log in to use account features.';
       loginHelperText.textContent = 'Use email and password to log in.';
     }
@@ -1358,6 +1384,15 @@
 
   animeServerSelect.addEventListener('change', (event) => {
     applySettings({ animeDefaultServer: event.target.value });
+  });
+
+  proxiedToggle?.addEventListener('change', (event) => {
+    const user = window.bilmAuth?.getCurrentUser?.();
+    if (!user) {
+      event.target.checked = false;
+      return;
+    }
+    applySettings({ proxied: event.target.checked });
   });
 
   exportDataBtn?.addEventListener('click', () => {
@@ -1638,6 +1673,7 @@
       cloudStatus.textContent = `Auth setup failed: ${err.message}`;
       loginHelperText.textContent = 'If this keeps happening, disable blockers for Firebase and reload.';
       openAccountSettingsBtn.disabled = false;
+      updateProxiedControl(null);
     }
   }
 
