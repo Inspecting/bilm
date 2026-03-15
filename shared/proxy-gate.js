@@ -2,9 +2,11 @@
   const DEFAULT_PROXY_URL = 'https://bilm-scramjet.fly.dev/';
   const SHELL_ID = 'bilmProxyShell';
   const SHELL_STYLE_ID = 'bilmProxyShellStyle';
+  const AUTH_HINT_KEY = 'bilm-auth-last-known';
   const AUTH_TIMEOUT_MS = 7000;
-  const AUTH_STATE_TIMEOUT_MS = 1800;
-  const FRAME_LOAD_TIMEOUT_MS = 15000;
+  const AUTH_STATE_TIMEOUT_MS = 1200;
+  const FRAME_LOAD_TIMEOUT_MS = 20000;
+  const MAX_AUTO_RETRIES = 2;
 
   function detectBasePath() {
     const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
@@ -96,13 +98,20 @@
     const timeoutMs = Math.max(1000, Number(options.timeoutMs || AUTH_TIMEOUT_MS));
     const stateTimeoutMs = Math.max(250, Number(options.stateTimeoutMs || AUTH_STATE_TIMEOUT_MS));
     const authApi = await ensureAuthReady({ timeoutMs });
-    if (!authApi) return null;
+    if (!authApi) {
+      writeAuthHint(false);
+      return null;
+    }
 
     try {
       const current = authApi.getCurrentUser?.();
-      if (current) return current;
+      if (current) {
+        writeAuthHint(true);
+        return current;
+      }
 
       if (typeof authApi.onAuthStateChanged !== 'function') {
+        writeAuthHint(false);
         return null;
       }
 
@@ -112,6 +121,7 @@
         const complete = (user) => {
           if (settled) return;
           settled = true;
+          writeAuthHint(Boolean(user));
           try {
             unsubscribe();
           } catch {
@@ -135,12 +145,29 @@
         }
       });
     } catch {
+      writeAuthHint(false);
       return null;
     }
   }
 
   function getSettings() {
     return window.bilmTheme?.getSettings?.() || {};
+  }
+
+  function readAuthHint() {
+    try {
+      return localStorage.getItem(AUTH_HINT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function writeAuthHint(isLoggedIn) {
+    try {
+      localStorage.setItem(AUTH_HINT_KEY, isLoggedIn ? '1' : '0');
+    } catch {
+      // Ignore storage errors.
+    }
   }
 
   function setProxiedEnabled(enabled) {
@@ -256,6 +283,10 @@
         padding: 16px;
       }
 
+      #${SHELL_ID} .bilm-proxy-shell__error[hidden] {
+        display: none !important;
+      }
+
       #${SHELL_ID} .bilm-proxy-shell__error-panel {
         max-width: 520px;
         width: min(100%, 520px);
@@ -280,6 +311,13 @@
       }
     `;
     document.head.appendChild(style);
+  }
+
+  function unmountProxiedShell() {
+    const shell = document.getElementById(SHELL_ID);
+    if (shell) shell.remove();
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
   }
 
   function mountProxiedShell(options = {}) {
@@ -324,10 +362,11 @@
     const retryBtn = shell.querySelector('#bilmProxyRetryBtn');
     const openTabBtn = shell.querySelector('#bilmProxyOpenTabBtn');
     let frameTimeoutId = null;
+    let autoRetryCount = 0;
 
-    const hideErrorPanel = () => {
+    const hideErrorPanel = (nextStatus = 'Loading proxied site...') => {
       errorPanel.hidden = true;
-      status.textContent = 'Loading proxied site...';
+      status.textContent = nextStatus;
     };
 
     const showErrorPanel = () => {
@@ -335,10 +374,20 @@
       status.textContent = 'Proxy load issue detected.';
     };
 
-    const setFrameSource = (url, forceRefresh = false) => {
-      hideErrorPanel();
+    const setFrameSource = (url, forceRefresh = false, preserveRetryCount = false) => {
+      if (!preserveRetryCount) {
+        autoRetryCount = 0;
+      }
+      hideErrorPanel(preserveRetryCount ? `Retrying proxy load (${autoRetryCount}/${MAX_AUTO_RETRIES})...` : 'Loading proxied site...');
       if (frameTimeoutId) clearTimeout(frameTimeoutId);
-      frameTimeoutId = setTimeout(showErrorPanel, FRAME_LOAD_TIMEOUT_MS);
+      frameTimeoutId = setTimeout(() => {
+        if (autoRetryCount < MAX_AUTO_RETRIES) {
+          autoRetryCount += 1;
+          setFrameSource(url, true, true);
+          return;
+        }
+        showErrorPanel();
+      }, FRAME_LOAD_TIMEOUT_MS);
       if (!forceRefresh) {
         frame.src = url;
         return;
@@ -350,17 +399,23 @@
 
     frame.addEventListener('load', () => {
       if (frameTimeoutId) clearTimeout(frameTimeoutId);
+      autoRetryCount = 0;
       status.textContent = 'Proxied mode active.';
       errorPanel.hidden = true;
     });
 
     frame.addEventListener('error', () => {
       if (frameTimeoutId) clearTimeout(frameTimeoutId);
+      if (autoRetryCount < MAX_AUTO_RETRIES) {
+        autoRetryCount += 1;
+        setFrameSource(targetUrl, true, true);
+        return;
+      }
       showErrorPanel();
     });
 
     retryBtn.addEventListener('click', () => {
-      setFrameSource(targetUrl, true);
+      setFrameSource(targetUrl, true, false);
     });
 
     openTabBtn.addEventListener('click', () => {
@@ -380,11 +435,33 @@
   }
 
   async function activateProxiedMode(options = {}) {
+    if (getSettings().proxied !== true) {
+      if (document.getElementById(SHELL_ID)) {
+        unmountProxiedShell();
+      }
+      return false;
+    }
+
     const existing = document.getElementById(SHELL_ID);
     if (existing) return true;
+
+    let mountedFromHint = false;
+    if (readAuthHint()) {
+      mountProxiedShell(options);
+      mountedFromHint = true;
+    }
+
     const eligibility = await getEligibility(options);
-    if (!eligibility.eligible) return false;
-    mountProxiedShell(options);
+    if (!eligibility.eligible) {
+      if (mountedFromHint) {
+        unmountProxiedShell();
+      }
+      return false;
+    }
+
+    if (!document.getElementById(SHELL_ID)) {
+      mountProxiedShell(options);
+    }
     return true;
   }
 
@@ -395,6 +472,7 @@
     resolveCurrentUser,
     getEligibility,
     mountProxiedShell,
+    unmountProxiedShell,
     activateProxiedMode
   };
 })();

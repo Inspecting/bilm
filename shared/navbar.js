@@ -105,8 +105,7 @@ async function maybeActivateProxiedMode() {
     if (!proxyGate?.activateProxiedMode) return false;
     return await proxyGate.activateProxiedMode({
       targetUrl: 'https://bilm-scramjet.fly.dev/',
-      timeoutMs: 7000,
-      stateTimeoutMs: 1800
+      timeoutMs: 7000
     });
   } catch {
     return false;

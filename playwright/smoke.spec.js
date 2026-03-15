@@ -127,6 +127,7 @@ test('proxied mode replaces loading page for logged-in users', async ({ page }) 
   await page.goto('/');
   await expect(page.locator('#bilmProxyShell')).toBeVisible();
   await expect(page.locator('#bilmProxyFrame')).toHaveAttribute('src', /https:\/\/bilm-scramjet\.fly\.dev\//);
+  await expect(page.locator('#bilmProxyErrorPanel')).toBeHidden();
   expect(page.url()).not.toMatch(/\/home\/?$/);
 });
 
