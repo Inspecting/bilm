@@ -208,6 +208,10 @@
         flex-direction: column;
       }
 
+      body.bilm-proxy-only > :not(#${SHELL_ID}):not(script) {
+        display: none !important;
+      }
+
       #${SHELL_ID} .bilm-proxy-shell__topbar {
         display: flex;
         align-items: center;
@@ -313,9 +317,110 @@
     document.head.appendChild(style);
   }
 
+  function enableProxyOnlyMode(shellEl) {
+    window.__bilmProxyOnlyMode = true;
+    document.body.classList.add('bilm-proxy-only');
+    try {
+      window.stop();
+    } catch {
+      // Ignore stop failures.
+    }
+    if (!shellEl) return;
+    const children = Array.from(document.body.children);
+    children.forEach((node) => {
+      if (node === shellEl) return;
+      if (node.tagName === 'SCRIPT') return;
+      node.style.display = 'none';
+    });
+  }
+
+  function disableProxyOnlyMode() {
+    window.__bilmProxyOnlyMode = false;
+    document.body.classList.remove('bilm-proxy-only');
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function openProxyInAboutBlank(targetUrl) {
+    const popup = window.open('about:blank', '_blank');
+    if (!popup) return;
+    const safeTarget = escapeHtml(targetUrl);
+    popup.document.open();
+    popup.document.write(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm Proxy</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #05050b;
+      color: #f8f8ff;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    .proxy-wrap {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .proxy-top {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(5, 5, 11, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    iframe {
+      flex: 1;
+      border: 0;
+      width: 100%;
+      height: 100%;
+      background: #05050b;
+    }
+    .proxy-link {
+      color: #c4b5fd;
+      text-decoration: none;
+      max-width: 70vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="proxy-wrap">
+    <div class="proxy-top">
+      <span>Bilm Proxied</span>
+      <a class="proxy-link" href="${safeTarget}" target="_blank" rel="noreferrer noopener">${safeTarget}</a>
+    </div>
+    <iframe src="${safeTarget}" referrerpolicy="no-referrer" allow="fullscreen; clipboard-read; clipboard-write; encrypted-media"></iframe>
+  </div>
+</body>
+</html>`);
+    popup.document.close();
+  }
+
   function unmountProxiedShell() {
     const shell = document.getElementById(SHELL_ID);
     if (shell) shell.remove();
+    disableProxyOnlyMode();
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
   }
@@ -337,6 +442,7 @@
         <div class="bilm-proxy-shell__title">Bilm Proxied</div>
         <div class="bilm-proxy-shell__status" id="bilmProxyShellStatus">Loading proxied site...</div>
         <div class="bilm-proxy-shell__actions">
+          <button type="button" class="bilm-proxy-shell__button" id="bilmProxyAboutBlankBtn" title="Open proxied mode in about:blank" aria-label="Open proxied mode in about blank">◻</button>
           <button type="button" class="bilm-proxy-shell__button bilm-proxy-shell__button--danger" id="bilmProxyExitBtn">Exit Proxied</button>
         </div>
       </div>
@@ -358,6 +464,7 @@
     const frame = shell.querySelector('#bilmProxyFrame');
     const status = shell.querySelector('#bilmProxyShellStatus');
     const errorPanel = shell.querySelector('#bilmProxyErrorPanel');
+    const aboutBlankBtn = shell.querySelector('#bilmProxyAboutBlankBtn');
     const exitBtn = shell.querySelector('#bilmProxyExitBtn');
     const retryBtn = shell.querySelector('#bilmProxyRetryBtn');
     const openTabBtn = shell.querySelector('#bilmProxyOpenTabBtn');
@@ -422,11 +529,16 @@
       window.open(targetUrl, '_blank', 'noopener,noreferrer');
     });
 
+    aboutBlankBtn.addEventListener('click', () => {
+      openProxyInAboutBlank(targetUrl);
+    });
+
     exitBtn.addEventListener('click', () => {
       setProxiedEnabled(false);
       window.location.reload();
     });
 
+    enableProxyOnlyMode(shell);
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
     document.body.appendChild(shell);
@@ -446,7 +558,10 @@
     if (existing) return true;
 
     let mountedFromHint = false;
-    if (readAuthHint()) {
+    if (window.bilmAuth?.getCurrentUser?.()) {
+      mountProxiedShell(options);
+      mountedFromHint = true;
+    } else if (readAuthHint()) {
       mountProxiedShell(options);
       mountedFromHint = true;
     }

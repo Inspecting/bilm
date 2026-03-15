@@ -124,7 +124,7 @@ test('settings exposes diagnostics controls', async ({ page }) => {
 test('proxied mode replaces loading page for logged-in users', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: true, email: 'proxy@watchbilm.org' });
   await setThemeSettings(page, { proxied: true, loading: false });
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#bilmProxyShell')).toBeVisible();
   await expect(page.locator('#bilmProxyFrame')).toHaveAttribute('src', /https:\/\/bilm-scramjet\.fly\.dev\//);
   await expect(page.locator('#bilmProxyErrorPanel')).toBeHidden();
@@ -134,7 +134,7 @@ test('proxied mode replaces loading page for logged-in users', async ({ page }) 
 test('proxied mode replaces navbar routes for logged-in users', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: true, email: 'proxy@watchbilm.org' });
   await setThemeSettings(page, { proxied: true });
-  await page.goto('/home/');
+  await page.goto('/home/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#bilmProxyShell')).toBeVisible();
   await expect(page.locator('#bilmProxyExitBtn')).toBeVisible();
 });
