@@ -22,10 +22,95 @@ function detectBasePath() {
 }
 
 const BASE_PATH = detectBasePath();
+const NAVBAR_ASSET_CACHE_KEY = 'bilm-navbar-assets-v1';
+const NAVBAR_ASSET_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function withBase(path) {
   const normalized = path.startsWith('/') ? path : `/${path}`;
   return `${BASE_PATH}${normalized}`;
+}
+
+function readCachedNavbarAssets() {
+  try {
+    const raw = localStorage.getItem(NAVBAR_ASSET_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const cachedAtMs = Number(parsed?.cachedAtMs || 0);
+    if (!parsed?.html || !parsed?.css || !cachedAtMs) return null;
+    if (Date.now() - cachedAtMs > NAVBAR_ASSET_CACHE_MAX_AGE_MS) return null;
+    return {
+      html: String(parsed.html),
+      css: String(parsed.css)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedNavbarAssets(html, css) {
+  if (!html || !css) return;
+  try {
+    localStorage.setItem(NAVBAR_ASSET_CACHE_KEY, JSON.stringify({
+      cachedAtMs: Date.now(),
+      html,
+      css
+    }));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function renderNavbarSkeleton(shadow) {
+  shadow.innerHTML = `
+    <style>
+      :host {
+        display: block;
+        font-family: 'Poppins', sans-serif;
+      }
+      .bilm-navbar-skeleton {
+        height: 64px;
+        width: 100%;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        background: linear-gradient(90deg, rgba(22, 19, 36, 0.95), rgba(30, 24, 44, 0.95), rgba(22, 19, 36, 0.95));
+        background-size: 240% 100%;
+        animation: bilm-navbar-skeleton-shimmer 1.2s linear infinite;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        box-sizing: border-box;
+      }
+      .bilm-navbar-skeleton-logo {
+        color: rgba(245, 243, 255, 0.95);
+        font-weight: 700;
+        font-size: 1.25rem;
+        letter-spacing: 0.01em;
+      }
+      .bilm-navbar-skeleton-pill {
+        width: 120px;
+        height: 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.18);
+      }
+      @keyframes bilm-navbar-skeleton-shimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: 0 0; }
+      }
+      @media (max-width: 768px) {
+        .bilm-navbar-skeleton {
+          height: 58px;
+          padding: 10px 14px;
+        }
+        .bilm-navbar-skeleton-pill {
+          width: 88px;
+        }
+      }
+    </style>
+    <div class="bilm-navbar-skeleton" role="presentation" aria-hidden="true">
+      <div class="bilm-navbar-skeleton-logo">Bilm</div>
+      <div class="bilm-navbar-skeleton-pill"></div>
+    </div>
+  `;
 }
 function loadAuthScript() {
   return new Promise((resolve, reject) => {
@@ -123,25 +208,32 @@ async function maybeActivateProxiedMode() {
   document.body.classList.add('has-fixed-navbar');
 
   const shadow = container.shadowRoot || container.attachShadow({ mode: 'open' });
+  renderNavbarSkeleton(shadow);
 
   let html = '';
   let css = '';
-  try {
-    const [htmlRes, cssRes] = await Promise.all([
-      fetch(withBase('/shared/navbar.html')),
-      fetch(withBase('/shared/navbar.css'))
-    ]);
+  const cachedAssets = readCachedNavbarAssets();
+  if (cachedAssets?.html && cachedAssets?.css) {
+    html = cachedAssets.html;
+    css = cachedAssets.css;
+  } else {
+    try {
+      const [htmlRes, cssRes] = await Promise.all([
+        fetch(withBase('/shared/navbar.html')),
+        fetch(withBase('/shared/navbar.css'))
+      ]);
 
-    if (!htmlRes.ok || !cssRes.ok) {
-      throw new Error(`Navbar assets failed to load (html=${htmlRes.status}, css=${cssRes.status})`);
+      if (!htmlRes.ok || !cssRes.ok) {
+        throw new Error(`Navbar assets failed to load (html=${htmlRes.status}, css=${cssRes.status})`);
+      }
+
+      html = await htmlRes.text();
+      css = await cssRes.text();
+      writeCachedNavbarAssets(html, css);
+    } catch (error) {
+      console.error('Failed to load navbar assets:', error);
+      return;
     }
-
-    html = await htmlRes.text();
-    css = await cssRes.text();
-  } catch (error) {
-    console.error('Failed to load navbar assets:', error);
-    document.body.classList.remove('has-fixed-navbar');
-    return;
   }
 
   shadow.innerHTML = `<style>${css}</style>${html}`;
