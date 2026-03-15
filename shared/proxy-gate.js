@@ -348,10 +348,40 @@
       .replace(/'/g, '&#39;');
   }
 
-  function openProxyInAboutBlank(targetUrl) {
+  function buildAboutBlankLaunchUrl(rawUrl, proxyBaseUrl) {
+    const fallbackDestination = 'https://watchbilm.org/';
+    let base;
+    try {
+      base = new URL(String(proxyBaseUrl || DEFAULT_PROXY_URL).trim() || DEFAULT_PROXY_URL);
+    } catch {
+      base = new URL(DEFAULT_PROXY_URL);
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(String(rawUrl || '').trim() || base.toString(), base.toString());
+    } catch {
+      parsed = base;
+    }
+
+    // Scramjet can throw same-origin guard errors when launched at bare proxy origin in nested frames.
+    const isProxyRoot = parsed.origin === base.origin
+      && (parsed.pathname === '/' || parsed.pathname === '' || parsed.pathname === '/index.html')
+      && !parsed.search
+      && !parsed.hash;
+
+    if (isProxyRoot) {
+      return new URL(`/scramjet/${encodeURIComponent(fallbackDestination)}`, base).toString();
+    }
+
+    return parsed.toString();
+  }
+
+  function openProxyInAboutBlank(targetUrl, proxyBaseUrl = DEFAULT_PROXY_URL) {
     const popup = window.open('about:blank', '_blank');
     if (!popup) return;
-    const safeTarget = escapeHtml(targetUrl);
+    const launchUrl = buildAboutBlankLaunchUrl(targetUrl, proxyBaseUrl);
+    const safeTarget = escapeHtml(launchUrl);
     try {
       popup.opener = null;
     } catch {
@@ -502,7 +532,7 @@
     });
 
     aboutBlankBtn.addEventListener('click', () => {
-      openProxyInAboutBlank(targetUrl);
+      openProxyInAboutBlank(frame.src || targetUrl, targetUrl);
     });
 
     exitBtn.addEventListener('click', () => {
