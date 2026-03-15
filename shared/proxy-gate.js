@@ -352,6 +352,11 @@
     const popup = window.open('about:blank', '_blank');
     if (!popup) return;
     const safeTarget = escapeHtml(targetUrl);
+    try {
+      popup.opener = null;
+    } catch {
+      // Ignore opener hardening failures.
+    }
     popup.document.open();
     popup.document.write(`<!doctype html>
 <html lang="en">
@@ -366,52 +371,19 @@
       height: 100%;
       overflow: hidden;
       background: #05050b;
-      color: #f8f8ff;
-      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
     }
-    .proxy-wrap {
+    #bilmProxyBlankFrame {
       position: fixed;
       inset: 0;
-      display: flex;
-      flex-direction: column;
-    }
-    .proxy-top {
-      flex: 0 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 8px 12px;
-      background: rgba(5, 5, 11, 0.95);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-      font-size: 12px;
-      font-weight: 600;
-    }
-    iframe {
-      flex: 1;
       border: 0;
       width: 100%;
       height: 100%;
       background: #05050b;
     }
-    .proxy-link {
-      color: #c4b5fd;
-      text-decoration: none;
-      max-width: 70vw;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   </style>
 </head>
 <body>
-  <div class="proxy-wrap">
-    <div class="proxy-top">
-      <span>Bilm Proxied</span>
-      <a class="proxy-link" href="${safeTarget}" target="_blank" rel="noreferrer noopener">${safeTarget}</a>
-    </div>
-    <iframe src="${safeTarget}" referrerpolicy="no-referrer" allow="fullscreen; clipboard-read; clipboard-write; encrypted-media"></iframe>
-  </div>
+  <iframe id="bilmProxyBlankFrame" src="${safeTarget}" referrerpolicy="no-referrer" allow="fullscreen; clipboard-read; clipboard-write; encrypted-media"></iframe>
 </body>
 </html>`);
     popup.document.close();
