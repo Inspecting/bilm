@@ -402,6 +402,11 @@
     'bilm-history-movies',
     'bilm-history-tv'
   ]);
+  const WATCH_HISTORY_LIST_KEYS = new Set([
+    'bilm-watch-history',
+    'bilm-history-movies',
+    'bilm-history-tv'
+  ]);
   const BACKUP_LOCAL_ALLOWLIST = [
     /^bilm-/,
     /^theme-/
@@ -651,6 +656,34 @@
     if (titleFallback) return `${mediaType}:${titleFallback}`;
 
     return '';
+  }
+
+  function isWatchHistoryListKey(listKey) {
+    return WATCH_HISTORY_LIST_KEYS.has(String(listKey || '').trim());
+  }
+
+  function getWatchHistoryItemKey(item) {
+    if (!item || typeof item !== 'object') return '';
+    const historyEntryId = String(item.historyEntryId || '').trim();
+    if (historyEntryId) return `history:${historyEntryId}`;
+
+    const updatedAt = getItemUpdatedAt(item);
+    const identityKey = String(item.key || '').trim();
+    if (identityKey) return `history:${identityKey}:${updatedAt}`;
+
+    const mediaType = String(item.type || 'media').trim().toLowerCase() || 'media';
+    const title = String(item.title || '').trim().toLowerCase();
+    const season = Number(item.season || 0) || 0;
+    const episode = Number(item.episode || 0) || 0;
+    if (!title) return '';
+    return `history:${mediaType}:${title}:s${season}:e${episode}:${updatedAt}`;
+  }
+
+  function getListItemKeyForList(listKey, item) {
+    if (isWatchHistoryListKey(listKey)) {
+      return getWatchHistoryItemKey(item);
+    }
+    return getListItemKey(item);
   }
 
   function getItemUpdatedAt(item) {
@@ -941,11 +974,11 @@
     }
   }
 
-  function buildListMapFromRaw(raw) {
+  function buildListMapFromRaw(storageKey, raw) {
     const list = readJsonArray(raw);
     const map = new Map();
     list.forEach((entry) => {
-      const itemKey = getListItemKey(entry);
+      const itemKey = getListItemKeyForList(storageKey, entry);
       if (!itemKey) return;
       map.set(itemKey, entry);
     });
@@ -954,8 +987,8 @@
 
   function buildListOperationsFromRaw(storageKey, beforeRaw, afterRaw, nowMs = Date.now()) {
     if (!MERGEABLE_LIST_KEYS.has(storageKey)) return [];
-    const beforeMap = buildListMapFromRaw(beforeRaw);
-    const afterMap = buildListMapFromRaw(afterRaw);
+    const beforeMap = buildListMapFromRaw(storageKey, beforeRaw);
+    const afterMap = buildListMapFromRaw(storageKey, afterRaw);
     const operations = [];
 
     afterMap.forEach((entry, itemKey) => {
@@ -1242,7 +1275,7 @@
       const byKey = new Map();
 
       [...baseList, ...incomingList].forEach((item) => {
-        const itemKey = getListItemKey(item);
+        const itemKey = getListItemKeyForList(storageKey, item);
         if (!itemKey) return;
         const existing = byKey.get(itemKey);
         if (!existing || getItemUpdatedAt(item) >= getItemUpdatedAt(existing)) {
@@ -2269,7 +2302,7 @@
       grouped.forEach((ops, listKey) => {
         const byKey = new Map();
         readJsonArray(localStorage.getItem(listKey)).forEach((entry) => {
-          const itemKey = getListItemKey(entry);
+          const itemKey = getListItemKeyForList(listKey, entry);
           if (!itemKey) return;
           byKey.set(itemKey, entry);
         });
@@ -3063,8 +3096,8 @@
           const afterRaw = this.getItem(key);
           const beforeList = readJsonArray(beforeRaw);
           const afterList = readJsonArray(afterRaw);
-          const beforeKeys = new Set(beforeList.map(getListItemKey).filter(Boolean));
-          const afterKeys = new Set(afterList.map(getListItemKey).filter(Boolean));
+          const beforeKeys = new Set(beforeList.map((item) => getListItemKeyForList(key, item)).filter(Boolean));
+          const afterKeys = new Set(afterList.map((item) => getListItemKeyForList(key, item)).filter(Boolean));
           const now = Date.now();
           const meta = readSyncMeta();
           const tombstones = mergeTombstoneMaps(meta?.listTombstones, {});
@@ -3075,7 +3108,7 @@
             }
           });
           afterList.forEach((item) => {
-            const itemKey = getListItemKey(item);
+            const itemKey = getListItemKeyForList(key, item);
             if (itemKey && tombstones[key]?.[itemKey]) {
               delete tombstones[key][itemKey];
             }

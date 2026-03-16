@@ -221,6 +221,8 @@ let similarLoading = false;
 let similarEnded = false;
 let similarActive = false;
 const similarMovieIds = new Set();
+const watchHistorySessionId = `whs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const watchHistorySessionFingerprints = new Set();
 
 
 async function waitForApiCooldown(url) {
@@ -600,7 +602,8 @@ function saveList(key, items) {
   const normalized = list
     .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
     .filter(Boolean);
-  storage.setJSON(key, mediaIdentity.dedupeCanonicalItems(normalized));
+  const shouldDedupe = key !== WATCH_HISTORY_KEY;
+  storage.setJSON(key, shouldDedupe ? mediaIdentity.dedupeCanonicalItems(normalized) : normalized);
 }
 
 function updateFavoriteButton(isFavorite) {
@@ -795,14 +798,41 @@ function toggleWatchLater() {
   updateWatchLaterButton(true);
 }
 
-function upsertHistoryItem(key, payload) {
-  const items = loadList(key);
+function upsertContinueWatchingItem(payload) {
+  const items = loadList(CONTINUE_KEY);
   const existingIndex = items.findIndex(item => item.key === payload.key);
   if (existingIndex >= 0) {
     items.splice(existingIndex, 1);
   }
   items.unshift(payload);
-  saveList(key, items);
+  saveList(CONTINUE_KEY, items);
+}
+
+function createWatchHistoryEntryId(fingerprint) {
+  const seed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const safeFingerprint = String(fingerprint || '').replace(/[^a-z0-9:_-]/gi, '-');
+  return `${watchHistorySessionId}-${safeFingerprint}-${seed}`;
+}
+
+function buildWatchHistoryFingerprint(payload) {
+  const key = String(payload?.key || '').trim();
+  if (key) return key;
+  const fallbackType = String(payload?.type || 'movie').trim().toLowerCase() || 'movie';
+  const fallbackTitle = String(payload?.title || 'unknown').trim().toLowerCase() || 'unknown';
+  return `${fallbackType}:${fallbackTitle}`;
+}
+
+function appendWatchHistorySessionEntry(payload) {
+  const fingerprint = buildWatchHistoryFingerprint(payload);
+  if (!fingerprint || watchHistorySessionFingerprints.has(fingerprint)) return;
+  const items = loadList(WATCH_HISTORY_KEY);
+  items.unshift({
+    ...payload,
+    historyEntryId: createWatchHistoryEntryId(fingerprint),
+    updatedAt: Date.now()
+  });
+  saveList(WATCH_HISTORY_KEY, items);
+  watchHistorySessionFingerprints.add(fingerprint);
 }
 
 function updateContinueWatching() {
@@ -811,8 +841,8 @@ function updateContinueWatching() {
   const payload = buildCurrentMediaItem();
   if (!payload) return;
 
-  upsertHistoryItem(CONTINUE_KEY, payload);
-  upsertHistoryItem(WATCH_HISTORY_KEY, payload);
+  upsertContinueWatchingItem(payload);
+  appendWatchHistorySessionEntry(payload);
 }
 
 function loadPlaybackNotes() {

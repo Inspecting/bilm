@@ -75,6 +75,12 @@ async function setThemeSettings(page, partial) {
   }, partial);
 }
 
+async function setLocalJson(page, key, value) {
+  await page.addInitScript(({ storageKey, payload }) => {
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+  }, { storageKey: key, payload: value });
+}
+
 test('core routes render', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   await page.goto('/home/');
@@ -171,4 +177,73 @@ test('settings shows proxied control for logged-in users and persists toggle', a
     return settings.proxied === true;
   });
   expect(storedProxied).toBe(true);
+});
+
+test('watch history keeps duplicate rows and delete removes only one entry', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  const now = Date.now();
+  await setLocalJson(page, 'bilm-watch-history', [
+    {
+      provider: 'tmdb',
+      type: 'movie',
+      key: 'tmdb:movie:447365',
+      id: 447365,
+      tmdbId: 447365,
+      title: 'Guardians of the Galaxy Vol. 3',
+      link: '/movies/show.html?id=447365',
+      updatedAt: now - 1000,
+      historyEntryId: 'history-entry-1'
+    },
+    {
+      provider: 'tmdb',
+      type: 'movie',
+      key: 'tmdb:movie:447365',
+      id: 447365,
+      tmdbId: 447365,
+      title: 'Guardians of the Galaxy Vol. 3',
+      link: '/movies/show.html?id=447365',
+      updatedAt: now,
+      historyEntryId: 'history-entry-2'
+    }
+  ]);
+
+  await page.goto('/settings/history/');
+  await page.click('#watchTabBtn');
+
+  await expect(page.locator('#historyList .history-item')).toHaveCount(2);
+  await expect(page.locator('#totalCount')).toHaveText('2');
+
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.locator('#historyList .history-item .delete-btn').first().click();
+
+  await expect(page.locator('#historyList .history-item')).toHaveCount(1);
+  await expect(page.locator('#totalCount')).toHaveText('1');
+});
+
+test('continue watching upsert remains deduped by media key', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  await page.goto('/movies/watch/viewer.html?id=447365', { waitUntil: 'domcontentloaded' });
+
+  const count = await page.evaluate(() => {
+    localStorage.setItem('bilm-continue-watching', '[]');
+    const update = window.upsertContinueWatchingItem;
+    if (typeof update !== 'function') return -1;
+    const now = Date.now();
+    const base = {
+      provider: 'tmdb',
+      type: 'movie',
+      key: 'tmdb:movie:447365',
+      id: 447365,
+      tmdbId: 447365,
+      title: 'Guardians of the Galaxy Vol. 3',
+      link: '/movies/show.html?id=447365',
+      updatedAt: now
+    };
+    update(base);
+    update({ ...base, updatedAt: now + 1000 });
+    const parsed = JSON.parse(localStorage.getItem('bilm-continue-watching') || '[]');
+    return Array.isArray(parsed) ? parsed.length : -1;
+  });
+
+  expect(count).toBe(1);
 });

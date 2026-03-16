@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const watchTypeButtons = [...document.querySelectorAll('.type-filter-btn')];
   const dateRangeButtons = [...document.querySelectorAll('#dateRangeFilters .filter-btn')];
+  const isWatchHistoryKey = (key) => String(key || '').trim() === WATCH_HISTORY_KEY;
 
   function loadList(key) {
     const list = storage.getJSON(key, []);
@@ -108,6 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const normalized = (Array.isArray(list) ? list : [])
       .map((item) => mediaIdentity.canonicalizeStoredItem(item) || item)
       .filter(Boolean);
+    if (isWatchHistoryKey(key)) {
+      storage.setJSON(key, normalized);
+      return;
+    }
     storage.setJSON(key, mediaIdentity.dedupeCanonicalItems(normalized));
   }
 
@@ -155,8 +160,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getItemId(item) {
-    const basis = state.activeType === 'search' ? item.query : `${item.title}-${item.type}-${item.season}-${item.episode}`;
-    return item.key || `${state.activeType}-${basis}-${getTimestamp(item)}`;
+    if (state.activeType === 'search') {
+      const query = String(item?.query || '').trim();
+      return `${state.activeType}-${query}-${getTimestamp(item)}`;
+    }
+    const historyEntryId = String(item?.historyEntryId || '').trim();
+    if (historyEntryId) return historyEntryId;
+    const key = String(item?.key || '').trim();
+    if (key) return `watch-${key}-${getTimestamp(item)}`;
+    const basis = `${item?.title}-${item?.type}-${item?.season}-${item?.episode}`;
+    return `watch-${basis}-${getTimestamp(item)}`;
   }
 
   function resolveMovieDetailsLink(item) {

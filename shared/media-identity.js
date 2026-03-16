@@ -23,6 +23,11 @@
     'bilm-history-movies',
     'bilm-history-tv'
   ]);
+  const WATCH_HISTORY_MIGRATION_KEYS = new Set([
+    'bilm-watch-history',
+    'bilm-history-movies',
+    'bilm-history-tv'
+  ]);
 
   function detectBasePath() {
     const pathname = String(global.location?.pathname || '/');
@@ -369,10 +374,16 @@
     return incoming.length;
   }
 
+  function isWatchHistoryListKey(storageKey) {
+    return WATCH_HISTORY_MIGRATION_KEYS.has(String(storageKey || '').trim());
+  }
+
   function migrateList(storageKey, quarantineEntries = []) {
     const current = readJsonArray(storageKey);
     if (!current.length) return { changed: false, quarantined: 0 };
-    const map = new Map();
+    const shouldDedupeByIdentity = !isWatchHistoryListKey(storageKey);
+    const map = shouldDedupeByIdentity ? new Map() : null;
+    const migrated = [];
     let quarantined = 0;
     current.forEach((item) => {
       const canonical = canonicalizeStoredItem(item);
@@ -387,6 +398,10 @@
         });
         return;
       }
+      if (!shouldDedupeByIdentity) {
+        migrated.push(canonical);
+        return;
+      }
       const currentEntry = map.get(key);
       const currentUpdatedAt = Number(currentEntry?.updatedAt || 0) || 0;
       const candidateUpdatedAt = Number(canonical.updatedAt || 0) || 0;
@@ -394,12 +409,14 @@
         map.set(key, canonical);
       }
     });
-    const migrated = [...map.values()].sort((a, b) => (Number(b?.updatedAt || 0) || 0) - (Number(a?.updatedAt || 0) || 0));
+    const output = shouldDedupeByIdentity
+      ? [...map.values()].sort((a, b) => (Number(b?.updatedAt || 0) || 0) - (Number(a?.updatedAt || 0) || 0))
+      : migrated;
     const before = JSON.stringify(current);
-    const after = JSON.stringify(migrated);
+    const after = JSON.stringify(output);
     const changed = before !== after;
     if (changed) {
-      writeJsonArray(storageKey, migrated);
+      writeJsonArray(storageKey, output);
     }
     return { changed, quarantined };
   }
@@ -430,7 +447,14 @@
     let restored = 0;
     grouped.forEach((items, storageKey) => {
       const existing = readJsonArray(storageKey);
-      const merged = dedupeCanonicalItems([...(Array.isArray(items) ? items : []), ...existing]);
+      const merged = isWatchHistoryListKey(storageKey)
+        ? [...(Array.isArray(items) ? items : []), ...existing]
+          .map((entry) => canonicalizeStoredItem(entry) || entry)
+          .filter((entry) => {
+            const identityKey = String(entry?.key || '').trim();
+            return Boolean(entry) && Boolean(identityKey);
+          })
+        : dedupeCanonicalItems([...(Array.isArray(items) ? items : []), ...existing]);
       writeJsonArray(storageKey, merged);
       restored += Array.isArray(items) ? items.length : 0;
     });
