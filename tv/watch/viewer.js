@@ -62,6 +62,7 @@ let seasonEpisodeMemory = {};
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const API_COOLDOWN_MS = 250;
+const METADATA_FETCH_TIMEOUT_MS = 6500;
 const apiCooldownByHost = new Map();
 const PROVIDER_HEALTH_KEY = 'bilm-player-provider-health-v1';
 const PROVIDER_HEALTH_TTL_MS = 6 * 60 * 1000;
@@ -233,7 +234,9 @@ let imdbId = null;
 let iframeLoadRequestId = 0;
 let lastIframeLoadAtMs = 0;
 let lastIframeLoadedSrc = '';
-const EMBED_LOAD_TIMEOUTS_MS = [15000, 22000, 30000];
+const EMBED_LOAD_TIMEOUTS_MS = [12000];
+const EMBED_LOAD_TIMEOUT_GRACE_MS = 700;
+const EMBED_LOAD_LATE_WINDOW_MS = 700;
 const EMBED_MASTER_COLOR_RETRY_SCHEDULE_MS = [100, 320, 800, 1700, 2800, 4200];
 let embedMasterLastColorSent = '';
 let similarPage = 1;
@@ -260,10 +263,28 @@ async function waitForApiCooldown(url) {
   }
   apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
 }
-async function fetchJSON(url) {
+
+async function fetchWithTimeout(url, { timeoutMs = 0, ...fetchOptions } = {}) {
+  const safeTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
+  if (!safeTimeoutMs) {
+    return fetch(url, fetchOptions);
+  }
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, safeTimeoutMs);
+  try {
+    return await fetch(url, { ...fetchOptions, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function fetchJSON(url, options = {}) {
+  const { timeoutMs = 0, ...fetchOptions } = options;
   try {
     await waitForApiCooldown(url);
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, { timeoutMs, ...fetchOptions });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch {
@@ -271,11 +292,13 @@ async function fetchJSON(url) {
   }
 }
 
-async function postJSON(url, body) {
+async function postJSON(url, body, options = {}) {
+  const { timeoutMs = 0 } = options;
   try {
     await waitForApiCooldown(url);
     const isAniList = /graphql\.anilist\.co/i.test(url);
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
+      timeoutMs,
       method: 'POST',
       headers: isAniList
         ? { 'Content-Type': 'text/plain;charset=UTF-8' }
@@ -968,55 +991,9 @@ function getServerLabel(server) {
   return String(item?.textContent || server || 'server').trim();
 }
 
-function getFallbackOrder() {
-  return isAnime ? [...animeSupportedServers] : [...supportedServers];
-}
-
-function findNextFallbackServer(fromServer) {
-  const order = getFallbackOrder();
-  if (!order.length) return null;
-  const startIndex = Math.max(0, order.indexOf(fromServer));
-  for (let offset = 1; offset <= order.length; offset += 1) {
-    const candidate = order[(startIndex + offset) % order.length];
-    if (!candidate || candidate === fromServer) continue;
-    if (isServerTemporarilyUnhealthy(candidate)) continue;
-    return candidate;
-  }
-  return null;
-}
-
-function resolveTvEmbedRequest({ ignoreHealth = false } = {}) {
-  let server = currentServer;
-  if (!isAnime && !ignoreHealth && isServerTemporarilyUnhealthy(server)) {
-    const skippedServer = server;
-    const fallbackHealthyServer = findNextFallbackServer(server);
-    if (fallbackHealthyServer) {
-      setActiveServer(fallbackHealthyServer);
-      server = fallbackHealthyServer;
-      console.info('[player] skipping temporarily unhealthy server', {
-        context: 'tv',
-        skippedServer,
-        fallbackServer: fallbackHealthyServer
-      });
-    }
-  }
-  let url = buildTvUrl(server);
-
-  if (!url) {
-    const fallbackServer = normalizeServer('vidsrc');
-    if (fallbackServer !== server) {
-      setActiveServer(fallbackServer);
-      server = fallbackServer;
-      url = buildTvUrl(server);
-      console.info('[player] deterministic fallback', {
-        context: 'tv',
-        reason: 'empty_url',
-        selectedServer: currentServer,
-        fallbackServer
-      });
-    }
-  }
-
+function resolveTvEmbedRequest() {
+  const server = currentServer;
+  const url = buildTvUrl(server);
   return { server, url };
 }
 
@@ -1037,8 +1014,8 @@ async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
     iframe,
     url,
     timeoutScheduleMs: EMBED_LOAD_TIMEOUTS_MS,
-    timeoutGraceMs: 2600,
-    lateLoadWindowMs: 5200,
+    timeoutGraceMs: EMBED_LOAD_TIMEOUT_GRACE_MS,
+    lateLoadWindowMs: EMBED_LOAD_LATE_WINDOW_MS,
     isCancelled: () => requestId !== iframeLoadRequestId,
     onAttempt: ({ attempt, timeoutMs }) => {
       console.info('[player] load attempt', {
@@ -1098,15 +1075,7 @@ async function loadTvEmbedUrlWithRetry({ requestId, url, server }) {
     return;
   }
 
-  const nextServer = isAnime ? null : findNextFallbackServer(server);
-  if (nextServer) {
-    setPlayerStatus(`Switching from ${serverLabel} to ${getServerLabel(nextServer)}…`, 'warning');
-    setActiveServer(nextServer);
-    updateIframe();
-    return;
-  }
-
-  setPlayerStatus(`We couldn't load ${serverLabel}. Retry or choose another server.`, 'error');
+  setPlayerStatus(`We couldn't load ${serverLabel}. Tap refresh or choose another server.`, 'error');
   console.error('[player] load exhausted', {
     context: 'tv',
     server,
@@ -1178,7 +1147,7 @@ function applyEmbedMasterAccentColor() {
   }, 120);
 }
 
-function updateIframe({ forceCurrentServer = false } = {}) {
+function updateIframe() {
   normalizeSeasonEpisodeState();
   saveProgress();
 
@@ -1191,7 +1160,7 @@ function updateIframe({ forceCurrentServer = false } = {}) {
     return;
   }
 
-  const { server, url } = resolveTvEmbedRequest({ ignoreHealth: forceCurrentServer });
+  const { server, url } = resolveTvEmbedRequest();
   if (!url) {
     iframe.removeAttribute('sandbox');
     iframe.src = '';
@@ -1217,7 +1186,7 @@ function refreshCurrentServer() {
   markServerHealth(currentServer, true, 'manual-refresh');
   setPlayerStatus(`Refreshing ${getServerLabel(currentServer)}…`);
   closeAllDropdowns();
-  updateIframe({ forceCurrentServer: true });
+  updateIframe();
 }
 
 function populateSeasons(total) {
@@ -1445,7 +1414,11 @@ async function fetchTMDBData() {
       }
     `;
 
-    const payload = await postJSON('https://storage-api.watchbilm.org/media/anilist', { query, variables: { id: Number(animeId) } });
+    const payload = await postJSON(
+      'https://storage-api.watchbilm.org/media/anilist',
+      { query, variables: { id: Number(animeId) } },
+      { timeoutMs: METADATA_FETCH_TIMEOUT_MS }
+    );
     const details = payload?.data?.Media;
     const title = details?.title?.english || details?.title?.romaji || 'Unknown anime';
     const year = details?.startDate?.year || 'N/A';
@@ -1496,15 +1469,17 @@ async function fetchTMDBData() {
 
   try {
     // First get external IDs (like imdb_id)
-    const [externalData, contentRatings] = await Promise.all([
-      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/external_ids`),
-      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/content_ratings`)
+    const [externalResult, contentRatingsResult] = await Promise.allSettled([
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/external_ids`, { timeoutMs: METADATA_FETCH_TIMEOUT_MS }),
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}/content_ratings`, { timeoutMs: METADATA_FETCH_TIMEOUT_MS })
     ]);
+    const externalData = externalResult.status === 'fulfilled' ? externalResult.value : null;
+    const contentRatings = contentRatingsResult.status === 'fulfilled' ? contentRatingsResult.value : null;
     imdbId = externalData?.imdb_id || null;
     const certification = pickShowCertification(contentRatings?.results);
 
     // Get season info
-    const details = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}`);
+    const details = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/tv/${tmdbId}`, { timeoutMs: METADATA_FETCH_TIMEOUT_MS });
     if (!details) {
       mediaTitle.textContent = 'Unknown title';
       mediaMeta.textContent = 'Release date unavailable';
@@ -1577,6 +1552,37 @@ async function fetchTMDBData() {
     }
   } catch (e) {
     console.error('Error fetching TMDB data:', e);
+    mediaTitle.textContent = 'Unknown title';
+    mediaMeta.textContent = 'Release date unavailable';
+    totalSeasons = 1;
+    episodesPerSeason = { 1: 1 };
+    currentSeason = 1;
+    currentEpisode = 1;
+    seasonEpisodeMemory = { 1: 1 };
+    populateSeasons(totalSeasons);
+    populateEpisodes(episodesPerSeason[1]);
+    updateControls();
+    mediaDetails = {
+      id: Number(tmdbId || 0) || 0,
+      tmdbId: Number(tmdbId || 0) || 0,
+      title: 'Unknown title',
+      firstAirDate: '',
+      year: 'N/A',
+      poster: 'https://via.placeholder.com/140x210?text=No+Image',
+      rating: null,
+      genreIds: [],
+      genreSlugs: [],
+      link: `${appWithBase('/tv/show.html')}?id=${tmdbId}`,
+      certification: '',
+      provider: 'tmdb'
+    };
+    syncFavoriteAndWatchLaterButtons();
+    loadPlaybackNote();
+    updateIframe();
+    startContinueWatchingTimer();
+    if (moreLikeStatus) {
+      setMoreLikeStatus('Recommendations unavailable right now.');
+    }
   }
 }
 

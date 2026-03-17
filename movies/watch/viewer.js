@@ -52,6 +52,7 @@ let currentSubtitle = 'off';
 let continueWatchingEnabled = initialSettings?.continueWatching !== false;
 let mediaDetails = null;
 const API_COOLDOWN_MS = 250;
+const METADATA_FETCH_TIMEOUT_MS = 6500;
 const apiCooldownByHost = new Map();
 const PROVIDER_HEALTH_KEY = 'bilm-player-provider-health-v1';
 const PROVIDER_HEALTH_TTL_MS = 6 * 60 * 1000;
@@ -179,7 +180,9 @@ let imdbId = null;
 let iframeLoadRequestId = 0;
 let lastIframeLoadAtMs = 0;
 let lastIframeLoadedSrc = '';
-const EMBED_LOAD_TIMEOUTS_MS = [15000, 22000, 30000];
+const EMBED_LOAD_TIMEOUTS_MS = [12000];
+const EMBED_LOAD_TIMEOUT_GRACE_MS = 700;
+const EMBED_LOAD_LATE_WINDOW_MS = 700;
 const EMBED_MASTER_COLOR_RETRY_SCHEDULE_MS = [100, 320, 800, 1700, 2800, 4200];
 let embedMasterLastColorSent = '';
 const CONTINUE_KEY = 'bilm-continue-watching';
@@ -240,10 +243,28 @@ async function waitForApiCooldown(url) {
   }
   apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
 }
-async function fetchJSON(url) {
+
+async function fetchWithTimeout(url, { timeoutMs = 0, ...fetchOptions } = {}) {
+  const safeTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
+  if (!safeTimeoutMs) {
+    return fetch(url, fetchOptions);
+  }
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, safeTimeoutMs);
+  try {
+    return await fetch(url, { ...fetchOptions, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+async function fetchJSON(url, options = {}) {
+  const { timeoutMs = 0, ...fetchOptions } = options;
   try {
     await waitForApiCooldown(url);
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url, { timeoutMs, ...fetchOptions });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch {
@@ -251,11 +272,13 @@ async function fetchJSON(url) {
   }
 }
 
-async function postJSON(url, body) {
+async function postJSON(url, body, options = {}) {
+  const { timeoutMs = 0 } = options;
   try {
     await waitForApiCooldown(url);
     const isAniList = /graphql\.anilist\.co/i.test(url);
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
+      timeoutMs,
       method: 'POST',
       headers: isAniList
         ? { 'Content-Type': 'text/plain;charset=UTF-8' }
@@ -344,55 +367,9 @@ function getServerLabel(server) {
   return String(item?.textContent || server || 'server').trim();
 }
 
-function getFallbackOrder() {
-  return isAnime ? [...animeSupportedServers] : [...supportedServers];
-}
-
-function findNextFallbackServer(fromServer) {
-  const order = getFallbackOrder();
-  if (!order.length) return null;
-  const startIndex = Math.max(0, order.indexOf(fromServer));
-  for (let offset = 1; offset <= order.length; offset += 1) {
-    const candidate = order[(startIndex + offset) % order.length];
-    if (!candidate || candidate === fromServer) continue;
-    if (isServerTemporarilyUnhealthy(candidate)) continue;
-    return candidate;
-  }
-  return null;
-}
-
-function resolveMovieEmbedRequest({ ignoreHealth = false } = {}) {
-  let server = currentServer;
-  if (!isAnime && !ignoreHealth && isServerTemporarilyUnhealthy(server)) {
-    const skippedServer = server;
-    const fallbackHealthyServer = findNextFallbackServer(server);
-    if (fallbackHealthyServer) {
-      setActiveServer(fallbackHealthyServer);
-      server = fallbackHealthyServer;
-      console.info('[player] skipping temporarily unhealthy server', {
-        context: 'movie',
-        skippedServer,
-        fallbackServer: fallbackHealthyServer
-      });
-    }
-  }
-  let url = buildMovieUrl(server);
-
-  if (!url) {
-    const fallbackServer = normalizeServer('vidsrc');
-    if (fallbackServer !== server) {
-      setActiveServer(fallbackServer);
-      server = fallbackServer;
-      url = buildMovieUrl(server);
-      console.info('[player] deterministic fallback', {
-        context: 'movie',
-        reason: 'empty_url',
-        selectedServer: currentServer,
-        fallbackServer
-      });
-    }
-  }
-
+function resolveMovieEmbedRequest() {
+  const server = currentServer;
+  const url = buildMovieUrl(server);
   return { server, url };
 }
 
@@ -413,8 +390,8 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
     iframe,
     url,
     timeoutScheduleMs: EMBED_LOAD_TIMEOUTS_MS,
-    timeoutGraceMs: 2600,
-    lateLoadWindowMs: 5200,
+    timeoutGraceMs: EMBED_LOAD_TIMEOUT_GRACE_MS,
+    lateLoadWindowMs: EMBED_LOAD_LATE_WINDOW_MS,
     isCancelled: () => requestId !== iframeLoadRequestId,
     onAttempt: ({ attempt, timeoutMs }) => {
       console.info('[player] load attempt', {
@@ -474,15 +451,7 @@ async function loadMovieEmbedUrlWithRetry({ requestId, url, server }) {
     return;
   }
 
-  const nextServer = isAnime ? null : findNextFallbackServer(server);
-  if (nextServer) {
-    setPlayerStatus(`Switching from ${serverLabel} to ${getServerLabel(nextServer)}…`, 'warning');
-    setActiveServer(nextServer);
-    updateIframe();
-    return;
-  }
-
-  setPlayerStatus(`We couldn't load ${serverLabel}. Retry or choose another server.`, 'error');
+  setPlayerStatus(`We couldn't load ${serverLabel}. Tap refresh or choose another server.`, 'error');
   console.error('[player] load exhausted', {
     context: 'movie',
     server,
@@ -554,7 +523,7 @@ function applyEmbedMasterAccentColor() {
   }, 120);
 }
 
-function updateIframe({ forceCurrentServer = false } = {}) {
+function updateIframe() {
   const idToUse = isAnime ? animeId : (imdbId || contentId);
   if (!idToUse) {
     console.warn('No valid ID parameter provided.');
@@ -564,7 +533,7 @@ function updateIframe({ forceCurrentServer = false } = {}) {
     return;
   }
 
-  const { server, url } = resolveMovieEmbedRequest({ ignoreHealth: forceCurrentServer });
+  const { server, url } = resolveMovieEmbedRequest();
   if (!url) {
     iframe.removeAttribute('sandbox');
     iframe.src = '';
@@ -588,7 +557,7 @@ function refreshCurrentServer() {
   markServerHealth(currentServer, true, 'manual-refresh');
   setPlayerStatus(`Refreshing ${getServerLabel(currentServer)}…`);
   closeAllDropdowns();
-  updateIframe({ forceCurrentServer: true });
+  updateIframe();
 }
 
 function loadList(key) {
@@ -932,7 +901,11 @@ async function loadMovieDetails() {
         }
       }
     `;
-    const payload = await postJSON('https://storage-api.watchbilm.org/media/anilist', { query, variables: { id: Number(animeId) } });
+    const payload = await postJSON(
+      'https://storage-api.watchbilm.org/media/anilist',
+      { query, variables: { id: Number(animeId) } },
+      { timeoutMs: METADATA_FETCH_TIMEOUT_MS }
+    );
     const details = payload?.data?.Media;
     const title = details?.title?.english || details?.title?.romaji || 'Unknown anime';
     const year = details?.startDate?.year || 'N/A';
@@ -968,24 +941,21 @@ async function loadMovieDetails() {
   }
 
   try {
-    const [response, externalResponse, releaseDatesResponse] = await Promise.all([
-      fetch(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}`),
-      fetch(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/external_ids`),
-      fetch(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/release_dates`)
+    const [detailsResult, externalResult, releaseDatesResult] = await Promise.allSettled([
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}`, { timeoutMs: METADATA_FETCH_TIMEOUT_MS }),
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/external_ids`, { timeoutMs: METADATA_FETCH_TIMEOUT_MS }),
+      fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/movie/${contentId}/release_dates`, { timeoutMs: METADATA_FETCH_TIMEOUT_MS })
     ]);
-    if (!response.ok) {
-      throw new Error('Failed to load movie details');
-    }
-    const details = await response.json();
-    const external = externalResponse.ok ? await externalResponse.json() : {};
-    const releaseDates = releaseDatesResponse.ok ? await releaseDatesResponse.json() : {};
+    const details = detailsResult.status === 'fulfilled' ? detailsResult.value : null;
+    const external = externalResult.status === 'fulfilled' ? (externalResult.value || {}) : {};
+    const releaseDates = releaseDatesResult.status === 'fulfilled' ? (releaseDatesResult.value || {}) : {};
     const certification = pickMovieCertification(releaseDates?.results);
     imdbId = external.imdb_id || null;
-    const title = details.title || details.original_title || 'Unknown title';
-    const releaseDate = details.release_date || '';
+    const title = details?.title || details?.original_title || 'Unknown title';
+    const releaseDate = details?.release_date || '';
     const displayDate = releaseDate ? new Date(releaseDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Release date unavailable';
     const year = releaseDate ? releaseDate.slice(0, 4) : 'N/A';
-    const poster = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image';
+    const poster = details?.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : 'https://via.placeholder.com/140x210?text=No+Image';
 
     mediaTitle.textContent = title;
     mediaMeta.textContent = displayDate;
@@ -997,10 +967,10 @@ async function loadMovieDetails() {
       releaseDate,
       year,
       poster,
-      genreIds: details.genres?.map(genre => genre.id) || [],
-      genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
+      genreIds: details?.genres?.map(genre => genre.id) || [],
+      genreSlugs: details?.genres?.map(genre => toSlug(genre.name)) || [],
       link: `${appWithBase('/movies/show.html')}?id=${contentId}`,
-      rating: details.vote_average,
+      rating: details?.vote_average ?? null,
       certification,
       provider: 'tmdb'
     };
@@ -1009,18 +979,40 @@ async function loadMovieDetails() {
     loadPlaybackNote();
     updateIframe();
     startContinueWatchingTimer();
-    if (moreLikeGrid) {
+    if (details && moreLikeGrid) {
       moreLikeGrid.innerHTML = '';
       similarMovieIds.clear();
       similarPage = 1;
       similarEnded = false;
       loadMoreLikeMovies();
+    } else if (moreLikeStatus) {
+      setMoreLikeStatus('Recommendations unavailable right now.');
     }
   } catch (error) {
     console.error('Error fetching movie details:', error);
     mediaTitle.textContent = 'Unknown title';
     mediaMeta.textContent = 'Release date unavailable';
+    imdbId = null;
+    mediaDetails = {
+      id: Number(contentId || 0) || 0,
+      title: 'Unknown title',
+      releaseDate: '',
+      year: 'N/A',
+      poster: 'https://via.placeholder.com/140x210?text=No+Image',
+      genreIds: [],
+      genreSlugs: [],
+      link: `${appWithBase('/movies/show.html')}?id=${contentId}`,
+      rating: null,
+      certification: '',
+      provider: 'tmdb'
+    };
+    syncFavoriteAndWatchLaterButtons();
+    loadPlaybackNote();
     updateIframe();
+    startContinueWatchingTimer();
+    if (moreLikeStatus) {
+      setMoreLikeStatus('Recommendations unavailable right now.');
+    }
   }
 }
 

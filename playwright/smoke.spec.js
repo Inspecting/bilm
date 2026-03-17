@@ -109,6 +109,72 @@ test('watch player menus are mutually exclusive', async ({ page }) => {
   await expect(page.locator('#subtitleDropdown')).toBeHidden();
 });
 
+test('watch player keeps selected server on embed timeout and keeps refresh available', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/movie/447365', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 447365,
+        title: 'Guardians of the Galaxy Vol. 3',
+        release_date: '2023-05-05',
+        poster_path: null,
+        vote_average: 8.0,
+        genres: [{ id: 878, name: 'Science Fiction' }]
+      })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/movie/447365/external_ids', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ imdb_id: 'tt6791350' })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/movie/447365/release_dates', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route(/https:\/\/embedmaster\.link\/.*/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 15_000));
+    await route.abort();
+  });
+
+  await page.goto('/movies/watch/viewer.html?id=447365', { waitUntil: 'domcontentloaded' });
+
+  await expect(page.locator('#playerStatus')).toContainText('Tap refresh or choose another server.', { timeout: 20_000 });
+  await expect(page.locator('#serverDropdown .serverDropdownItem.active')).toHaveAttribute('data-server', 'embedmaster');
+  await expect(page.locator('#refreshBtn')).toBeVisible();
+  await expect(page.locator('#refreshBtn')).toBeEnabled();
+});
+
+test('tv watch still attempts iframe load when tmdb metadata fails', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+
+  await page.route(/https:\/\/storage-api\.watchbilm\.org\/media\/tmdb\/tv\/1399.*/, async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'metadata unavailable' })
+    });
+  });
+
+  await page.goto('/tv/watch/viewer.html?id=1399', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#videoPlayer')).toHaveAttribute(
+    'src',
+    /https:\/\/embedmaster\.link\/830gqxyfskjlsnbq\/tv\/1399\/1\/1\?bilm_refresh=/,
+    { timeout: 15_000 }
+  );
+});
+
 test('anime watch keeps subtitles disabled', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   await page.goto('/tv/watch/viewer.html?anime=1&aid=21459&type=tv');
