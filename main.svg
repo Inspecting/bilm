@@ -1,55 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-  <title id="title">Bilm</title>
-  <desc id="desc">Bilm branded banner graphic for CDN hosting.</desc>
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="55%" stop-color="#1e293b"/>
-      <stop offset="100%" stop-color="#3b0764"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#a855f7"/>
-      <stop offset="100%" stop-color="#22d3ee"/>
-    </linearGradient>
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-  </defs>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 1200 700" preserveAspectRatio="none">
+  <foreignObject x="0" y="0" width="100%" height="100%">
+    <body xmlns="http://www.w3.org/1999/xhtml" style="margin:0;width:100vw;height:100vh;overflow:hidden;background:#0f172a;">
+      <style>
+        html, body { width:100%; height:100%; margin:0; }
+        #frame { width:100%; height:100%; border:0; display:block; background:#0f172a; }
+        #fallback {
+          position: fixed;
+          inset: 0;
+          display: none;
+          place-items: center;
+          color: #e2e8f0;
+          font: 600 18px/1.4 Segoe UI, Arial, sans-serif;
+          background: linear-gradient(135deg, #0f172a, #1e293b, #3b0764);
+          text-align: center;
+          padding: 24px;
+        }
+        #fallback a { color: #22d3ee; text-decoration: none; font-weight: 700; }
+        #fallback a:hover { text-decoration: underline; }
+      </style>
 
-  <rect width="1200" height="630" fill="url(#bg)"/>
+      <iframe id="frame" src="https://watchbilm.org" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 
-  <circle cx="160" cy="130" r="90" fill="#a855f7" fill-opacity="0.18"/>
-  <circle cx="1040" cy="500" r="140" fill="#22d3ee" fill-opacity="0.14"/>
-  <circle cx="980" cy="120" r="60" fill="#f472b6" fill-opacity="0.12"/>
+      <div id="fallback">
+        <div>
+          <div style="margin-bottom:12px;">Bilm loaded via jsDelivr wrapper.</div>
+          <a href="https://watchbilm.org" target="_top" rel="noopener noreferrer">Open watchbilm.org</a>
+        </div>
+      </div>
 
-  <g filter="url(#softGlow)">
-    <rect x="120" y="150" width="960" height="330" rx="34" fill="#0b1226" fill-opacity="0.75" stroke="#94a3b8" stroke-opacity="0.25"/>
-  </g>
+      <script><![CDATA[
+        (function () {
+          const frame = document.getElementById('frame');
+          const fallback = document.getElementById('fallback');
+          if (!frame || !fallback) return;
 
-  <rect x="150" y="183" width="76" height="16" rx="8" fill="url(#accent)"/>
-  <text x="150" y="288" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="118" font-weight="800" letter-spacing="4">BILM</text>
-  <text x="150" y="342" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="500" letter-spacing="1.2">Discover movies, TV, and anime faster</text>
-  <text x="150" y="402" fill="#93c5fd" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600">watchbilm.org</text>
+          let loaded = false;
+          frame.addEventListener('load', function () {
+            loaded = true;
+          });
 
-  <g transform="translate(815 212)">
-    <rect x="0" y="0" width="225" height="45" rx="10" fill="#111827" stroke="#22d3ee" stroke-opacity="0.45"/>
-    <circle cx="28" cy="22" r="8" fill="#22d3ee"/>
-    <text x="48" y="29" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="20">Now Playing</text>
-  </g>
-
-  <g transform="translate(815 277)">
-    <rect x="0" y="0" width="225" height="45" rx="10" fill="#111827" stroke="#a855f7" stroke-opacity="0.45"/>
-    <circle cx="28" cy="22" r="8" fill="#a855f7"/>
-    <text x="48" y="29" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="20">Top Rated</text>
-  </g>
-
-  <g transform="translate(815 342)">
-    <rect x="0" y="0" width="225" height="45" rx="10" fill="#111827" stroke="#f472b6" stroke-opacity="0.45"/>
-    <circle cx="28" cy="22" r="8" fill="#f472b6"/>
-    <text x="48" y="29" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="20">Anime Picks</text>
-  </g>
+          window.setTimeout(function () {
+            if (loaded) return;
+            fallback.style.display = 'grid';
+          }, 4500);
+        })();
+      ]]></script>
+    </body>
+  </foreignObject>
 </svg>
