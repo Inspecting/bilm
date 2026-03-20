@@ -30,10 +30,25 @@
   ]);
 
   function detectBasePath() {
-    const pathname = String(global.location?.pathname || '/');
-    const parts = pathname.split('/').filter(Boolean);
-    if (!parts.length || APP_ROOTS.has(parts[0])) return '';
-    if (parts.length > 1 && APP_ROOTS.has(parts[1])) return `/${parts[0]}`;
+    const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    if (!parts.length) return '';
+    
+    const appRootIndex = parts.findIndex((part) => appRoots.has(part));
+    if (appRootIndex >= 0) {
+      if (appRootIndex === 0) return '';
+      return `/${parts.slice(0, appRootIndex).join('/')}`;
+    }
+    
+    if (parts[0] === 'gh' && parts.length >= 3) {
+      return `/${parts.slice(0, 3).join('/')}`;
+    }
+    if (parts[0] === 'npm' && parts.length >= 2) {
+      return `/${parts.slice(0, 2).join('/')}`;
+    }
+    if (parts.length === 1) {
+      return `/${parts[0]}`;
+    }
     return '';
   }
 

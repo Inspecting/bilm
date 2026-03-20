@@ -1,14 +1,35 @@
 function detectBasePath() {
-  const parts = window.location.pathname.split('/').filter(Boolean);
   const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
-  if (!parts.length || appRoots.has(parts[0])) return '';
-  if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  if (!parts.length) return '';
+  
+  const appRootIndex = parts.findIndex((part) => appRoots.has(part));
+  if (appRootIndex >= 0) {
+    if (appRootIndex === 0) return '';
+    return `/${parts.slice(0, appRootIndex).join('/')}`;
+  }
+  
+  if (parts[0] === 'gh' && parts.length >= 3) {
+    return `/${parts.slice(0, 3).join('/')}`;
+  }
+  if (parts[0] === 'npm' && parts.length >= 2) {
+    return `/${parts.slice(0, 2).join('/')}`;
+  }
+  if (parts.length === 1) {
+    return `/${parts[0]}`;
+  }
   return '';
 }
 
 function withBase(path) {
   const normalized = path.startsWith('/') ? path : `/${path}`;
   return `${detectBasePath()}${normalized}`;
+}
+
+function getApiOrigin() {
+  return String(window.location.hostname || '').toLowerCase() === 'cdn.jsdelivr.net'
+    ? 'https://watchbilm.org'
+    : window.location.origin;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -402,7 +423,8 @@ document.addEventListener('DOMContentLoaded', () => {
     runHealthCheckBtn.disabled = true;
     healthCheckStatus.textContent = 'Running checks...';
     try {
-      const response = await fetch(withBase('/api/health/check'), {
+      const healthCheckUrl = new URL('/api/health/check', getApiOrigin()).toString();
+      const response = await fetch(healthCheckUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         cache: 'no-store',

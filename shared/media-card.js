@@ -5,10 +5,25 @@
   const APP_ROOT_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
 
   function detectBasePath() {
-    const parts = window.location.pathname.split('/').filter(Boolean);
     const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
-    if (!parts.length || appRoots.has(parts[0])) return '';
-    if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    if (!parts.length) return '';
+    
+    const appRootIndex = parts.findIndex((part) => appRoots.has(part));
+    if (appRootIndex >= 0) {
+      if (appRootIndex === 0) return '';
+      return `/${parts.slice(0, appRootIndex).join('/')}`;
+    }
+    
+    if (parts[0] === 'gh' && parts.length >= 3) {
+      return `/${parts.slice(0, 3).join('/')}`;
+    }
+    if (parts[0] === 'npm' && parts.length >= 2) {
+      return `/${parts.slice(0, 2).join('/')}`;
+    }
+    if (parts.length === 1) {
+      return `/${parts[0]}`;
+    }
     return '';
   }
 
@@ -26,6 +41,12 @@
   function withBase(pathname = '') {
     const normalizedPath = String(pathname || '').startsWith('/') ? String(pathname) : `/${String(pathname || '')}`;
     return `${detectBasePath()}${normalizedPath}`;
+  }
+
+  function getApiOrigin() {
+    return String(window.location.hostname || '').toLowerCase() === 'cdn.jsdelivr.net'
+      ? 'https://watchbilm.org'
+      : window.location.origin;
   }
 
   function normalizeCardLink(rawLink) {
@@ -114,7 +135,7 @@
         const primaryUrl = `https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}`;
         let response = await fetch(primaryUrl);
         if (!response.ok) {
-          const backupUrl = `${window.location.origin}${withBase(`/api/tmdb/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}`)}`;
+          const backupUrl = new URL(`/api/tmdb/${mediaType}/${encodeURIComponent(mediaId)}/${endpoint}`, getApiOrigin()).toString();
           console.info('[api-fallback] media-card certification using backup provider', {
             primaryUrl,
             backupUrl

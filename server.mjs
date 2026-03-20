@@ -56,6 +56,13 @@ const RATE_LIMITS = Object.freeze({
     windowMs: parseEnvInt('HEALTH_CHECK_RATE_WINDOW_MS', 60_000, { min: 1000, max: 3_600_000 })
   })
 });
+const CORS_ALLOWED_ORIGINS = new Set([
+  'https://watchbilm.org',
+  'https://www.watchbilm.org',
+  'https://bilm.fly.dev',
+  'https://inspecting.github.io',
+  'https://cdn.jsdelivr.net'
+]);
 
 const BASE_SECURITY_HEADERS = Object.freeze({
   'x-content-type-options': 'nosniff',
@@ -143,6 +150,62 @@ function getClientIp(req) {
   return normalizeClientIp(req.socket?.remoteAddress) || 'unknown';
 }
 
+function normalizeRequestOrigin(rawOrigin) {
+  const normalized = String(rawOrigin || '').trim();
+  if (!normalized) return '';
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+    return `${parsed.protocol}//${parsed.host}`.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function appendVary(existingValue, nextValue) {
+  const existing = String(existingValue || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const normalizedExisting = new Set(existing.map((part) => part.toLowerCase()));
+  if (!normalizedExisting.has(String(nextValue || '').toLowerCase())) {
+    existing.push(nextValue);
+  }
+  return existing.join(', ');
+}
+
+function buildCorsHeaders(req, {
+  methods = '',
+  defaultAllowHeaders = 'content-type',
+  includePreflight = false
+} = {}) {
+  const origin = normalizeRequestOrigin(req.headers.origin);
+  if (!origin || !CORS_ALLOWED_ORIGINS.has(origin)) return {};
+
+  const corsHeaders = {
+    'access-control-allow-origin': origin,
+    vary: 'Origin'
+  };
+
+  if (!includePreflight) return corsHeaders;
+
+  if (methods) {
+    corsHeaders['access-control-allow-methods'] = methods;
+  }
+
+  const requestedHeaders = String(req.headers['access-control-request-headers'] || '').trim().toLowerCase();
+  if (requestedHeaders && /^[a-z0-9,_ -]+$/.test(requestedHeaders)) {
+    corsHeaders['access-control-allow-headers'] = requestedHeaders;
+    corsHeaders.vary = appendVary(corsHeaders.vary, 'Access-Control-Request-Headers');
+  } else if (defaultAllowHeaders) {
+    corsHeaders['access-control-allow-headers'] = defaultAllowHeaders;
+  }
+  corsHeaders['access-control-max-age'] = '600';
+  corsHeaders.vary = appendVary(corsHeaders.vary, 'Access-Control-Request-Method');
+
+  return corsHeaders;
+}
+
 function sweepRateLimitStore(nowMs) {
   if (nowMs < nextRateLimitSweepAtMs && RATE_LIMIT_STORE.size < RATE_LIMIT_STORE_SOFT_CAP) return;
 
@@ -209,7 +272,7 @@ function rateLimitHeaders(rateLimitState) {
   };
 }
 
-function enforceRateLimit(req, res, bucketName) {
+function enforceRateLimit(req, res, bucketName, extraHeaders = {}) {
   const rateLimitState = consumeRateLimit(bucketName, req);
   const headers = rateLimitHeaders(rateLimitState);
   if (rateLimitState.allowed) {
@@ -224,6 +287,7 @@ function enforceRateLimit(req, res, bucketName) {
     code: `${bucketName}_rate_limited`,
     retryAfterSeconds: rateLimitState.retryAfterSeconds
   }, {
+    ...extraHeaders,
     ...headers,
     'cache-control': 'no-store',
     'retry-after': String(rateLimitState.retryAfterSeconds)
@@ -523,8 +587,15 @@ async function readRequestBody(req, maxBytes = 256 * 1024) {
 }
 
 async function handleAniListProxy(req, res) {
+  const corsHeaders = buildCorsHeaders(req);
   if (req.method === 'OPTIONS') {
+    const preflightCorsHeaders = buildCorsHeaders(req, {
+      methods: 'POST, OPTIONS',
+      defaultAllowHeaders: 'content-type',
+      includePreflight: true
+    });
     sendNoContent(res, 204, {
+      ...preflightCorsHeaders,
       allow: 'POST, OPTIONS',
       'cache-control': 'no-store'
     });
@@ -533,18 +604,20 @@ async function handleAniListProxy(req, res) {
 
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'Method Not Allowed' }, {
+      ...corsHeaders,
       allow: 'POST, OPTIONS',
       'cache-control': 'no-store'
     });
     return;
   }
 
-  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'anilist');
+  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'anilist', corsHeaders);
   if (blocked) return;
 
   const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   if (contentType !== 'application/json') {
     sendJson(res, 415, { error: 'Content-Type must be application/json' }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -555,6 +628,7 @@ async function handleAniListProxy(req, res) {
     const body = await readRequestBody(req, 128 * 1024);
     if (!body.trim()) {
       sendJson(res, 400, { error: 'Request body is required' }, {
+        ...corsHeaders,
         ...rateLimitHeadersMap,
         'cache-control': 'no-store'
       });
@@ -564,6 +638,7 @@ async function handleAniListProxy(req, res) {
     const sanitizedPayload = sanitizeAniListPayload(body);
     if (sanitizedPayload.error) {
       sendJson(res, 400, { error: sanitizedPayload.error }, {
+        ...corsHeaders,
         ...rateLimitHeadersMap,
         'cache-control': 'no-store'
       });
@@ -588,6 +663,7 @@ async function handleAniListProxy(req, res) {
     const payload = await upstream.text();
     res.writeHead(upstream.status, {
       ...BASE_SECURITY_HEADERS,
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'content-type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
       'cache-control': 'no-store'
@@ -596,6 +672,7 @@ async function handleAniListProxy(req, res) {
   } catch (error) {
     if (error?.statusCode === 413) {
       sendJson(res, 413, { error: 'Payload too large' }, {
+        ...corsHeaders,
         ...rateLimitHeadersMap,
         'cache-control': 'no-store'
       });
@@ -603,12 +680,14 @@ async function handleAniListProxy(req, res) {
     }
     if (error?.name === 'AbortError') {
       sendJson(res, 504, { error: 'AniList upstream timed out' }, {
+        ...corsHeaders,
         ...rateLimitHeadersMap,
         'cache-control': 'no-store'
       });
       return;
     }
     sendJson(res, 502, { error: 'AniList proxy request failed' }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -616,15 +695,31 @@ async function handleAniListProxy(req, res) {
 }
 
 async function handleTmdbProxy(req, res, pathname, searchParams) {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    sendJson(res, 405, { error: 'Method Not Allowed' }, {
-      allow: 'GET, HEAD',
+  const corsHeaders = buildCorsHeaders(req);
+  if (req.method === 'OPTIONS') {
+    const preflightCorsHeaders = buildCorsHeaders(req, {
+      methods: 'GET, HEAD, OPTIONS',
+      defaultAllowHeaders: 'accept, content-type',
+      includePreflight: true
+    });
+    sendNoContent(res, 204, {
+      ...preflightCorsHeaders,
+      allow: 'GET, HEAD, OPTIONS',
       'cache-control': 'no-store'
     });
     return;
   }
 
-  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'tmdb');
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendJson(res, 405, { error: 'Method Not Allowed' }, {
+      ...corsHeaders,
+      allow: 'GET, HEAD, OPTIONS',
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'tmdb', corsHeaders);
   if (blocked) return;
 
   const apiKey = String(process.env.TMDB_API_KEY || '').trim();
@@ -633,6 +728,7 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
       error: 'TMDB proxy unavailable',
       code: 'tmdb_proxy_missing_api_key'
     }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -642,6 +738,7 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
   const sanitizedPath = sanitizeTmdbPath(pathname);
   if (sanitizedPath.error) {
     sendJson(res, 400, { error: sanitizedPath.error }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -651,6 +748,7 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
   const sanitizedSearchParams = sanitizeTmdbSearchParams(searchParams);
   if (sanitizedSearchParams.error) {
     sendJson(res, 400, { error: sanitizedSearchParams.error }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -675,6 +773,7 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
     });
     const headers = {
       ...BASE_SECURITY_HEADERS,
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store',
     };
@@ -690,12 +789,14 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
   } catch (error) {
     if (error?.name === 'AbortError') {
       sendJson(res, 504, { error: 'TMDB upstream timed out' }, {
+        ...corsHeaders,
         ...rateLimitHeadersMap,
         'cache-control': 'no-store'
       });
       return;
     }
     sendJson(res, 502, { error: 'TMDB proxy request failed' }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -859,8 +960,15 @@ async function checkHealthTarget(target) {
 }
 
 async function handleHealthCheck(req, res) {
+  const corsHeaders = buildCorsHeaders(req);
   if (req.method === 'OPTIONS') {
+    const preflightCorsHeaders = buildCorsHeaders(req, {
+      methods: 'POST, OPTIONS',
+      defaultAllowHeaders: 'content-type',
+      includePreflight: true
+    });
     sendNoContent(res, 204, {
+      ...preflightCorsHeaders,
       allow: 'POST, OPTIONS',
       'cache-control': 'no-store'
     });
@@ -869,13 +977,14 @@ async function handleHealthCheck(req, res) {
 
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'Method Not Allowed' }, {
+      ...corsHeaders,
       allow: 'POST, OPTIONS',
       'cache-control': 'no-store'
     });
     return;
   }
 
-  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'healthcheck');
+  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'healthcheck', corsHeaders);
   if (blocked) return;
 
   let body;
@@ -884,12 +993,14 @@ async function handleHealthCheck(req, res) {
   } catch (error) {
     if (error?.statusCode === 413) {
       sendJson(res, 413, { error: 'Payload too large' }, {
+        ...corsHeaders,
         ...rateLimitHeadersMap,
         'cache-control': 'no-store'
       });
       return;
     }
     sendJson(res, 400, { error: 'Invalid request payload' }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -901,6 +1012,7 @@ async function handleHealthCheck(req, res) {
     parsed = JSON.parse(body || '{}');
   } catch {
     sendJson(res, 400, { error: 'Invalid JSON payload' }, {
+      ...corsHeaders,
       ...rateLimitHeadersMap,
       'cache-control': 'no-store'
     });
@@ -921,6 +1033,7 @@ async function handleHealthCheck(req, res) {
     checkedAtMs: Date.now(),
     results
   }, {
+    ...corsHeaders,
     ...rateLimitHeadersMap,
     'cache-control': 'no-store'
   });
@@ -932,6 +1045,7 @@ async function routeRequest(req, res) {
   const rawPathname = querySeparatorIndex >= 0
     ? rawRequestTarget.slice(0, querySeparatorIndex)
     : rawRequestTarget;
+  const apiCorsHeaders = buildCorsHeaders(req);
 
   let url;
   try {
@@ -954,7 +1068,10 @@ async function routeRequest(req, res) {
     return;
   }
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
-    sendJson(res, 404, { error: 'Not Found' }, { 'cache-control': 'no-store' });
+    sendJson(res, 404, { error: 'Not Found' }, {
+      ...apiCorsHeaders,
+      'cache-control': 'no-store'
+    });
     return;
   }
   await serveStatic(req, res, url.pathname);

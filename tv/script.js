@@ -1,8 +1,23 @@
 function detectBasePath() {
-  const parts = window.location.pathname.split('/').filter(Boolean);
   const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
-  if (!parts.length || appRoots.has(parts[0])) return '';
-  if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  if (!parts.length) return '';
+  
+  const appRootIndex = parts.findIndex((part) => appRoots.has(part));
+  if (appRootIndex >= 0) {
+    if (appRootIndex === 0) return '';
+    return `/${parts.slice(0, appRootIndex).join('/')}`;
+  }
+  
+  if (parts[0] === 'gh' && parts.length >= 3) {
+    return `/${parts.slice(0, 3).join('/')}`;
+  }
+  if (parts[0] === 'npm' && parts.length >= 2) {
+    return `/${parts.slice(0, 2).join('/')}`;
+  }
+  if (parts.length === 1) {
+    return `/${parts[0]}`;
+  }
   return '';
 }
 
@@ -30,6 +45,12 @@ const inFlightPostRequests = new Map();
 const pageRequestController = new AbortController();
 
 const modeState = { current: 'regular' };
+
+function getApiOrigin() {
+  return String(window.location.hostname || '').toLowerCase() === 'cdn.jsdelivr.net'
+    ? 'https://watchbilm.org'
+    : window.location.origin;
+}
 
 function setContentMode(mode) {
   const normalizedMode = mode === 'anime' ? 'anime' : 'regular';
@@ -94,7 +115,7 @@ function getStorageApiBackupGetUrl(rawUrl) {
     if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
     if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
     const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
-    const backup = new URL(`${window.location.origin}${BASE_URL}/api/tmdb/${tmdbPath}`);
+    const backup = new URL(`/api/tmdb/${tmdbPath}`, getApiOrigin());
     parsed.searchParams.forEach((value, key) => {
       if (String(key || '').toLowerCase() === 'api_key') return;
       backup.searchParams.append(key, value);
