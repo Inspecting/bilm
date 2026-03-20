@@ -1,9 +1,20 @@
 const appWithBase = window.bilmTheme?.withBase || ((path) => path);
 
+function sanitizeNumericId(value) {
+  const normalized = String(value || '').trim();
+  if (!/^\d{1,12}$/.test(normalized)) return '';
+  return normalized.replace(/^0+(?=\d)/, '');
+}
+
+function sanitizeImdbId(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^tt\d{5,12}$/.test(normalized) ? normalized : '';
+}
+
 const params = new URLSearchParams(window.location.search);
-const tmdbId = params.get('id');
+const tmdbId = sanitizeNumericId(params.get('id'));
 const isAnime = params.get('anime') === '1';
-const animeId = params.get('aid') || tmdbId;
+const animeId = sanitizeNumericId(params.get('aid') || tmdbId);
 
 const iframe = document.getElementById('videoPlayer');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -93,6 +104,18 @@ function normalizeEmbedUrlForCompare(rawUrl) {
     return parsed.toString();
   } catch {
     return normalized;
+  }
+}
+
+function getEmbedMessageTargetOrigin() {
+  const src = String(iframe?.getAttribute('src') || '').trim();
+  if (!src) return '';
+  try {
+    const parsed = new URL(src, window.location.href);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+    return parsed.origin;
+  } catch {
+    return '';
   }
 }
 
@@ -238,6 +261,7 @@ const EMBED_LOAD_TIMEOUTS_MS = [12000];
 const EMBED_LOAD_TIMEOUT_GRACE_MS = 700;
 const EMBED_LOAD_LATE_WINDOW_MS = 700;
 const EMBED_MASTER_COLOR_RETRY_SCHEDULE_MS = [100, 320, 800, 1700, 2800, 4200];
+const EMBEDMASTER_ALLOWED_COMMANDS = new Set(['color1', 'fullscreen']);
 let embedMasterLastColorSent = '';
 let similarPage = 1;
 let similarLoading = false;
@@ -953,26 +977,30 @@ function buildTvUrl(server) {
   normalizeSeasonEpisodeState();
   const season = currentSeason;
   const episode = currentEpisode;
+  const safeLanguage = currentLanguage === 'dub' ? 'dub' : 'sub';
   if (isAnime) {
     if (!animeId) return '';
-    return `https://vidnest.fun/anime/${encodeURIComponent(animeId)}/${episode}/${currentLanguage}`;
+    return `https://vidnest.fun/anime/${encodeURIComponent(animeId)}/${encodeURIComponent(episode)}/${safeLanguage}`;
   }
-  if (!tmdbId && !imdbId) return '';
+  const safeImdbId = sanitizeImdbId(imdbId);
+  if (!tmdbId && !safeImdbId) return '';
   switch (server) {
     case 'vidsrc': {
-      const id = imdbId || tmdbId;
-      return appendVidsrcSubtitleParam(`https://vidsrc-embed.ru/embed/tv/${id}/${season}-${episode}`);
+      const id = safeImdbId || tmdbId;
+      return appendVidsrcSubtitleParam(`https://vidsrc-embed.ru/embed/tv/${encodeURIComponent(id)}/${encodeURIComponent(season)}-${encodeURIComponent(episode)}`);
     }
     case 'multiembed':
-      return imdbId
-        ? `https://multiembed.mov/directstream.php?video_id=${imdbId}&s=${season}&e=${episode}`
-        : `https://multiembed.mov/directstream.php?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}`;
+      return safeImdbId
+        ? `https://multiembed.mov/directstream.php?video_id=${encodeURIComponent(safeImdbId)}&s=${encodeURIComponent(season)}&e=${encodeURIComponent(episode)}`
+        : `https://multiembed.mov/directstream.php?video_id=${encodeURIComponent(tmdbId)}&tmdb=1&s=${encodeURIComponent(season)}&e=${encodeURIComponent(episode)}`;
     case 'vidking':
       return tmdbId
         ? appendVidKingParams(`https://www.vidking.net/embed/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season)}/${encodeURIComponent(episode)}`, { includeEpisodeControls: true })
         : '';
     case 'embedmaster':
-      return tmdbId ? `https://embedmaster.link/830gqxyfskjlsnbq/tv/${tmdbId}/${season}/${episode}` : '';
+      return tmdbId
+        ? `https://embedmaster.link/830gqxyfskjlsnbq/tv/${encodeURIComponent(tmdbId)}/${encodeURIComponent(season)}/${encodeURIComponent(episode)}`
+        : '';
     default:
       return '';
   }
@@ -1087,9 +1115,11 @@ function dispatchEmbedMasterCommand(command, value = null) {
   const embedWindow = iframe?.contentWindow;
   if (!embedWindow) return;
   const safeCommand = String(command || '').trim();
-  if (!safeCommand) return;
+  if (!safeCommand || !EMBEDMASTER_ALLOWED_COMMANDS.has(safeCommand)) return;
   const safeValue = value == null ? '' : String(value);
   const hasValue = safeValue.length > 0;
+  const targetOrigin = getEmbedMessageTargetOrigin();
+  if (!targetOrigin) return;
 
   try {
     if (typeof embedWindow.sendCommand === 'function') {
@@ -1113,15 +1143,15 @@ function dispatchEmbedMasterCommand(command, value = null) {
     ? { cmd: safeCommand, val: safeValue }
     : { cmd: safeCommand };
   [commandPayload, apiCommandPayload, shortPayload].forEach((payload) => {
-    embedWindow.postMessage(payload, '*');
-    embedWindow.postMessage(JSON.stringify(payload), '*');
+    embedWindow.postMessage(payload, targetOrigin);
+    embedWindow.postMessage(JSON.stringify(payload), targetOrigin);
   });
   if (hasValue) {
-    embedWindow.postMessage(`${safeCommand}:${safeValue}`, '*');
-    embedWindow.postMessage(`sendCommand('${safeCommand}','${safeValue}')`, '*');
+    embedWindow.postMessage(`${safeCommand}:${safeValue}`, targetOrigin);
+    embedWindow.postMessage(`sendCommand('${safeCommand}','${safeValue}')`, targetOrigin);
   } else {
-    embedWindow.postMessage(safeCommand, '*');
-    embedWindow.postMessage(`sendCommand('${safeCommand}')`, '*');
+    embedWindow.postMessage(safeCommand, targetOrigin);
+    embedWindow.postMessage(`sendCommand('${safeCommand}')`, targetOrigin);
   }
 }
 
@@ -1444,7 +1474,7 @@ async function fetchTMDBData() {
       firstAirDate: '',
       year,
       poster: details?.coverImage?.large || details?.coverImage?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
-      link: `${appWithBase('/tv/show.html')}?anime=1&aid=${animeId}&type=tv`,
+      link: `${appWithBase('/tv/show.html')}?anime=1&aid=${encodeURIComponent(animeId)}&type=tv`,
       rating: details?.averageScore ? details.averageScore / 10 : null,
       certification: 'N/A',
       genreIds: [],
@@ -1475,7 +1505,7 @@ async function fetchTMDBData() {
     ]);
     const externalData = externalResult.status === 'fulfilled' ? externalResult.value : null;
     const contentRatings = contentRatingsResult.status === 'fulfilled' ? contentRatingsResult.value : null;
-    imdbId = externalData?.imdb_id || null;
+    imdbId = sanitizeImdbId(externalData?.imdb_id) || null;
     const certification = pickShowCertification(contentRatings?.results);
 
     // Get season info
@@ -1515,7 +1545,7 @@ async function fetchTMDBData() {
       rating: details.vote_average,
       genreIds: details.genres?.map(genre => genre.id) || [],
       genreSlugs: details.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${appWithBase('/tv/show.html')}?id=${tmdbId}`,
+      link: `${appWithBase('/tv/show.html')}?id=${encodeURIComponent(tmdbId)}`,
       certification,
       provider: 'tmdb'
     };
@@ -1572,7 +1602,7 @@ async function fetchTMDBData() {
       rating: null,
       genreIds: [],
       genreSlugs: [],
-      link: `${appWithBase('/tv/show.html')}?id=${tmdbId}`,
+      link: `${appWithBase('/tv/show.html')}?id=${encodeURIComponent(tmdbId)}`,
       certification: '',
       provider: 'tmdb'
     };

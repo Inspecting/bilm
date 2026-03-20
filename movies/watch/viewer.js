@@ -1,9 +1,20 @@
 const appWithBase = window.bilmTheme?.withBase || ((path) => path);
 
+function sanitizeNumericId(value) {
+  const normalized = String(value || '').trim();
+  if (!/^\d{1,12}$/.test(normalized)) return '';
+  return normalized.replace(/^0+(?=\d)/, '');
+}
+
+function sanitizeImdbId(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^tt\d{5,12}$/.test(normalized) ? normalized : '';
+}
+
 const params = new URLSearchParams(window.location.search);
-const contentId = params.get('id'); // movie or TV id
+const contentId = sanitizeNumericId(params.get('id')); // movie or TV id
 const isAnime = params.get('anime') === '1';
-const animeId = params.get('aid') || contentId;
+const animeId = sanitizeNumericId(params.get('aid') || contentId);
 
 const iframe = document.getElementById('videoPlayer');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -83,6 +94,18 @@ function normalizeEmbedUrlForCompare(rawUrl) {
     return parsed.toString();
   } catch {
     return normalized;
+  }
+}
+
+function getEmbedMessageTargetOrigin() {
+  const src = String(iframe?.getAttribute('src') || '').trim();
+  if (!src) return '';
+  try {
+    const parsed = new URL(src, window.location.href);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+    return parsed.origin;
+  } catch {
+    return '';
   }
 }
 
@@ -184,6 +207,7 @@ const EMBED_LOAD_TIMEOUTS_MS = [12000];
 const EMBED_LOAD_TIMEOUT_GRACE_MS = 700;
 const EMBED_LOAD_LATE_WINDOW_MS = 700;
 const EMBED_MASTER_COLOR_RETRY_SCHEDULE_MS = [100, 320, 800, 1700, 2800, 4200];
+const EMBEDMASTER_ALLOWED_COMMANDS = new Set(['color1', 'fullscreen']);
 let embedMasterLastColorSent = '';
 const CONTINUE_KEY = 'bilm-continue-watching';
 const WATCH_HISTORY_KEY = 'bilm-watch-history';
@@ -333,22 +357,24 @@ function stopContinueWatchingTimer() {
 }
 
 function buildMovieUrl(server) {
+  const safeLanguage = currentLanguage === 'dub' ? 'dub' : 'sub';
   if (isAnime) {
     if (!animeId) return '';
-    return `https://vidnest.fun/anime/${encodeURIComponent(animeId)}/1/${currentLanguage}`;
+    return `https://vidnest.fun/anime/${encodeURIComponent(animeId)}/1/${safeLanguage}`;
   }
   if (!contentId) return '';
+  const externalMovieId = sanitizeImdbId(imdbId) || contentId;
   switch (server) {
     case 'vidsrc':
-      return appendVidsrcSubtitleParam(`https://vidsrc-embed.ru/embed/movie/${imdbId || contentId}`);
+      return appendVidsrcSubtitleParam(`https://vidsrc-embed.ru/embed/movie/${encodeURIComponent(externalMovieId)}`);
     case 'multiembed':
-      return imdbId
-        ? `https://multiembed.mov/directstream.php?video_id=${imdbId}`
-        : `https://multiembed.mov/directstream.php?video_id=${contentId}&tmdb=1`;
+      return sanitizeImdbId(imdbId)
+        ? `https://multiembed.mov/directstream.php?video_id=${encodeURIComponent(imdbId)}`
+        : `https://multiembed.mov/directstream.php?video_id=${encodeURIComponent(contentId)}&tmdb=1`;
     case 'vidking':
       return appendVidKingParams(`https://www.vidking.net/embed/movie/${encodeURIComponent(contentId)}`);
     case 'embedmaster':
-      return `https://embedmaster.link/830gqxyfskjlsnbq/movie/${contentId}`;
+      return `https://embedmaster.link/830gqxyfskjlsnbq/movie/${encodeURIComponent(contentId)}`;
     default:
       return '';
   }
@@ -463,9 +489,11 @@ function dispatchEmbedMasterCommand(command, value = null) {
   const embedWindow = iframe?.contentWindow;
   if (!embedWindow) return;
   const safeCommand = String(command || '').trim();
-  if (!safeCommand) return;
+  if (!safeCommand || !EMBEDMASTER_ALLOWED_COMMANDS.has(safeCommand)) return;
   const safeValue = value == null ? '' : String(value);
   const hasValue = safeValue.length > 0;
+  const targetOrigin = getEmbedMessageTargetOrigin();
+  if (!targetOrigin) return;
 
   try {
     if (typeof embedWindow.sendCommand === 'function') {
@@ -489,15 +517,15 @@ function dispatchEmbedMasterCommand(command, value = null) {
     ? { cmd: safeCommand, val: safeValue }
     : { cmd: safeCommand };
   [commandPayload, apiCommandPayload, shortPayload].forEach((payload) => {
-    embedWindow.postMessage(payload, '*');
-    embedWindow.postMessage(JSON.stringify(payload), '*');
+    embedWindow.postMessage(payload, targetOrigin);
+    embedWindow.postMessage(JSON.stringify(payload), targetOrigin);
   });
   if (hasValue) {
-    embedWindow.postMessage(`${safeCommand}:${safeValue}`, '*');
-    embedWindow.postMessage(`sendCommand('${safeCommand}','${safeValue}')`, '*');
+    embedWindow.postMessage(`${safeCommand}:${safeValue}`, targetOrigin);
+    embedWindow.postMessage(`sendCommand('${safeCommand}','${safeValue}')`, targetOrigin);
   } else {
-    embedWindow.postMessage(safeCommand, '*');
-    embedWindow.postMessage(`sendCommand('${safeCommand}')`, '*');
+    embedWindow.postMessage(safeCommand, targetOrigin);
+    embedWindow.postMessage(`sendCommand('${safeCommand}')`, targetOrigin);
   }
 }
 
@@ -919,7 +947,7 @@ async function loadMovieDetails() {
       releaseDate: '',
       year,
       poster: details?.coverImage?.large || details?.coverImage?.medium || 'https://via.placeholder.com/140x210?text=No+Image',
-      link: `${appWithBase('/movies/show.html')}?anime=1&aid=${animeId}&type=movie`,
+      link: `${appWithBase('/movies/show.html')}?anime=1&aid=${encodeURIComponent(animeId)}&type=movie`,
       rating: details?.averageScore ? details.averageScore / 10 : null,
       certification: 'N/A',
       provider: 'anilist'
@@ -950,7 +978,7 @@ async function loadMovieDetails() {
     const external = externalResult.status === 'fulfilled' ? (externalResult.value || {}) : {};
     const releaseDates = releaseDatesResult.status === 'fulfilled' ? (releaseDatesResult.value || {}) : {};
     const certification = pickMovieCertification(releaseDates?.results);
-    imdbId = external.imdb_id || null;
+    imdbId = sanitizeImdbId(external.imdb_id) || null;
     const title = details?.title || details?.original_title || 'Unknown title';
     const releaseDate = details?.release_date || '';
     const displayDate = releaseDate ? new Date(releaseDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Release date unavailable';
@@ -969,7 +997,7 @@ async function loadMovieDetails() {
       poster,
       genreIds: details?.genres?.map(genre => genre.id) || [],
       genreSlugs: details?.genres?.map(genre => toSlug(genre.name)) || [],
-      link: `${appWithBase('/movies/show.html')}?id=${contentId}`,
+      link: `${appWithBase('/movies/show.html')}?id=${encodeURIComponent(contentId)}`,
       rating: details?.vote_average ?? null,
       certification,
       provider: 'tmdb'
@@ -1001,7 +1029,7 @@ async function loadMovieDetails() {
       poster: 'https://via.placeholder.com/140x210?text=No+Image',
       genreIds: [],
       genreSlugs: [],
-      link: `${appWithBase('/movies/show.html')}?id=${contentId}`,
+      link: `${appWithBase('/movies/show.html')}?id=${encodeURIComponent(contentId)}`,
       rating: null,
       certification: '',
       provider: 'tmdb'

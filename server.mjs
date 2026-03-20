@@ -27,7 +27,36 @@ function resolveHealthCheckAllowedHosts() {
   return hosts;
 }
 
+function parseEnvInt(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const rawValue = Number(process.env[name]);
+  if (!Number.isFinite(rawValue)) return fallback;
+  const normalized = Math.floor(rawValue);
+  if (normalized < min || normalized > max) return fallback;
+  return normalized;
+}
+
 const HEALTH_CHECK_ALLOWED_HOSTS = resolveHealthCheckAllowedHosts();
+const RATE_LIMIT_STORE = new Map();
+let nextRateLimitSweepAtMs = 0;
+const RATE_LIMIT_STORE_SOFT_CAP = 5000;
+const TMDB_PATH_SEGMENT_RE = /^[a-z0-9_-]+$/i;
+const TMDB_QUERY_KEY_RE = /^[a-z0-9_.-]+$/i;
+const ANILIST_ALLOWED_PAYLOAD_KEYS = new Set(['query', 'variables', 'operationName', 'extensions']);
+const RATE_LIMITS = Object.freeze({
+  tmdb: Object.freeze({
+    limit: parseEnvInt('TMDB_PROXY_RATE_LIMIT', 120, { min: 10, max: 5000 }),
+    windowMs: parseEnvInt('TMDB_PROXY_RATE_WINDOW_MS', 60_000, { min: 1000, max: 3_600_000 })
+  }),
+  anilist: Object.freeze({
+    limit: parseEnvInt('ANILIST_PROXY_RATE_LIMIT', 60, { min: 10, max: 5000 }),
+    windowMs: parseEnvInt('ANILIST_PROXY_RATE_WINDOW_MS', 60_000, { min: 1000, max: 3_600_000 })
+  }),
+  healthcheck: Object.freeze({
+    limit: parseEnvInt('HEALTH_CHECK_RATE_LIMIT', 20, { min: 5, max: 2000 }),
+    windowMs: parseEnvInt('HEALTH_CHECK_RATE_WINDOW_MS', 60_000, { min: 1000, max: 3_600_000 })
+  })
+});
+
 const BASE_SECURITY_HEADERS = Object.freeze({
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
@@ -62,6 +91,306 @@ function safeJoin(base, target) {
     return normalizedTarget;
   }
   return null;
+}
+
+function sendNoContent(res, status = 204, headers = {}) {
+  res.writeHead(status, {
+    ...BASE_SECURITY_HEADERS,
+    ...headers
+  });
+  res.end();
+}
+
+function normalizeClientIp(rawValue) {
+  const rawText = String(rawValue || '').trim();
+  if (!rawText) return '';
+
+  let value = rawText;
+  if (value.startsWith('[') && value.includes(']')) {
+    value = value.slice(1, value.indexOf(']'));
+  }
+  if (value.startsWith('::ffff:')) {
+    value = value.slice(7);
+  }
+  if (value === '::1') {
+    return '127.0.0.1';
+  }
+  if (/^\d{1,3}(?:\.\d{1,3}){3}:\d{1,5}$/.test(value)) {
+    value = value.split(':')[0];
+  }
+  return value.toLowerCase();
+}
+
+function getClientIp(req) {
+  const flyClientIp = normalizeClientIp(req.headers['fly-client-ip']);
+  if (flyClientIp) return flyClientIp;
+
+  const realIp = normalizeClientIp(req.headers['x-real-ip']);
+  if (realIp) return realIp;
+
+  const forwarded = String(req.headers['x-forwarded-for'] || '').trim();
+  if (forwarded) {
+    const chain = forwarded
+      .split(',')
+      .map((part) => normalizeClientIp(part))
+      .filter(Boolean);
+    if (chain.length) {
+      // Use the right-most entry because trusted proxies append to the chain.
+      return chain[chain.length - 1];
+    }
+  }
+
+  return normalizeClientIp(req.socket?.remoteAddress) || 'unknown';
+}
+
+function sweepRateLimitStore(nowMs) {
+  if (nowMs < nextRateLimitSweepAtMs && RATE_LIMIT_STORE.size < RATE_LIMIT_STORE_SOFT_CAP) return;
+
+  for (const [key, entry] of RATE_LIMIT_STORE.entries()) {
+    if (nowMs >= Number(entry?.resetAtMs || 0)) {
+      RATE_LIMIT_STORE.delete(key);
+    }
+  }
+  nextRateLimitSweepAtMs = nowMs + 60_000;
+}
+
+function consumeRateLimit(bucketName, req) {
+  const bucket = RATE_LIMITS[bucketName];
+  if (!bucket) {
+    return {
+      allowed: true,
+      limit: 0,
+      remaining: 0,
+      resetAtEpochSeconds: Math.ceil(Date.now() / 1000),
+      retryAfterSeconds: 0
+    };
+  }
+
+  const nowMs = Date.now();
+  sweepRateLimitStore(nowMs);
+
+  const ip = getClientIp(req);
+  const key = `${bucketName}:${ip}`;
+  let entry = RATE_LIMIT_STORE.get(key);
+  if (!entry || nowMs >= Number(entry.resetAtMs || 0)) {
+    entry = {
+      count: 0,
+      resetAtMs: nowMs + bucket.windowMs
+    };
+  }
+
+  if (entry.count >= bucket.limit) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((entry.resetAtMs - nowMs) / 1000));
+    return {
+      allowed: false,
+      limit: bucket.limit,
+      remaining: 0,
+      resetAtEpochSeconds: Math.ceil(entry.resetAtMs / 1000),
+      retryAfterSeconds
+    };
+  }
+
+  entry.count += 1;
+  RATE_LIMIT_STORE.set(key, entry);
+  return {
+    allowed: true,
+    limit: bucket.limit,
+    remaining: Math.max(0, bucket.limit - entry.count),
+    resetAtEpochSeconds: Math.ceil(entry.resetAtMs / 1000),
+    retryAfterSeconds: 0
+  };
+}
+
+function rateLimitHeaders(rateLimitState) {
+  return {
+    'x-ratelimit-limit': String(Math.max(0, Number(rateLimitState?.limit || 0))),
+    'x-ratelimit-remaining': String(Math.max(0, Number(rateLimitState?.remaining || 0))),
+    'x-ratelimit-reset': String(Math.max(0, Number(rateLimitState?.resetAtEpochSeconds || 0)))
+  };
+}
+
+function enforceRateLimit(req, res, bucketName) {
+  const rateLimitState = consumeRateLimit(bucketName, req);
+  const headers = rateLimitHeaders(rateLimitState);
+  if (rateLimitState.allowed) {
+    return {
+      blocked: false,
+      headers
+    };
+  }
+
+  sendJson(res, 429, {
+    error: 'Too Many Requests',
+    code: `${bucketName}_rate_limited`,
+    retryAfterSeconds: rateLimitState.retryAfterSeconds
+  }, {
+    ...headers,
+    'cache-control': 'no-store',
+    'retry-after': String(rateLimitState.retryAfterSeconds)
+  });
+  return {
+    blocked: true,
+    headers
+  };
+}
+
+function sanitizeAcceptHeader(rawValue) {
+  const fallback = 'application/json, text/plain, */*';
+  const value = String(rawValue || '').trim();
+  if (!value) return fallback;
+  if (value.length > 256) return fallback;
+  if (/[\r\n]/.test(value)) return fallback;
+  return value;
+}
+
+function sanitizeTmdbPath(pathname) {
+  const rawPath = String(pathname || '').replace(/^\/api\/tmdb\/?/i, '');
+  if (!rawPath.trim()) {
+    return { error: 'TMDB path is required' };
+  }
+
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(rawPath);
+  } catch {
+    return { error: 'Invalid TMDB path encoding' };
+  }
+
+  const normalizedPath = decodedPath
+    .replace(/\\/g, '/')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+
+  if (!normalizedPath) {
+    return { error: 'TMDB path is required' };
+  }
+  if (normalizedPath.length > 256) {
+    return { error: 'TMDB path is too long' };
+  }
+  if (normalizedPath.includes('..')) {
+    return { error: 'Invalid TMDB path' };
+  }
+
+  const segments = normalizedPath.split('/');
+  if (segments.length > 8) {
+    return { error: 'TMDB path depth exceeded' };
+  }
+
+  for (const segment of segments) {
+    if (!segment || segment.length > 64 || !TMDB_PATH_SEGMENT_RE.test(segment)) {
+      return { error: 'Invalid TMDB path segment' };
+    }
+  }
+
+  return { path: normalizedPath };
+}
+
+function sanitizeTmdbSearchParams(searchParams) {
+  const cleanParams = new URLSearchParams();
+  let count = 0;
+  let totalChars = 0;
+  for (const [rawKey, rawValue] of searchParams.entries()) {
+    const key = String(rawKey || '').trim();
+    if (!key) continue;
+    if (key.toLowerCase() === 'api_key') continue;
+    if (!TMDB_QUERY_KEY_RE.test(key) || key.length > 64) {
+      return { error: 'Invalid TMDB query parameter key' };
+    }
+
+    count += 1;
+    if (count > 20) {
+      return { error: 'Too many TMDB query parameters' };
+    }
+
+    const value = String(rawValue ?? '');
+    if (value.length > 512) {
+      return { error: 'TMDB query parameter value is too long' };
+    }
+    if (/[\u0000-\u001f\u007f]/.test(value)) {
+      return { error: 'Invalid TMDB query parameter value' };
+    }
+
+    totalChars += key.length + value.length;
+    if (totalChars > 2048) {
+      return { error: 'TMDB query string is too large' };
+    }
+
+    cleanParams.append(key, value);
+  }
+  return { searchParams: cleanParams };
+}
+
+function sanitizeAniListPayload(rawBody) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return { error: 'Invalid JSON payload' };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { error: 'AniList payload must be a JSON object' };
+  }
+
+  for (const key of Object.keys(parsed)) {
+    if (!ANILIST_ALLOWED_PAYLOAD_KEYS.has(key)) {
+      return { error: 'AniList payload contains unsupported keys' };
+    }
+  }
+
+  const query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
+  if (!query) {
+    return { error: 'AniList query is required' };
+  }
+  if (query.length > 12_000) {
+    return { error: 'AniList query is too long' };
+  }
+
+  const sanitizedPayload = { query };
+
+  if (typeof parsed.operationName !== 'undefined') {
+    if (parsed.operationName === null) {
+      sanitizedPayload.operationName = null;
+    } else if (typeof parsed.operationName === 'string' && parsed.operationName.length <= 128) {
+      sanitizedPayload.operationName = parsed.operationName;
+    } else {
+      return { error: 'AniList operationName is invalid' };
+    }
+  }
+
+  if (typeof parsed.variables !== 'undefined') {
+    const variables = parsed.variables;
+    if (variables === null) {
+      sanitizedPayload.variables = null;
+    } else if (variables && typeof variables === 'object' && !Array.isArray(variables)) {
+      const serializedVariables = JSON.stringify(variables);
+      if (serializedVariables.length > 32_000) {
+        return { error: 'AniList variables are too large' };
+      }
+      sanitizedPayload.variables = variables;
+    } else {
+      return { error: 'AniList variables must be an object or null' };
+    }
+  }
+
+  if (typeof parsed.extensions !== 'undefined') {
+    const extensions = parsed.extensions;
+    if (extensions === null) {
+      sanitizedPayload.extensions = null;
+    } else if (extensions && typeof extensions === 'object' && !Array.isArray(extensions)) {
+      const serializedExtensions = JSON.stringify(extensions);
+      if (serializedExtensions.length > 8192) {
+        return { error: 'AniList extensions are too large' };
+      }
+      sanitizedPayload.extensions = extensions;
+    } else {
+      return { error: 'AniList extensions must be an object or null' };
+    }
+  }
+
+  return {
+    body: JSON.stringify(sanitizedPayload)
+  };
 }
 
 function sendJson(res, status, payload, headers = {}) {
@@ -195,12 +524,10 @@ async function readRequestBody(req, maxBytes = 256 * 1024) {
 
 async function handleAniListProxy(req, res) {
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
+    sendNoContent(res, 204, {
       allow: 'POST, OPTIONS',
-      'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff'
+      'cache-control': 'no-store'
     });
-    res.end();
     return;
   }
 
@@ -212,17 +539,34 @@ async function handleAniListProxy(req, res) {
     return;
   }
 
+  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'anilist');
+  if (blocked) return;
+
+  const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    sendJson(res, 415, { error: 'Content-Type must be application/json' }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
   try {
-    const body = await readRequestBody(req);
+    const body = await readRequestBody(req, 128 * 1024);
     if (!body.trim()) {
-      sendJson(res, 400, { error: 'Request body is required' }, { 'cache-control': 'no-store' });
+      sendJson(res, 400, { error: 'Request body is required' }, {
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
       return;
     }
 
-    try {
-      JSON.parse(body);
-    } catch {
-      sendJson(res, 400, { error: 'Invalid JSON payload' }, { 'cache-control': 'no-store' });
+    const sanitizedPayload = sanitizeAniListPayload(body);
+    if (sanitizedPayload.error) {
+      sendJson(res, 400, { error: sanitizedPayload.error }, {
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
       return;
     }
 
@@ -234,7 +578,7 @@ async function handleAniListProxy(req, res) {
       upstream = await fetch('https://graphql.anilist.co', {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body,
+        body: sanitizedPayload.body,
         signal: abortController.signal
       });
     } finally {
@@ -243,21 +587,31 @@ async function handleAniListProxy(req, res) {
 
     const payload = await upstream.text();
     res.writeHead(upstream.status, {
+      ...BASE_SECURITY_HEADERS,
+      ...rateLimitHeadersMap,
       'content-type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff'
+      'cache-control': 'no-store'
     });
     res.end(payload);
   } catch (error) {
     if (error?.statusCode === 413) {
-      sendJson(res, 413, { error: 'Payload too large' }, { 'cache-control': 'no-store' });
+      sendJson(res, 413, { error: 'Payload too large' }, {
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
       return;
     }
     if (error?.name === 'AbortError') {
-      sendJson(res, 504, { error: 'AniList upstream timed out' }, { 'cache-control': 'no-store' });
+      sendJson(res, 504, { error: 'AniList upstream timed out' }, {
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
       return;
     }
-    sendJson(res, 502, { error: 'AniList proxy request failed' }, { 'cache-control': 'no-store' });
+    sendJson(res, 502, { error: 'AniList proxy request failed' }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
   }
 }
 
@@ -270,24 +624,41 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
     return;
   }
 
+  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'tmdb');
+  if (blocked) return;
+
   const apiKey = String(process.env.TMDB_API_KEY || '').trim();
   if (!apiKey) {
     sendJson(res, 503, {
       error: 'TMDB proxy unavailable',
       code: 'tmdb_proxy_missing_api_key'
-    }, { 'cache-control': 'no-store' });
+    }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
     return;
   }
 
-  const relativePath = String(pathname || '').replace(/^\/api\/tmdb\/?/i, '').trim();
-  if (!relativePath) {
-    sendJson(res, 400, { error: 'TMDB path is required' }, { 'cache-control': 'no-store' });
+  const sanitizedPath = sanitizeTmdbPath(pathname);
+  if (sanitizedPath.error) {
+    sendJson(res, 400, { error: sanitizedPath.error }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
     return;
   }
 
-  const upstreamUrl = new URL(`https://api.themoviedb.org/3/${relativePath}`);
-  searchParams.forEach((value, key) => {
-    if (String(key || '').toLowerCase() === 'api_key') return;
+  const sanitizedSearchParams = sanitizeTmdbSearchParams(searchParams);
+  if (sanitizedSearchParams.error) {
+    sendJson(res, 400, { error: sanitizedSearchParams.error }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  const upstreamUrl = new URL(`https://api.themoviedb.org/3/${sanitizedPath.path}`);
+  sanitizedSearchParams.searchParams.forEach((value, key) => {
     upstreamUrl.searchParams.append(key, value);
   });
   upstreamUrl.searchParams.set('api_key', apiKey);
@@ -298,14 +669,14 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
     const upstream = await fetch(upstreamUrl.toString(), {
       method: req.method,
       headers: {
-        accept: req.headers.accept || 'application/json, text/plain, */*'
+        accept: sanitizeAcceptHeader(req.headers.accept)
       },
       signal: abortController.signal
     });
-    const payload = await upstream.arrayBuffer();
     const headers = {
+      ...BASE_SECURITY_HEADERS,
+      ...rateLimitHeadersMap,
       'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff'
     };
     const contentType = upstream.headers.get('content-type');
     if (contentType) headers['content-type'] = contentType;
@@ -314,13 +685,20 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
       res.end();
       return;
     }
+    const payload = await upstream.arrayBuffer();
     res.end(Buffer.from(payload));
   } catch (error) {
     if (error?.name === 'AbortError') {
-      sendJson(res, 504, { error: 'TMDB upstream timed out' }, { 'cache-control': 'no-store' });
+      sendJson(res, 504, { error: 'TMDB upstream timed out' }, {
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
       return;
     }
-    sendJson(res, 502, { error: 'TMDB proxy request failed' }, { 'cache-control': 'no-store' });
+    sendJson(res, 502, { error: 'TMDB proxy request failed' }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -482,12 +860,10 @@ async function checkHealthTarget(target) {
 
 async function handleHealthCheck(req, res) {
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
+    sendNoContent(res, 204, {
       allow: 'POST, OPTIONS',
-      'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff'
+      'cache-control': 'no-store'
     });
-    res.end();
     return;
   }
 
@@ -499,15 +875,24 @@ async function handleHealthCheck(req, res) {
     return;
   }
 
+  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'healthcheck');
+  if (blocked) return;
+
   let body;
   try {
     body = await readRequestBody(req, 128 * 1024);
   } catch (error) {
     if (error?.statusCode === 413) {
-      sendJson(res, 413, { error: 'Payload too large' }, { 'cache-control': 'no-store' });
+      sendJson(res, 413, { error: 'Payload too large' }, {
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
       return;
     }
-    sendJson(res, 400, { error: 'Invalid request payload' }, { 'cache-control': 'no-store' });
+    sendJson(res, 400, { error: 'Invalid request payload' }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
     return;
   }
 
@@ -515,7 +900,10 @@ async function handleHealthCheck(req, res) {
   try {
     parsed = JSON.parse(body || '{}');
   } catch {
-    sendJson(res, 400, { error: 'Invalid JSON payload' }, { 'cache-control': 'no-store' });
+    sendJson(res, 400, { error: 'Invalid JSON payload' }, {
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
     return;
   }
 
@@ -532,24 +920,55 @@ async function handleHealthCheck(req, res) {
     ok: true,
     checkedAtMs: Date.now(),
     results
-  }, { 'cache-control': 'no-store' });
+  }, {
+    ...rateLimitHeadersMap,
+    'cache-control': 'no-store'
+  });
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-  if (url.pathname === '/api/anilist') {
+async function routeRequest(req, res) {
+  const rawRequestTarget = String(req.url || '/');
+  const querySeparatorIndex = rawRequestTarget.indexOf('?');
+  const rawPathname = querySeparatorIndex >= 0
+    ? rawRequestTarget.slice(0, querySeparatorIndex)
+    : rawRequestTarget;
+
+  let url;
+  try {
+    url = new URL(rawRequestTarget || '/', 'http://localhost');
+  } catch {
+    sendJson(res, 400, { error: 'Bad Request' }, { 'cache-control': 'no-store' });
+    return;
+  }
+
+  if (rawPathname === '/api/anilist') {
     await handleAniListProxy(req, res);
     return;
   }
-  if (url.pathname === '/api/health/check') {
+  if (rawPathname === '/api/health/check') {
     await handleHealthCheck(req, res);
     return;
   }
-  if (url.pathname.startsWith('/api/tmdb/')) {
-    await handleTmdbProxy(req, res, url.pathname, url.searchParams);
+  if (rawPathname === '/api/tmdb' || rawPathname.startsWith('/api/tmdb/')) {
+    await handleTmdbProxy(req, res, rawPathname, url.searchParams);
+    return;
+  }
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    sendJson(res, 404, { error: 'Not Found' }, { 'cache-control': 'no-store' });
     return;
   }
   await serveStatic(req, res, url.pathname);
+}
+
+const server = http.createServer((req, res) => {
+  routeRequest(req, res).catch((error) => {
+    console.error('Unhandled request error:', error);
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+    sendJson(res, 500, { error: 'Internal Server Error' }, { 'cache-control': 'no-store' });
+  });
 });
 
 server.listen(port, '0.0.0.0', () => {

@@ -1,1 +1,15 @@
 fly.toml
+.git
+.gitignore
+node_modules
+npm-debug.log*
+playwright-report
+test-results
+coverage
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+.vscode
+.idea
