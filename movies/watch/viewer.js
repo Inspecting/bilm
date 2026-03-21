@@ -227,7 +227,9 @@ const storage = window.bilmTheme?.storage || {
   },
   setJSON: (key, value) => {
     localStorage.setItem(key, JSON.stringify(value));
-  }
+  },
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value)
 };
 const mediaIdentity = window.BilmMediaIdentity || {
   createStoredMediaItem: (item) => item,
@@ -727,12 +729,13 @@ async function loadMoreLikeMovies() {
   similarLoading = false;
 }
 
-function buildCurrentMediaItem() {
+function buildCurrentMediaItem(options = {}) {
+  const includePlaybackNote = options?.includePlaybackNote !== false;
   if (!mediaDetails) return null;
   const provider = isAnime ? 'anilist' : 'tmdb';
   const id = Number(mediaDetails.id || 0) || 0;
   if (!id) return null;
-  return mediaIdentity.createStoredMediaItem({
+  const item = mediaIdentity.createStoredMediaItem({
     provider,
     id,
     anilistId: provider === 'anilist' ? id : undefined,
@@ -748,6 +751,15 @@ function buildCurrentMediaItem() {
     rating: mediaDetails.rating,
     certification: mediaDetails.certification || ''
   });
+  if (!item) return null;
+  if (includePlaybackNote) {
+    const playbackNote = getPlaybackNoteValueByKey(item.key);
+    if (playbackNote) {
+      item.playbackNote = playbackNote;
+      item.playbackNoteUpdatedAt = Date.now();
+    }
+  }
+  return item;
 }
 
 function syncFavoriteAndWatchLaterButtons() {
@@ -844,7 +856,7 @@ function updateContinueWatching() {
 
 function loadPlaybackNotes() {
   try {
-    const raw = localStorage.getItem(PLAYBACK_NOTE_KEY);
+    const raw = storage.getItem(PLAYBACK_NOTE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
@@ -854,12 +866,18 @@ function loadPlaybackNotes() {
 }
 
 function savePlaybackNotes(notes) {
-  localStorage.setItem(PLAYBACK_NOTE_KEY, JSON.stringify(notes));
+  storage.setItem(PLAYBACK_NOTE_KEY, JSON.stringify(notes));
+}
+
+function getPlaybackNoteValueByKey(key) {
+  const normalizedKey = String(key || '').trim();
+  if (!normalizedKey) return '';
+  const notes = loadPlaybackNotes();
+  return String(notes[normalizedKey] || '').trim();
 }
 
 function getPlaybackNoteKey() {
-  if (!mediaDetails) return null;
-  const item = buildCurrentMediaItem();
+  const item = buildCurrentMediaItem({ includePlaybackNote: false });
   return item?.key || null;
 }
 
@@ -895,18 +913,24 @@ function savePlaybackNote() {
   const key = getPlaybackNoteKey();
   if (!key) return;
   const notes = loadPlaybackNotes();
+  const previousValue = String(notes[key] || '');
   const rawHours = normalizeTimeDigits(playbackNoteHoursInput.value, 3);
   const rawMinutes = normalizeTimeDigits(playbackNoteMinutesInput.value, 2);
   const minutes = rawMinutes ? String(Math.min(Number(rawMinutes), 59)).padStart(2, '0') : '';
   playbackNoteHoursInput.value = rawHours;
   playbackNoteMinutesInput.value = rawMinutes;
+  const nextValue = rawHours || minutes
+    ? `${rawHours || '0'}:${minutes || '00'}`
+    : '';
+  if (previousValue === nextValue) return;
   if (rawHours || minutes) {
-    const hours = rawHours || '0';
-    notes[key] = `${hours}:${minutes || '00'}`;
+    notes[key] = nextValue;
   } else {
     delete notes[key];
   }
   savePlaybackNotes(notes);
+  updateContinueWatching();
+  window.bilmAuth?.noteUserActivity?.('playback-note');
 }
 
 async function loadMovieDetails() {
