@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bilm - Random Lab</title>
+  <title>Bilm - Roulette Lab</title>
   <meta name="theme-color" content="#0a0a0a" />
 
   <link rel="manifest" href="../manifest.json" />
@@ -21,9 +21,9 @@
   <main class="rng-page">
     <header class="rng-hero panel">
       <div class="rng-hero-copy">
-        <p class="rng-kicker">Toolbox</p>
-        <h1>Random Lab</h1>
-        <p>Fresh RNG system with number ranges, weighted list picks, coin flips, dice rolls, history tracking, and reusable presets.</p>
+        <p class="rng-kicker">Casino Lab</p>
+        <h1>Roulette + RNG Tools</h1>
+        <p>Spin a visual roulette wheel with bankroll and strategy controls, plus keep number/list/coin/dice utilities in one place.</p>
       </div>
       <p class="rng-status" id="rngStatus">Ready</p>
     </header>
@@ -47,14 +47,151 @@
 
     <div class="rng-layout">
       <section class="panel rng-main-panel">
-        <div class="mode-tabs" role="tablist" aria-label="Random modes">
-          <button class="mode-tab is-active" data-mode="number" type="button" role="tab" aria-selected="true">Number</button>
+        <div class="mode-tabs" role="tablist" aria-label="RNG modes">
+          <button class="mode-tab is-active" data-mode="roulette" type="button" role="tab" aria-selected="true">Roulette</button>
+          <button class="mode-tab" data-mode="number" type="button" role="tab" aria-selected="false">Number</button>
           <button class="mode-tab" data-mode="list" type="button" role="tab" aria-selected="false">List picker</button>
           <button class="mode-tab" data-mode="coin" type="button" role="tab" aria-selected="false">Coin flip</button>
           <button class="mode-tab" data-mode="dice" type="button" role="tab" aria-selected="false">Dice</button>
         </div>
 
-        <section class="mode-panel" id="mode-number" data-mode-panel="number">
+        <section class="mode-panel roulette-panel" id="mode-roulette" data-mode-panel="roulette">
+          <div class="roulette-layout">
+            <article class="roulette-wheel-wrap">
+              <div class="wheel-stage">
+                <canvas id="rouletteWheel" width="560" height="560"></canvas>
+                <div class="wheel-pointer" aria-hidden="true"></div>
+              </div>
+              <div class="wheel-readout">
+                <p>Last outcome: <strong id="rouletteLastOutcome">-</strong></p>
+                <p>Landing: <strong id="rouletteLanding">-</strong></p>
+              </div>
+              <div class="recent-strip" id="rouletteRecentStrip">
+                <p class="muted">No spins yet.</p>
+              </div>
+            </article>
+
+            <article class="roulette-controls">
+              <div class="compact-card">
+                <p class="card-label">Practice bankroll</p>
+                <p class="big-balance">$<span id="balanceDisplay">1000.00</span></p>
+                <div class="field-row">
+                  <input id="balanceInput" type="number" min="1" value="1000" />
+                  <button id="applyBalanceBtn" class="ghost-btn" type="button">Apply</button>
+                </div>
+              </div>
+
+              <div class="compact-card">
+                <p class="card-label">Bet amount</p>
+                <div class="field-row">
+                  <input id="betAmountInput" type="number" min="1" value="10" />
+                  <button id="betHalfBtn" class="ghost-btn" type="button">Half</button>
+                  <button id="betDoubleBtn" class="ghost-btn" type="button">Double</button>
+                  <button id="betMaxBtn" class="ghost-btn" type="button">Max</button>
+                  <button id="betResetBtn" class="ghost-btn" type="button">Reset</button>
+                </div>
+              </div>
+
+              <div class="compact-card">
+                <p class="card-label">Bet on</p>
+                <div class="bet-grid" id="betGrid">
+                  <button class="bet-option bet-red" data-bet="red" type="button">Red</button>
+                  <button class="bet-option bet-black" data-bet="black" type="button">Black</button>
+                  <button class="bet-option bet-green" data-bet="green" type="button">Green</button>
+                  <button class="bet-option" data-bet="odd" type="button">Odd</button>
+                  <button class="bet-option" data-bet="even" type="button">Even</button>
+                  <button class="bet-option" data-bet="low" type="button">1-18</button>
+                  <button class="bet-option" data-bet="high" type="button">19-36</button>
+                </div>
+              </div>
+
+              <div class="compact-card">
+                <p class="card-label">Spin controls</p>
+                <div class="field-row">
+                  <button id="spinBtn" class="primary-btn" type="button">Spin wheel</button>
+                  <button id="autoSpinBtn" class="ghost-btn" type="button">Auto spin</button>
+                  <button id="stopAutoBtn" class="ghost-btn" type="button">Stop auto</button>
+                  <button id="resetSessionBtn" class="ghost-btn" type="button">Reset session</button>
+                </div>
+              </div>
+
+              <div class="compact-card">
+                <p class="card-label">Advanced wheel settings</p>
+                <div class="field-grid roulette-settings-grid">
+                  <label class="field" for="wheelTypeSelect">
+                    <span>Wheel type</span>
+                    <select id="wheelTypeSelect">
+                      <option value="classic">Classic (36)</option>
+                      <option value="european">European (single 0)</option>
+                      <option value="american">American (0 + 00)</option>
+                    </select>
+                  </label>
+                  <label class="field" for="rouletteStrategySelect">
+                    <span>Strategy</span>
+                    <select id="rouletteStrategySelect">
+                      <option value="flat">Flat</option>
+                      <option value="martingale">Martingale</option>
+                      <option value="reverse-martingale">Reverse Martingale</option>
+                      <option value="dalembert">D'Alembert</option>
+                    </select>
+                  </label>
+                  <label class="field" for="rouletteBiasSelect">
+                    <span>Bias test</span>
+                    <select id="rouletteBiasSelect">
+                      <option value="none">None</option>
+                      <option value="red">Favor red</option>
+                      <option value="black">Favor black</option>
+                      <option value="green">Favor green</option>
+                    </select>
+                  </label>
+                  <label class="field" for="rouletteColorPayoutInput">
+                    <span>Color payout</span>
+                    <input id="rouletteColorPayoutInput" type="number" min="1" step="0.1" value="2" />
+                  </label>
+                  <label class="field" for="rouletteGreenPayoutInput">
+                    <span>Green payout</span>
+                    <input id="rouletteGreenPayoutInput" type="number" min="1" step="0.1" value="14" />
+                  </label>
+                  <label class="field" for="spinDurationInput">
+                    <span>Spin ms</span>
+                    <input id="spinDurationInput" type="number" min="400" max="10000" step="100" value="2600" />
+                  </label>
+                  <label class="field" for="spinLoopsInput">
+                    <span>Extra loops</span>
+                    <input id="spinLoopsInput" type="number" min="1" max="12" value="5" />
+                  </label>
+                  <label class="field" for="instantResultSelect">
+                    <span>Instant result</span>
+                    <select id="instantResultSelect">
+                      <option value="auto">Auto</option>
+                      <option value="off">Off</option>
+                      <option value="on">On</option>
+                    </select>
+                  </label>
+                  <label class="field" for="rouletteSoundSelect">
+                    <span>Sound</span>
+                    <select id="rouletteSoundSelect">
+                      <option value="off">Off</option>
+                      <option value="on">On</option>
+                    </select>
+                  </label>
+                  <label class="field" for="autoSpinCountInput">
+                    <span>Auto spins</span>
+                    <input id="autoSpinCountInput" type="number" min="1" max="500" value="12" />
+                  </label>
+                  <label class="field" for="autoSpinDelayInput">
+                    <span>Auto delay ms</span>
+                    <input id="autoSpinDelayInput" type="number" min="150" max="10000" step="50" value="700" />
+                  </label>
+                </div>
+              </div>
+
+              <p class="roulette-message" id="rouletteMessage">Pick a bet and spin.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="mode-panel" id="mode-number" data-mode-panel="number" hidden>
           <div class="field-grid">
             <label class="field" for="numberMin">
               <span>Minimum</span>
@@ -92,7 +229,7 @@
 
         <section class="mode-panel" id="mode-list" data-mode-panel="list" hidden>
           <label class="field" for="listItems">
-            <span>Items (one per line, optional weight with <code>|</code>, example <code>Blue|3</code>)</span>
+            <span>Items (one per line, optional weight with <code>|</code>)</span>
             <textarea id="listItems" rows="8" spellcheck="false">Blue team
 Red team
 Gold team
@@ -148,12 +285,12 @@ Green team</textarea>
 
         <section class="result-panel">
           <div class="result-head">
-            <h2>Result</h2>
-            <p id="resultMeta">Generate to start.</p>
+            <h2 id="resultHeading">Round log</h2>
+            <p id="resultMeta">Spin to start.</p>
           </div>
           <output id="resultOutput" class="result-output" aria-live="polite">Ready.</output>
           <div class="result-actions">
-            <button id="generateBtn" class="primary-btn" type="button">Generate</button>
+            <button id="generateBtn" class="primary-btn" type="button">Spin / Generate</button>
             <button id="copyResultBtn" class="ghost-btn" type="button">Copy result</button>
           </div>
         </section>
@@ -166,6 +303,18 @@ Green team</textarea>
             <article>
               <p class="stat-label">Total runs</p>
               <p id="statRuns" class="stat-value">0</p>
+            </article>
+            <article>
+              <p class="stat-label">Wins</p>
+              <p id="statWins" class="stat-value">0</p>
+            </article>
+            <article>
+              <p class="stat-label">Losses</p>
+              <p id="statLosses" class="stat-value">0</p>
+            </article>
+            <article>
+              <p class="stat-label">Streak</p>
+              <p id="statStreak" class="stat-value">0</p>
             </article>
             <article>
               <p class="stat-label">Last mode</p>
@@ -199,9 +348,9 @@ Green team</textarea>
         <section class="side-block helper-block">
           <h2>Tips</h2>
           <ul>
-            <li>Press <kbd>Space</kbd> to generate quickly.</li>
-            <li>Use seeded mode when you need reproducible results.</li>
-            <li>For weighted picks, use <code>Item|Weight</code> format.</li>
+            <li>Roulette hotkeys: <kbd>R</kbd>, <kbd>B</kbd>, <kbd>G</kbd> to choose color; <kbd>Space</kbd> to spin.</li>
+            <li>Use seeded mode when you need reproducible rounds.</li>
+            <li>Utilities are still available in tabs if you need non-casino RNG.</li>
           </ul>
           <a class="subtle-link" href="./reset.html">Reset all local data</a>
         </section>
