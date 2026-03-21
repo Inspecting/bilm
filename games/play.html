@@ -17,21 +17,24 @@
   <link rel="stylesheet" href="./play.css" />
   <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
-      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./play.css" />
-    </head>
+
+</head>
 <body>
   <div id="navbarContainer"></div>
   <script src="../shared/navbar.js"></script>
 
   <main class="play-main">
     <header class="play-header">
-      <div>
+      <div class="play-title-wrap">
         <p class="play-kicker">Now playing</p>
         <h1 class="play-title" id="gameTitle">Loading game…</h1>
         <p class="play-description" id="gameDescription"></p>
+        <div class="play-meta" id="gameMeta"></div>
       </div>
-      <a class="back-link" href="./index.html">Back to Games</a>
+      <div class="play-header-actions">
+        <button class="action-button action-button-alt" id="favoriteGame" type="button">Add to favorites</button>
+        <a class="back-link" href="./index.html">Back to Games</a>
+      </div>
     </header>
 
     <section class="play-content" id="playContent">
@@ -47,10 +50,20 @@
       </div>
       <aside class="play-panel">
         <img class="play-poster" id="gamePoster" alt="" />
+        <div class="play-panel-meta">
+          <p><span>Category:</span> <strong id="gameCategory">General</strong></p>
+          <p><span>Source:</span> <strong id="gameSource">Unknown</strong></p>
+        </div>
         <div class="play-actions">
           <button class="action-button" id="openSource" type="button">Open game in new tab</button>
+          <button class="action-button action-button-alt" id="copyShare" type="button">Copy share link</button>
         </div>
       </aside>
+    </section>
+
+    <section class="play-list-section" id="recentWrap" hidden>
+      <h2>Recently played</h2>
+      <div class="play-list" id="recentList"></div>
     </section>
 
     <div class="play-empty" id="playEmpty" hidden>
@@ -60,6 +73,6 @@
     </div>
   </main>
 
-    <script src="./play.js"></script>
+  <script src="./play.js"></script>
 </body>
 </html>

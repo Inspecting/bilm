@@ -18,22 +18,41 @@
   <link rel="stylesheet" href="./style.css" />
   <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
-    
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./style.css" />
-    </head>
+
+</head>
 <body>
 
   <div id="navbarContainer"></div>
   <script src="../shared/navbar.js"></script>
 
-  <main>
+  <main class="games-page">
     <header class="page-header">
-      <div>
+      <div class="page-title-wrap">
         <p class="page-kicker">Jump into something fun</p>
         <h1 class="page-title">Games</h1>
+        <p class="page-subtitle">Fresh picks, favorites, and quick launch tools for your next game.</p>
       </div>
-      <div class="page-status" id="gameStatus">Loading games…</div>
+      <div class="header-actions">
+        <div class="page-status" id="gameStatus">Loading games…</div>
+      </div>
+      <div class="header-stats" id="headerStats" aria-live="polite">
+        <article class="stat-card">
+          <p class="stat-label">Total games</p>
+          <p class="stat-value" id="statTotal">0</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Categories</p>
+          <p class="stat-value" id="statCategories">0</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Favorites</p>
+          <p class="stat-value" id="statFavorites">0</p>
+        </article>
+        <article class="stat-card">
+          <p class="stat-label">Recently played</p>
+          <p class="stat-value" id="statRecent">0</p>
+        </article>
+      </div>
     </header>
 
     <section class="page-toolbar" aria-label="Game search and filters">
@@ -41,18 +60,49 @@
         <span class="search-label">Search games</span>
         <input id="gameSearchInput" type="search" placeholder="Search by title, category, or description" autocomplete="off" />
       </label>
+      <label class="toolbar-field" for="sortSelect">
+        <span class="search-label">Sort</span>
+        <select id="sortSelect">
+          <option value="featured">Featured</option>
+          <option value="name">Name (A-Z)</option>
+          <option value="category">Category</option>
+          <option value="recent">Recently played</option>
+        </select>
+      </label>
+      <button id="favoritesToggleBtn" class="toolbar-button" type="button" aria-pressed="false">Favorites only</button>
+      <button id="randomPlayBtn" class="toolbar-button toolbar-button-accent" type="button">Play random</button>
       <button id="clearSearchBtn" class="toolbar-button" type="button" hidden>Clear</button>
+    </section>
+
+    <section class="chip-bar" id="categoryChips" aria-label="Category filters"></section>
+
+    <section class="rail-wrap" id="favoriteRailWrap" hidden>
+      <div class="rail-head">
+        <h2>Favorites</h2>
+      </div>
+      <div class="rail-grid" id="favoriteRail"></div>
+    </section>
+
+    <section class="rail-wrap" id="recentRailWrap" hidden>
+      <div class="rail-head">
+        <h2>Recently played</h2>
+      </div>
+      <div class="rail-grid" id="recentRail"></div>
     </section>
 
     <p class="results-meta" id="resultsMeta" hidden></p>
 
-    <div id="gameSections"></div>
+    <section class="results-section">
+      <h2 class="section-title" id="resultsTitle">All games</h2>
+      <div id="gameSections" class="results-grid"></div>
+      <button id="loadMoreBtn" class="load-more-btn" type="button" hidden>Load more</button>
+    </section>
 
     <div class="empty-state" id="gameEmpty" hidden>
-      <p>No games available right now. Try again later.</p>
+      <p>No games matched the current filters. Try another search or reset favorites/category filters.</p>
     </div>
   </main>
 
-    <script src="./script.js"></script>
+  <script src="./script.js"></script>
 </body>
 </html>
