@@ -390,10 +390,6 @@ const createGameCard = (game) => {
   title.className = 'game-title';
   title.textContent = game.title;
 
-  const description = document.createElement('p');
-  description.className = 'game-description';
-  description.textContent = game.description || 'Jump in and start playing instantly.';
-
   const tags = document.createElement('div');
   tags.className = 'game-tags';
   (game.tags || []).slice(0, 3).forEach((tag) => tags.appendChild(createTagPill(tag)));
@@ -421,7 +417,7 @@ const createGameCard = (game) => {
   }
 
   actions.append(playBtn, sourceBtn);
-  body.append(metaRow, title, description, tags, actions);
+  body.append(metaRow, title, tags, actions);
   card.append(thumbButton, body);
 
   return card;

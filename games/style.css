@@ -304,7 +304,7 @@ body {
   box-shadow: var(--shadow-sm);
   display: grid;
   grid-template-rows: auto 1fr;
-  min-height: 300px;
+  min-height: 260px;
 }
 
 .game-thumb {
@@ -381,13 +381,6 @@ body {
 .game-title {
   font-size: 16px;
   line-height: 1.25;
-}
-
-.game-description {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.45;
-  min-height: 36px;
 }
 
 .game-tags {
@@ -518,10 +511,6 @@ body {
 
   .game-title {
     font-size: 14px;
-  }
-
-  .game-description {
-    display: none;
   }
 
   .source-btn {
