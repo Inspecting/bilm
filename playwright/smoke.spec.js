@@ -81,6 +81,138 @@ async function setLocalJson(page, key, value) {
   }, { storageKey: key, payload: value });
 }
 
+async function mockNativeFullscreenFailure(page) {
+  await page.evaluate(() => {
+    const setMethod = (obj, name, fn) => {
+      if (!obj) return;
+      try {
+        obj[name] = fn;
+        return;
+      } catch {
+        // Fall through to defineProperty.
+      }
+      try {
+        Object.defineProperty(obj, name, {
+          configurable: true,
+          writable: true,
+          value: fn
+        });
+      } catch {
+        // Ignore unsupported descriptor updates in test stubs.
+      }
+    };
+    const setGetter = (obj, name, getter) => {
+      try {
+        Object.defineProperty(obj, name, {
+          configurable: true,
+          get: getter
+        });
+      } catch {
+        // Ignore unsupported descriptor updates in test stubs.
+      }
+    };
+    let activeElement = null;
+    const failRequest = () => Promise.reject(new Error('fullscreen blocked by test'));
+    const targets = ['#videoPlayer', '#playerContainer', '#playerWithControls']
+      .map((selector) => document.querySelector(selector))
+      .filter(Boolean);
+
+    setGetter(document, 'fullscreenElement', () => activeElement);
+    setGetter(document, 'webkitFullscreenElement', () => activeElement);
+    setGetter(document, 'msFullscreenElement', () => activeElement);
+
+    targets.forEach((element) => {
+      setMethod(element, 'requestFullscreen', failRequest);
+      setMethod(element, 'webkitRequestFullscreen', failRequest);
+      setMethod(element, 'msRequestFullscreen', failRequest);
+    });
+
+    const exit = () => {
+      activeElement = null;
+      document.dispatchEvent(new Event('fullscreenchange'));
+      return Promise.resolve();
+    };
+    setMethod(document, 'exitFullscreen', exit);
+    setMethod(document, 'webkitExitFullscreen', exit);
+    setMethod(document, 'msExitFullscreen', exit);
+  });
+}
+
+async function mockNativeFullscreenSuccess(page, targetSelector = '#videoPlayer') {
+  await page.evaluate((selector) => {
+    const setMethod = (obj, name, fn) => {
+      if (!obj) return;
+      try {
+        obj[name] = fn;
+        return;
+      } catch {
+        // Fall through to defineProperty.
+      }
+      try {
+        Object.defineProperty(obj, name, {
+          configurable: true,
+          writable: true,
+          value: fn
+        });
+      } catch {
+        // Ignore unsupported descriptor updates in test stubs.
+      }
+    };
+    const setGetter = (obj, name, getter) => {
+      try {
+        Object.defineProperty(obj, name, {
+          configurable: true,
+          get: getter
+        });
+      } catch {
+        // Ignore unsupported descriptor updates in test stubs.
+      }
+    };
+    let activeElement = null;
+    window.__bilmFullscreenMock = {
+      requestCount: 0,
+      exitCount: 0
+    };
+
+    setGetter(document, 'fullscreenElement', () => activeElement);
+    setGetter(document, 'webkitFullscreenElement', () => activeElement);
+    setGetter(document, 'msFullscreenElement', () => activeElement);
+
+    const failRequest = () => Promise.reject(new Error('fullscreen blocked by test'));
+    const targets = ['#videoPlayer', '#playerContainer', '#playerWithControls']
+      .map((entry) => document.querySelector(entry))
+      .filter(Boolean);
+    targets.forEach((element) => {
+      setMethod(element, 'requestFullscreen', failRequest);
+      setMethod(element, 'webkitRequestFullscreen', failRequest);
+      setMethod(element, 'msRequestFullscreen', failRequest);
+    });
+
+    const target = document.querySelector(selector);
+    if (target) {
+      const succeedRequest = function succeedRequest() {
+        window.__bilmFullscreenMock.requestCount += 1;
+        activeElement = this;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        return Promise.resolve();
+      };
+      setMethod(target, 'requestFullscreen', succeedRequest);
+      setMethod(target, 'webkitRequestFullscreen', succeedRequest);
+      setMethod(target, 'msRequestFullscreen', succeedRequest);
+    }
+
+    const exit = () => {
+      window.__bilmFullscreenMock.exitCount += 1;
+      activeElement = null;
+      document.dispatchEvent(new Event('fullscreenchange'));
+      return Promise.resolve();
+    };
+    setMethod(document, 'exitFullscreen', exit);
+    setMethod(document, 'webkitExitFullscreen', exit);
+    setMethod(document, 'msExitFullscreen', exit);
+  }, targetSelector);
+}
+
 test('core routes render', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   await page.goto('/home/');
@@ -181,6 +313,69 @@ test('anime watch keeps subtitles disabled', async ({ page }) => {
   await expect(page.locator('#playexBar')).toBeVisible();
   await expect(page.locator('#subtitleBtn')).toBeHidden();
   await expect(page.locator('#autoplayBtn')).toHaveCount(0);
+});
+
+test('movie watch fullscreen falls back to simulated shell when native fullscreen fails', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  await page.goto('/movies/watch/viewer.html?id=447365', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#fullscreenBtn')).toBeVisible();
+  await expect(page.locator('#playexBar')).toBeVisible();
+
+  await mockNativeFullscreenFailure(page);
+  await page.click('#fullscreenBtn');
+
+  await expect(page.locator('#playerWithControls')).toHaveClass(/(^| )simulated-fullscreen( |$)/);
+  await expect(page.locator('#mediaHeader')).toBeHidden();
+  await expect(page.locator('#playexBar')).toBeHidden();
+  await expect(page.locator('#navbarContainer')).toHaveClass(/(^| )hide-navbar( |$)/);
+  await expect(page.locator('#closeBtn')).toBeVisible();
+
+  await page.click('#closeBtn');
+  await expect(page.locator('#playerWithControls')).not.toHaveClass(/(^| )simulated-fullscreen( |$)/);
+  await expect(page.locator('#closeBtn')).toBeHidden();
+  await expect(page.locator('#navbarContainer')).not.toHaveClass(/(^| )hide-navbar( |$)/);
+});
+
+test('tv watch fullscreen fallback hides compact controls and restores on close', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  await page.goto('/tv/watch/viewer.html?id=1399', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#fullscreenBtn')).toBeVisible();
+  await expect(page.locator('#controlsCompact')).toBeVisible();
+
+  await mockNativeFullscreenFailure(page);
+  await page.click('#fullscreenBtn');
+
+  await expect(page.locator('#playerWithControls')).toHaveClass(/(^| )simulated-fullscreen( |$)/);
+  await expect(page.locator('#controlsCompact')).toBeHidden();
+  await expect(page.locator('#playexBar')).toBeHidden();
+  await expect(page.locator('#closeBtn')).toBeVisible();
+
+  await page.click('#closeBtn');
+  await expect(page.locator('#playerWithControls')).not.toHaveClass(/(^| )simulated-fullscreen( |$)/);
+  await expect(page.locator('#controlsCompact')).toBeVisible();
+  await expect(page.locator('#closeBtn')).toBeHidden();
+});
+
+test('watch fullscreen prefers native fullscreen before simulated fallback', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  await page.goto('/movies/watch/viewer.html?id=447365', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#fullscreenBtn')).toBeVisible();
+
+  await mockNativeFullscreenSuccess(page, '#videoPlayer');
+  await page.click('#fullscreenBtn');
+
+  await expect(page.locator('#playerWithControls')).not.toHaveClass(/(^| )simulated-fullscreen( |$)/);
+  await expect(page.locator('#navbarContainer')).toHaveClass(/(^| )hide-navbar( |$)/);
+  const enterStats = await page.evaluate(() => window.__bilmFullscreenMock);
+  expect(enterStats?.requestCount ?? 0).toBeGreaterThan(0);
+
+  await expect(page.locator('#closeBtn')).toBeVisible();
+  await page.click('#closeBtn');
+
+  const exitStats = await page.evaluate(() => window.__bilmFullscreenMock);
+  expect(exitStats?.exitCount ?? 0).toBeGreaterThan(0);
+  await expect(page.locator('#navbarContainer')).not.toHaveClass(/(^| )hide-navbar( |$)/);
+  await expect(page.locator('#closeBtn')).toBeHidden();
 });
 
 test('settings exposes diagnostics controls', async ({ page }) => {

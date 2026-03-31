@@ -21,6 +21,7 @@ const fullscreenBtn = document.getElementById('fullscreenBtn');
 const refreshBtn = document.getElementById('refreshBtn');
 const closeBtn = document.getElementById('closeBtn');
 const playerContainer = document.getElementById('playerContainer');
+const playerWithControls = document.getElementById('playerWithControls');
 const navbarContainer = document.getElementById('navbarContainer');
 const mediaTitle = document.getElementById('mediaTitle');
 const mediaMeta = document.getElementById('mediaMeta');
@@ -240,9 +241,6 @@ const mediaIdentity = window.BilmMediaIdentity || {
 };
 mediaIdentity.migrateLocalListsOnce?.();
 
-const isMobile = window.matchMedia('(max-width: 768px)').matches
-  || window.matchMedia('(pointer: coarse)').matches
-  || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 const CONTINUE_WATCHING_DELAY = 15000;
 let continueWatchingReady = false;
 let continueWatchingTimer = null;
@@ -735,57 +733,130 @@ function tryEmbedMasterFullscreenCommand() {
   dispatchEmbedMasterCommand('fullscreen');
 }
 
-function requestElementFullscreen(element) {
+function getActiveFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
+}
+
+function doesFullscreenMatch(element) {
   if (!element) return false;
-  if (element.requestFullscreen) {
-    element.requestFullscreen();
-    return true;
+  const activeElement = getActiveFullscreenElement();
+  if (!activeElement) return false;
+  if (activeElement === element || element === activeElement) return true;
+  if (typeof activeElement.contains === 'function' && activeElement.contains(element)) return true;
+  if (typeof element.contains === 'function' && element.contains(activeElement)) return true;
+  return false;
+}
+
+async function waitForFullscreenMatch(element, timeoutMs = 450) {
+  const endAt = Date.now() + timeoutMs;
+  while (Date.now() < endAt) {
+    if (doesFullscreenMatch(element)) return true;
+    await new Promise((resolve) => window.setTimeout(resolve, 32));
   }
-  if (element.webkitRequestFullscreen) {
-    element.webkitRequestFullscreen();
-    return true;
+  return doesFullscreenMatch(element);
+}
+
+async function requestElementFullscreen(element) {
+  if (!element) return false;
+  const requestMethod = element.requestFullscreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
+  if (typeof requestMethod !== 'function') return false;
+  try {
+    const result = requestMethod.call(element);
+    if (result && typeof result.then === 'function') {
+      await result;
+    }
+  } catch {
+    return false;
   }
-  if (element.msRequestFullscreen) {
-    element.msRequestFullscreen();
-    return true;
+  if (doesFullscreenMatch(element)) return true;
+  return waitForFullscreenMatch(element);
+}
+
+function setOverlayUiState(active) {
+  if (closeBtn) {
+    closeBtn.style.display = active ? 'block' : 'none';
+  }
+  navbarContainer?.classList.toggle('hide-navbar', active);
+}
+
+function enterSimulatedFullscreen() {
+  if (!playerWithControls) return;
+  playerWithControls.classList.add('simulated-fullscreen');
+  document.body.classList.add('simulated-fullscreen-active');
+  setOverlayUiState(true);
+}
+
+function exitSimulatedFullscreen() {
+  playerWithControls?.classList.remove('simulated-fullscreen');
+  document.body.classList.remove('simulated-fullscreen-active');
+}
+
+async function tryStartNativeFullscreen() {
+  const targets = [iframe, playerContainer, playerWithControls];
+  for (const target of targets) {
+    if (await requestElementFullscreen(target)) {
+      return true;
+    }
   }
   return false;
 }
 
-fullscreenBtn.onclick = () => {
-  tryEmbedMasterFullscreenCommand();
-  if (!isMobile) {
-    const fullscreenStarted = requestElementFullscreen(iframe) || requestElementFullscreen(playerContainer);
-    if (!fullscreenStarted) {
-      playerContainer.classList.add('simulated-fullscreen');
+async function exitNativeFullscreen() {
+  try {
+    if (document.exitFullscreen) {
+      await document.exitFullscreen();
+      return true;
     }
-  } else {
-    playerContainer.classList.add('simulated-fullscreen');
+    if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+      return true;
+    }
+    if (document.msExitFullscreen) {
+      document.msExitFullscreen();
+      return true;
+    }
+  } catch {
+    return false;
   }
-  if (closeBtn) {
-    closeBtn.style.display = 'block';
+  return false;
+}
+
+function handleFullscreenStateChange() {
+  if (getActiveFullscreenElement()) {
+    setOverlayUiState(true);
+    return;
   }
-  navbarContainer.classList.add('hide-navbar');
+  exitSimulatedFullscreen();
+  setOverlayUiState(false);
+}
+
+fullscreenBtn.onclick = async () => {
+  tryEmbedMasterFullscreenCommand();
+  const fullscreenStarted = await tryStartNativeFullscreen();
+  if (!fullscreenStarted) {
+    enterSimulatedFullscreen();
+    return;
+  }
+  exitSimulatedFullscreen();
+  setOverlayUiState(true);
 };
 
 if (closeBtn) {
-  closeBtn.onclick = () => {
-    if (isMobile) {
-      playerContainer.classList.remove('simulated-fullscreen');
-    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
-      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+  closeBtn.onclick = async () => {
+    if (getActiveFullscreenElement()) {
+      await exitNativeFullscreen();
     }
-    closeBtn.style.display = 'none';
-    navbarContainer.classList.remove('hide-navbar');
+    exitSimulatedFullscreen();
+    if (!getActiveFullscreenElement()) {
+      setOverlayUiState(false);
+    } else {
+      setOverlayUiState(true);
+    }
   };
 }
 
-document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) {
-    if (closeBtn) closeBtn.style.display = 'none';
-    navbarContainer.classList.remove('hide-navbar');
-  }
-});
+document.addEventListener('fullscreenchange', handleFullscreenStateChange);
+document.addEventListener('webkitfullscreenchange', handleFullscreenStateChange);
 
 if (iframe) {
   iframe.addEventListener('load', () => {
