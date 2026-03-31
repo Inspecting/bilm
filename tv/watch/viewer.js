@@ -782,14 +782,17 @@ function setOverlayUiState(active) {
 function enterSimulatedFullscreen() {
   if (!playerWithControls) return;
   document.body.classList.remove('native-fullscreen-active');
+  document.documentElement.classList.remove('native-fullscreen-active');
   playerWithControls.classList.add('simulated-fullscreen');
   document.body.classList.add('simulated-fullscreen-active');
+  document.documentElement.classList.add('simulated-fullscreen-active');
   setOverlayUiState(true);
 }
 
 function exitSimulatedFullscreen() {
   playerWithControls?.classList.remove('simulated-fullscreen');
   document.body.classList.remove('simulated-fullscreen-active');
+  document.documentElement.classList.remove('simulated-fullscreen-active');
 }
 
 async function tryStartNativeFullscreen() {
@@ -825,6 +828,8 @@ async function exitNativeFullscreen() {
 function handleFullscreenStateChange() {
   const nativeFullscreenActive = Boolean(getActiveFullscreenElement());
   document.body.classList.toggle('native-fullscreen-active', nativeFullscreenActive);
+  document.documentElement.classList.toggle('native-fullscreen-active', nativeFullscreenActive);
+  playerWithControls?.classList.toggle('native-fullscreen-shell', nativeFullscreenActive);
   if (nativeFullscreenActive) {
     setOverlayUiState(true);
     return;
@@ -842,6 +847,7 @@ fullscreenBtn.onclick = async () => {
   }
   exitSimulatedFullscreen();
   document.body.classList.add('native-fullscreen-active');
+  document.documentElement.classList.add('native-fullscreen-active');
   setOverlayUiState(true);
 };
 
@@ -853,9 +859,11 @@ if (closeBtn) {
     exitSimulatedFullscreen();
     if (!getActiveFullscreenElement()) {
       document.body.classList.remove('native-fullscreen-active');
+      document.documentElement.classList.remove('native-fullscreen-active');
       setOverlayUiState(false);
     } else {
       document.body.classList.add('native-fullscreen-active');
+      document.documentElement.classList.add('native-fullscreen-active');
       setOverlayUiState(true);
     }
   };
@@ -863,6 +871,13 @@ if (closeBtn) {
 
 document.addEventListener('fullscreenchange', handleFullscreenStateChange);
 document.addEventListener('webkitfullscreenchange', handleFullscreenStateChange);
+window.addEventListener('resize', handleFullscreenStateChange, { passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    handleFullscreenStateChange();
+  }
+});
+handleFullscreenStateChange();
 
 if (iframe) {
   iframe.addEventListener('load', () => {

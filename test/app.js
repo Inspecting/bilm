@@ -2,7 +2,7 @@ const CUSTOM_SERVERS_KEY = 'bilm-test-custom-servers';
 
 function detectBasePath() {
   const parts = window.location.pathname.split('/').filter(Boolean);
-  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
   if (!parts.length || appRoots.has(parts[0])) return '';
   if (parts.length > 1 && appRoots.has(parts[1])) return `/${parts[0]}`;
   return '';

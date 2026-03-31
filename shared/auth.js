@@ -372,7 +372,6 @@
   const SYNC_PAUSE_RECHECK_MS = 30000;
   const CLOUD_DRIFT_REPAIR_COOLDOWN_MS = 10 * 60 * 1000;
   const LIST_SYNC_CURSOR_META_KEY = 'lastListSyncCursorMs';
-  const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
   const LIST_SYNC_MIGRATED_META_KEY = 'sectorMigrationCompletedAtMs';
   const LIST_SYNC_ONE_TIME_RECOVERY_META_KEY = 'oneTimeRecoveryPullCompletedAtMs';
   const ONE_TIME_RECOVERY_MAX_PAGES = 8;
@@ -383,7 +382,6 @@
   const SYNC_FUTURE_TIME_WINDOW_MS = 10 * 60 * 1000;
   const SYNC_PENDING_DIAGNOSTIC_LIMIT = 20;
   const SYNC_MAX_ITEM_KEY_LENGTH = 255;
-  const SYNC_CHAT_MAX_TEXT_LENGTH = 2000;
 
   const SYNC_ENABLED_KEY = 'bilm-sync-enabled';
   const SYNC_META_KEY = 'bilm-sync-meta';
@@ -398,7 +396,6 @@
     'bilm-continue-watching',
     'bilm-watch-history',
     'bilm-search-history',
-    'bilm-shared-chat',
     'bilm-history-movies',
     'bilm-history-tv'
   ]);
@@ -434,7 +431,6 @@
     'bilm-continue-watching': 'continue_watching',
     'bilm-watch-history': 'watch_history',
     'bilm-search-history': 'search_history',
-    'bilm-shared-chat': 'chat_messages',
     'bilm-history-movies': 'watch_history',
     'bilm-history-tv': 'watch_history'
   });
@@ -443,12 +439,9 @@
     watch_later: 'bilm-watch-later',
     continue_watching: 'bilm-continue-watching',
     watch_history: 'bilm-watch-history',
-    search_history: 'bilm-search-history',
-    chat_messages: 'bilm-shared-chat'
+    search_history: 'bilm-search-history'
   });
-  const LIST_MAX_ITEMS_BY_KEY = Object.freeze({
-    'bilm-shared-chat': 20
-  });
+  const LIST_MAX_ITEMS_BY_KEY = Object.freeze({});
   const DEFAULT_LIST_MAX_ITEMS = 120;
   const EXTRA_SYNC_SECTOR_KEYS = Object.freeze({
     settings_profile: 'settings_profile',
@@ -487,8 +480,6 @@
   let lastAppliedCloudSignature = '';
   const pendingListOperations = new Map();
   const pendingSectorOperations = new Map();
-  let lastChatSyncError = null;
-  let lastChatSyncPullAt = 0;
   const syncIssueSubscribers = new Set();
   const listSyncAppliedSubscribers = new Set();
   let listSyncRetryTimer = null;
@@ -1084,14 +1075,6 @@
 
   function setListSyncCursorMs(nextCursorMs) {
     return setScopedSyncMetaNumber(LIST_SYNC_CURSOR_META_KEY, nextCursorMs);
-  }
-
-  function getChatSyncCursorMs() {
-    return getScopedSyncMetaNumber(CHAT_SYNC_CURSOR_META_KEY, 0);
-  }
-
-  function setChatSyncCursorMs(nextCursorMs) {
-    return setScopedSyncMetaNumber(CHAT_SYNC_CURSOR_META_KEY, nextCursorMs);
   }
 
   function getSectorMigrationCompletedAtMs() {
@@ -2442,9 +2425,7 @@
   }
 
   function getOperationSyncScope(operation = {}) {
-    const sectorKey = String(operation?.sectorKey || '').trim().toLowerCase();
-    const listKey = String(operation?.listKey || sectorKeyToListKey(sectorKey) || '').trim();
-    if (listKey === 'bilm-shared-chat' || sectorKey === 'chat_messages') return 'chat';
+    void operation;
     return 'sync';
   }
 
@@ -2499,31 +2480,11 @@
     const payload = operation?.payload;
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       return {
-        code: sectorKey === 'chat_messages' ? 'chat_payload_invalid' : 'invalid_payload',
+        code: 'invalid_payload',
         message: 'Operation payload must be an object.',
         status: 400,
         retryable: false
       };
-    }
-    if (sectorKey === 'chat_messages') {
-      const text = String(payload?.text || '').trim();
-      if (!text) {
-        return {
-          code: 'chat_payload_invalid',
-          message: 'Chat payload text is required.',
-          status: 400,
-          retryable: false
-        };
-      }
-      if (text.length > SYNC_CHAT_MAX_TEXT_LENGTH) {
-        return {
-          code: 'chat_message_too_large',
-          message: `Chat payload text exceeds ${SYNC_CHAT_MAX_TEXT_LENGTH} characters.`,
-          status: 413,
-          retryable: false
-        };
-      }
-      return null;
     }
 
     let serialized = '';
@@ -2724,22 +2685,8 @@
       : 1200;
     const jitterMs = Math.floor(Math.random() * 450);
     const nextDelay = listSyncRetryDelayMs + jitterMs;
-    const hasChatOperations = operations.some((operation) => (
-      String(operation?.listKey || '').trim() === 'bilm-shared-chat'
-      || String(operation?.sectorKey || '').trim() === 'chat_messages'
-    ));
-    if (hasChatOperations) {
-      emitSyncIssue({
-        scope: 'chat',
-        listKey: 'bilm-shared-chat',
-        sectorKey: listKeyToSectorKey('bilm-shared-chat'),
-        code: error?.code || error?.error || 'chat_sync_failed',
-        message: error?.message || 'Chat sync failed. We will retry automatically.',
-        status: error?.status || null,
-        retryable: error?.retryable !== false,
-        requestId: error?.requestId || null
-      });
-    }
+    void error;
+    void operations;
     listSyncRetryTimer = window.setTimeout(() => {
       flushPendingListOperationsToCloud('retry-backoff').catch((retryError) => {
         console.warn('List sync retry failed:', retryError);
@@ -3786,61 +3733,6 @@
       await init();
       if (isIncognitoSyncPaused()) return false;
       return syncFromCloudNow(options);
-    },
-    async pullChatNow(options = {}) {
-      await init();
-      if (isIncognitoSyncPaused()) {
-        throw buildIncognitoPausedError('sync chat');
-      }
-      const user = await requireAuth();
-      const userId = getTransferUserId(user);
-      const sinceMs = normalizeOperationUpdatedAt(options?.sinceMs, getChatSyncCursorMs());
-      const limit = Math.max(1, Math.min(500, Number(options?.limit || 120) || 120));
-      try {
-        const payload = await pullSectorOperationsFromTransferApi(user, userId, {
-          sinceMs,
-          limit,
-          sectors: ['chat_messages'],
-          allowLegacyListFallback: false
-        });
-        const rawOps = Array.isArray(payload?.operations) ? payload.operations : [];
-        const chatOps = rawOps
-          .map((operation) => toListOperation(operation))
-          .filter((operation) => String(operation?.listKey || '').trim() === 'bilm-shared-chat');
-        const applied = chatOps.length ? applyListOperationsToLocalStorage(chatOps) : false;
-        const cursorMs = Math.max(
-          normalizeOperationUpdatedAt(payload?.cursorMs, sinceMs),
-          chatOps.reduce((max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0)), 0)
-        );
-        if (cursorMs > 0) setChatSyncCursorMs(cursorMs);
-        lastChatSyncPullAt = Date.now();
-        lastChatSyncError = null;
-        return {
-          ok: true,
-          applied,
-          operations: chatOps,
-          cursorMs,
-          state: payload?.state || null,
-          requestId: payload?.requestId || null
-        };
-      } catch (error) {
-        lastChatSyncError = {
-          code: String(error?.code || error?.error || 'chat_pull_failed'),
-          message: String(error?.message || 'Chat pull failed.'),
-          status: Number(error?.status || 0) || null,
-          retryable: error?.retryable !== false,
-          requestId: String(error?.requestId || '').trim() || null,
-          atMs: Date.now()
-        };
-        throw error;
-      }
-    },
-    getChatSyncState() {
-      return {
-        cursorMs: getChatSyncCursorMs(),
-        lastPullAt: lastChatSyncPullAt || null,
-        lastError: lastChatSyncError
-      };
     },
     async flushSyncNow(reason = 'manual') {
       if (isIncognitoSyncPaused()) {

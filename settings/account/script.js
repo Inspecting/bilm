@@ -1,5 +1,5 @@
 function detectBasePath() {
-  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
   const parts = window.location.pathname.split('/').filter(Boolean);
   if (!parts.length) return '';
   
@@ -248,8 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
       'bilm-watch-history',
       'bilm-favorites',
       'bilm-watch-later',
-      'bilm-search-history',
-      'bilm-shared-chat'
+      'bilm-search-history'
     ]);
 
     const parseJson = (value, fallback) => {

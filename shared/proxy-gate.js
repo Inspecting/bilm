@@ -9,7 +9,7 @@
   const MAX_AUTO_RETRIES = 2;
 
   function detectBasePath() {
-    const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+    const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
     const parts = window.location.pathname.split('/').filter(Boolean);
     if (!parts.length) return '';
     

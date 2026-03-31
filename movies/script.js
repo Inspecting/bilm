@@ -1,5 +1,5 @@
 function detectBasePath() {
-  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
   const parts = window.location.pathname.split('/').filter(Boolean);
   if (!parts.length) return '';
   
@@ -47,12 +47,24 @@ const pageRequestController = new AbortController();
 
 const modeState = { current: 'regular' };
 const filterState = {
-  genres: new Set(),
-  ageRatings: new Set(),
+  genre: '',
+  age: '',
   minYear: '',
   maxYear: '',
   minRating: ''
 };
+const MOVIE_AGE_FILTER_OPTIONS = [
+  { value: 'G', label: 'G' },
+  { value: 'PG', label: 'PG' },
+  { value: 'PG-13', label: 'PG-13' },
+  { value: 'R', label: 'R' },
+  { value: 'NC-17', label: 'NC-17' }
+];
+const ANIME_AGE_FILTER_OPTIONS = [
+  { value: 'not_adult', label: 'Not Adult' },
+  { value: 'adult', label: 'Adult' },
+  { value: 'unknown', label: 'Unknown' }
+];
 const filterElements = {
   toggle: null,
   overlay: null,
@@ -67,7 +79,6 @@ const filterElements = {
   apply: null,
   summary: null
 };
-let filterMutationRefreshTimer = null;
 let animeSectionsBootstrapped = false;
 let animeSectionsLoadPromise = null;
 let activeAniListUrl = ANILIST_GRAPHQL_URL;
@@ -105,7 +116,6 @@ function setContentMode(mode) {
   if (animeSections) animeSections.classList.toggle('is-hidden', !isAnime);
 
   refreshFilterUiForCurrentMode();
-  applyFiltersToActiveMode();
 }
 
 function bindModeToggleButtons(onAnimeSelected) {
@@ -145,158 +155,76 @@ function sanitizeFilterRating(value) {
   return Math.round(parsed * 10) / 10;
 }
 
-function getActiveSectionsContainer() {
+function toSlug(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function buildCategoryUrl({
+  mode = 'regular',
+  section = '',
+  genre = '',
+  title = '',
+  yearMin = '',
+  yearMax = '',
+  ratingMin = '',
+  age = ''
+} = {}) {
+  const params = new URLSearchParams();
+  params.set('mode', mode === 'anime' ? 'anime' : 'regular');
+  const normalizedSection = toSlug(section);
+  if (normalizedSection) params.set('section', normalizedSection);
+  const normalizedGenre = toSlug(genre);
+  if (normalizedGenre) params.set('genre', normalizedGenre);
+  const normalizedYearMin = sanitizeFilterYear(yearMin);
+  const normalizedYearMax = sanitizeFilterYear(yearMax);
+  const normalizedRatingMin = sanitizeFilterRating(ratingMin);
+  if (normalizedYearMin !== '') params.set('year_min', String(normalizedYearMin));
+  if (normalizedYearMax !== '') params.set('year_max', String(normalizedYearMax));
+  if (normalizedRatingMin !== '') params.set('rating_min', String(normalizedRatingMin));
+  const ageValue = String(age || '').trim();
+  if (ageValue) params.set('age', ageValue);
+  const titleValue = String(title || '').trim();
+  if (titleValue) params.set('title', titleValue);
+  return `${BASE_URL}/movies/category.html?${params.toString()}`;
+}
+
+function getActiveGenreEntries() {
+  if (modeState.current === 'anime') {
+    return ANIME_MOVIE_GENRES.map((label) => ({ value: toSlug(label), label }));
+  }
+  return allGenres
+    .map((genre) => String(genre?.name || '').trim())
+    .filter(Boolean)
+    .map((label) => ({ value: toSlug(label), label }));
+}
+
+function getActiveAgeEntries() {
   return modeState.current === 'anime'
-    ? document.getElementById('animeSections')
-    : document.getElementById('movieSections');
+    ? [...ANIME_AGE_FILTER_OPTIONS]
+    : [...MOVIE_AGE_FILTER_OPTIONS];
 }
 
-function getActiveGenreOptionLabels() {
-  if (modeState.current === 'anime') return [...ANIME_MOVIE_GENRES];
-  return allGenres.map((genre) => String(genre?.name || '').trim()).filter(Boolean);
-}
-
-function getCardYear(card) {
-  const directYear = sanitizeFilterYear(card?.dataset?.year);
-  if (directYear) return directYear;
-  const subtitle = card?.querySelector('.card-subtitle')?.textContent || '';
-  const fromSubtitle = subtitle.split('•').map((part) => part.trim())[0];
-  return sanitizeFilterYear(fromSubtitle);
-}
-
-function getCardRating(card) {
-  const directRating = sanitizeFilterRating(card?.dataset?.rating);
-  if (directRating !== '') return directRating;
-  const badgeText = card?.querySelector('.rating-badge-overlay')?.textContent || '';
-  const parsed = Number.parseFloat(String(badgeText).replace(/[^\d.]/g, ''));
-  if (!Number.isFinite(parsed)) return null;
-  return Math.round(parsed * 10) / 10;
-}
-
-function getCardAgeRating(card) {
-  const fromDataset = String(card?.dataset?.ageRating || '').trim();
-  if (fromDataset) return fromDataset.toUpperCase();
-  const subtitle = String(card?.querySelector('.card-subtitle')?.textContent || '').trim();
-  if (!subtitle) return 'N/A';
-  const parts = subtitle.split('•').map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return 'N/A';
-  return String(parts[parts.length - 1] || 'N/A').toUpperCase();
-}
-
-function getCardGenreTokens(card) {
-  const raw = String(card?.dataset?.genres || '');
-  if (!raw) return [];
-  return raw.split('|').map((entry) => normalizeFilterToken(entry)).filter(Boolean);
-}
-
-function cardMatchesActiveFilters(card) {
-  const activeGenres = filterState.genres;
-  const activeAgeRatings = filterState.ageRatings;
-  const minYear = sanitizeFilterYear(filterState.minYear);
-  const maxYear = sanitizeFilterYear(filterState.maxYear);
-  const minRating = sanitizeFilterRating(filterState.minRating);
-
-  const cardYear = getCardYear(card);
-  const cardRating = getCardRating(card);
-  const cardAgeRating = normalizeFilterToken(getCardAgeRating(card));
-  const cardGenres = getCardGenreTokens(card);
-
-  if (activeGenres.size > 0) {
-    const hasGenreMatch = cardGenres.some((token) => activeGenres.has(token));
-    if (!hasGenreMatch) return false;
-  }
-
-  if (activeAgeRatings.size > 0 && !activeAgeRatings.has(cardAgeRating)) {
-    return false;
-  }
-
-  if (minYear !== '' && (!cardYear || cardYear < minYear)) {
-    return false;
-  }
-
-  if (maxYear !== '' && (!cardYear || cardYear > maxYear)) {
-    return false;
-  }
-
-  if (minRating !== '' && (cardRating == null || cardRating < minRating)) {
-    return false;
-  }
-
-  return true;
-}
-
-function updateFilterSummary(visibleCount, totalCount) {
-  if (!filterElements.summary) return;
-  const hasActiveFilters = filterState.genres.size > 0
-    || filterState.ageRatings.size > 0
-    || sanitizeFilterYear(filterState.minYear) !== ''
-    || sanitizeFilterYear(filterState.maxYear) !== ''
-    || sanitizeFilterRating(filterState.minRating) !== '';
-
-  if (!hasActiveFilters) {
-    filterElements.summary.textContent = `Showing ${visibleCount} of ${totalCount} loaded titles.`;
-    return;
-  }
-
-  filterElements.summary.textContent = `Filters on: showing ${visibleCount} of ${totalCount} loaded titles.`;
-}
-
-function scheduleFilterRefreshFromMutations() {
-  if (filterMutationRefreshTimer) return;
-  filterMutationRefreshTimer = window.setTimeout(() => {
-    filterMutationRefreshTimer = null;
-    refreshFilterUiForCurrentMode();
-    applyFiltersToActiveMode();
-  }, 120);
-}
-
-function applyFiltersToActiveMode() {
-  const container = getActiveSectionsContainer();
-  if (!container) return;
-
-  const cards = [...container.querySelectorAll('.movie-card')];
-  let visibleCount = 0;
-
-  cards.forEach((card) => {
-    const matches = cardMatchesActiveFilters(card);
-    card.classList.toggle('is-filtered-out', !matches);
-    if (matches) visibleCount += 1;
-  });
-
-  const sections = [...container.querySelectorAll('.section')];
-  sections.forEach((section) => {
-    const sectionCards = [...section.querySelectorAll('.movie-card')];
-    const visibleCards = sectionCards.filter((card) => !card.classList.contains('is-filtered-out'));
-    section.classList.toggle('is-filtered-out-section', sectionCards.length > 0 && visibleCards.length === 0);
-  });
-
-  updateFilterSummary(visibleCount, cards.length);
-}
-
-function renderFilterOptions(container, entries, selectedTokens, inputName) {
+function renderFilterOptions(container, entries, selectedValue, inputName) {
   if (!container) return;
   container.innerHTML = '';
 
-  if (!entries.length) {
-    const empty = document.createElement('span');
-    empty.className = 'card-subtitle';
-    empty.textContent = 'No options yet.';
-    container.appendChild(empty);
-    return;
-  }
-
-  entries.forEach((entry, index) => {
-    const token = normalizeFilterToken(entry.token);
+  const options = [{ value: '', label: 'Any' }, ...entries];
+  options.forEach((entry, index) => {
+    const optionValue = String(entry.value || '').trim();
     const label = String(entry.label || '').trim() || 'Unknown';
     const wrapper = document.createElement('label');
     wrapper.className = 'filter-option';
 
     const input = document.createElement('input');
-    input.type = 'checkbox';
+    input.type = 'radio';
     input.name = inputName;
-    input.value = token;
+    input.value = optionValue;
     input.id = `${inputName}-${index}`;
-    input.checked = selectedTokens.has(token);
+    input.checked = optionValue === String(selectedValue || '').trim();
 
     const text = document.createElement('span');
     text.textContent = label;
@@ -309,16 +237,8 @@ function renderFilterOptions(container, entries, selectedTokens, inputName) {
 
 function collectFilterStateFromUi() {
   if (!filterElements.drawer) return;
-  const selectedGenreTokens = new Set(
-    [...filterElements.drawer.querySelectorAll('input[name="genreFilterOption"]:checked')]
-      .map((input) => normalizeFilterToken(input.value))
-      .filter(Boolean)
-  );
-  const selectedAgeTokens = new Set(
-    [...filterElements.drawer.querySelectorAll('input[name="ageFilterOption"]:checked')]
-      .map((input) => normalizeFilterToken(input.value))
-      .filter(Boolean)
-  );
+  const selectedGenre = String(filterElements.drawer.querySelector('input[name="genreFilterOption"]:checked')?.value || '').trim();
+  const selectedAge = String(filterElements.drawer.querySelector('input[name="ageFilterOption"]:checked')?.value || '').trim();
 
   let minYear = sanitizeFilterYear(filterElements.yearMin?.value);
   let maxYear = sanitizeFilterYear(filterElements.yearMax?.value);
@@ -329,8 +249,8 @@ function collectFilterStateFromUi() {
   }
   const minRating = sanitizeFilterRating(filterElements.ratingMin?.value);
 
-  filterState.genres = selectedGenreTokens;
-  filterState.ageRatings = selectedAgeTokens;
+  filterState.genre = selectedGenre;
+  filterState.age = selectedAge;
   filterState.minYear = minYear === '' ? '' : String(minYear);
   filterState.maxYear = maxYear === '' ? '' : String(maxYear);
   filterState.minRating = minRating === '' ? '' : String(minRating);
@@ -339,26 +259,24 @@ function collectFilterStateFromUi() {
 function refreshFilterUiForCurrentMode() {
   if (!filterElements.drawer) return;
 
-  const genreEntries = getActiveGenreOptionLabels().map((label) => ({
-    token: label,
-    label
-  }));
-  const allowedGenreTokens = new Set(genreEntries.map((entry) => normalizeFilterToken(entry.token)));
-  filterState.genres = new Set([...filterState.genres].filter((token) => allowedGenreTokens.has(token)));
+  const genreEntries = getActiveGenreEntries();
+  const ageEntries = getActiveAgeEntries();
+  const allowedGenreValues = new Set(genreEntries.map((entry) => String(entry.value || '').trim()));
+  const allowedAgeValues = new Set(ageEntries.map((entry) => String(entry.value || '').trim()));
 
-  const cards = [...(getActiveSectionsContainer()?.querySelectorAll('.movie-card') || [])];
-  const ageEntries = [...new Set(cards.map((card) => getCardAgeRating(card)).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b))
-    .map((rating) => ({ token: rating, label: rating }));
-  const allowedAgeTokens = new Set(ageEntries.map((entry) => normalizeFilterToken(entry.token)));
-  filterState.ageRatings = new Set([...filterState.ageRatings].filter((token) => allowedAgeTokens.has(token)));
+  if (!allowedGenreValues.has(filterState.genre)) filterState.genre = '';
+  if (!allowedAgeValues.has(filterState.age)) filterState.age = '';
 
-  renderFilterOptions(filterElements.genreOptions, genreEntries, filterState.genres, 'genreFilterOption');
-  renderFilterOptions(filterElements.ageRatingOptions, ageEntries, filterState.ageRatings, 'ageFilterOption');
+  renderFilterOptions(filterElements.genreOptions, genreEntries, filterState.genre, 'genreFilterOption');
+  renderFilterOptions(filterElements.ageRatingOptions, ageEntries, filterState.age, 'ageFilterOption');
 
   if (filterElements.yearMin) filterElements.yearMin.value = filterState.minYear;
   if (filterElements.yearMax) filterElements.yearMax.value = filterState.maxYear;
   if (filterElements.ratingMin) filterElements.ratingMin.value = filterState.minRating;
+  if (filterElements.summary) {
+    const modeLabel = modeState.current === 'anime' ? 'anime' : 'movie';
+    filterElements.summary.textContent = `Apply filters to open ${modeLabel} results in a dedicated page URL.`;
+  }
 }
 
 function setFiltersDrawerOpen(open) {
@@ -374,13 +292,27 @@ function setFiltersDrawerOpen(open) {
 }
 
 function clearAllFilters() {
-  filterState.genres = new Set();
-  filterState.ageRatings = new Set();
+  filterState.genre = '';
+  filterState.age = '';
   filterState.minYear = '';
   filterState.maxYear = '';
   filterState.minRating = '';
   refreshFilterUiForCurrentMode();
-  applyFiltersToActiveMode();
+}
+
+function applyFiltersToResultsPage() {
+  const mode = modeState.current === 'anime' ? 'anime' : 'regular';
+  const title = mode === 'anime' ? 'Filtered Anime Movies' : 'Filtered Movies';
+  const nextUrl = buildCategoryUrl({
+    mode,
+    genre: filterState.genre,
+    age: filterState.age,
+    yearMin: filterState.minYear,
+    yearMax: filterState.maxYear,
+    ratingMin: filterState.minRating,
+    title
+  });
+  window.location.href = nextUrl;
 }
 
 function initializeFiltersUi() {
@@ -414,7 +346,7 @@ function initializeFiltersUi() {
   filterElements.apply?.addEventListener('click', () => {
     collectFilterStateFromUi();
     refreshFilterUiForCurrentMode();
-    applyFiltersToActiveMode();
+    applyFiltersToResultsPage();
   });
 
   filterElements.drawer.addEventListener('keydown', (event) => {
@@ -423,18 +355,6 @@ function initializeFiltersUi() {
     }
   });
 
-  if (typeof MutationObserver === 'function') {
-    const observer = new MutationObserver((mutations) => {
-      const shouldRefresh = mutations.some((mutation) => mutation.type === 'childList' || mutation.type === 'characterData');
-      if (shouldRefresh) {
-        scheduleFilterRefreshFromMutations();
-      }
-    });
-    const targets = [document.getElementById('movieSections'), document.getElementById('animeSections')].filter(Boolean);
-    targets.forEach((target) => {
-      observer.observe(target, { childList: true, subtree: true, characterData: true });
-    });
-  }
 }
 
 function getRequestSignal(signal) {
@@ -693,12 +613,16 @@ function getSections() {
 
   const genreSections = allGenres.map((genre) => ({
     title: genre.name,
-    endpoint: `/discover/movie?with_genres=${genre.id}`
+    endpoint: `/discover/movie?with_genres=${genre.id}`,
+    genreSlug: toSlug(genre.name)
   }));
 
   return [...staticSections, ...genreSections].map((section) => ({
     ...section,
-    slug: slugifySectionTitle(section.title)
+    slug: slugifySectionTitle(section.title),
+    categoryUrl: section.genreSlug
+      ? buildCategoryUrl({ mode: 'regular', genre: section.genreSlug, title: section.title })
+      : buildCategoryUrl({ mode: 'regular', section: slugifySectionTitle(section.title), title: section.title })
   }));
 }
 
@@ -706,7 +630,13 @@ function getAnimeMovieSections() {
   return ANIME_MOVIE_GENRES.map((genre) => ({
     title: genre,
     genre,
-    slug: `anime-${slugifySectionTitle(genre)}`
+    slug: `anime-${slugifySectionTitle(genre)}`,
+    genreSlug: toSlug(genre),
+    categoryUrl: buildCategoryUrl({
+      mode: 'anime',
+      genre: toSlug(genre),
+      title: `${genre} Anime Movies`
+    })
   }));
 }
 
@@ -790,10 +720,10 @@ function createSectionSkeleton(section, container, prefix = '') {
 
   headerEl.appendChild(titleEl);
 
-  if (!prefix) {
+  if (section.categoryUrl) {
     const viewMoreLink = document.createElement('a');
     viewMoreLink.className = 'view-more-button';
-    viewMoreLink.href = `${BASE_URL}/movies/category.html?section=${encodeURIComponent(section.slug)}&title=${encodeURIComponent(section.title)}`;
+    viewMoreLink.href = section.categoryUrl;
     viewMoreLink.textContent = 'View more';
     viewMoreLink.setAttribute('aria-label', `View more ${section.title} movies`);
     headerEl.appendChild(viewMoreLink);
@@ -813,23 +743,17 @@ function createSectionSkeleton(section, container, prefix = '') {
   container.appendChild(sectionEl);
 }
 
-function renderQuickFilters(sections, containerId = 'quickFilters', targetPrefix = '') {
+function renderQuickFilters(sections, containerId = 'quickFilters') {
   const filtersContainer = document.getElementById(containerId);
   if (!filtersContainer) return;
 
   filtersContainer.innerHTML = '';
   sections.forEach((section) => {
+    if (!section.categoryUrl) return;
     const chip = document.createElement('a');
     chip.className = 'filter-chip';
-    chip.href = `#${targetPrefix}section-${section.slug}`;
+    chip.href = section.categoryUrl;
     chip.textContent = section.title;
-    chip.addEventListener('click', (event) => {
-      event.preventDefault();
-      const target = document.getElementById(`${targetPrefix}section-${section.slug}`);
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
     filtersContainer.appendChild(chip);
   });
 }
@@ -884,8 +808,6 @@ async function loadMoviesForSection(section) {
   }
 
   loadedCounts[section.slug] += moviesPerLoad;
-  applyFiltersToActiveMode();
-  refreshFilterUiForCurrentMode();
   return true;
 }
 
@@ -942,8 +864,6 @@ async function loadAnimeMoviesForSection(section) {
   }
 
   animeLoadedCounts[section.slug] += animeMoviesPerLoad;
-  applyFiltersToActiveMode();
-  refreshFilterUiForCurrentMode();
   return true;
 }
 
@@ -989,15 +909,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     animeSectionsLoadPromise = (async () => {
       const animeSections = getAnimeMovieSections();
-      renderQuickFilters(animeSections, 'animeQuickFilters', 'anime-');
+      renderQuickFilters(animeSections, 'animeQuickFilters');
       animeSections.forEach((section) => createSectionSkeleton(section, animeContainer, 'anime-'));
 
       const priorityAnimeSections = animeSections.slice(0, PRIORITY_SECTION_COUNT);
       const deferredAnimeSections = animeSections.slice(PRIORITY_SECTION_COUNT);
       await runSectionScheduler(priorityAnimeSections, deferredAnimeSections, loadAnimeMoviesForSection);
       animeSections.forEach((section) => setupInfiniteScroll(section, loadAnimeMoviesForSection, 'anime-'));
-      refreshFilterUiForCurrentMode();
-      applyFiltersToActiveMode();
       animeSectionsBootstrapped = true;
     })().finally(() => {
       animeSectionsLoadPromise = null;
@@ -1023,7 +941,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   sections.forEach((section) => setupInfiniteScroll(section, loadMoviesForSection));
   refreshFilterUiForCurrentMode();
-  applyFiltersToActiveMode();
 });
 
 

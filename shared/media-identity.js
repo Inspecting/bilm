@@ -3,7 +3,6 @@
     'home',
     'movies',
     'tv',
-    'games',
     'search',
     'settings',
     'random',
@@ -11,7 +10,7 @@
     'shared',
     'index.html'
   ]);
-  const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
+  const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|search|settings|random|test|shared)(?:\/|$)/i;
   const MIGRATION_META_KEY = 'bilm-media-identity-migration-v3';
   const MIGRATION_QUARANTINE_KEY = 'bilm-media-identity-quarantine-v1';
   const MIGRATION_QUARANTINE_META_KEY = 'bilm-media-identity-quarantine-meta-v1';
@@ -30,7 +29,7 @@
   ]);
 
   function detectBasePath() {
-    const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+    const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
     const parts = window.location.pathname.split('/').filter(Boolean);
     if (!parts.length) return '';
     

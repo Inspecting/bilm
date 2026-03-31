@@ -1,5 +1,5 @@
 function detectBasePath() {
-  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
   const parts = window.location.pathname.split('/').filter(Boolean);
   if (!parts.length) return '';
   
@@ -268,415 +268,59 @@ async function maybeActivateProxiedMode() {
   }
 
 
-  const chatWidget = shadow.getElementById('sharedChatWidget');
-  const chatToggle = shadow.getElementById('sharedChatToggle');
-  const chatPanel = shadow.getElementById('sharedChatPanel');
-  const chatClose = shadow.getElementById('sharedChatClose');
-  const chatForm = shadow.getElementById('sharedChatForm');
-  const chatInput = shadow.getElementById('sharedChatInput');
-  const chatRefreshBtn = shadow.getElementById('sharedChatRefreshBtn');
-  const CHAT_REFRESH_COOLDOWN_MS = 5000;
-  const CHAT_ACTIVE_POLL_MS = 4000;
-  const CHAT_BACKGROUND_POLL_MS = 10000;
-  const CHAT_PAUSED_POLL_MS = 60000;
-  const CHAT_MAX_MESSAGES = 20;
-  const CHAT_STICKY_BOTTOM_THRESHOLD_PX = 42;
   const ACCOUNT_MANUAL_SYNC_COOLDOWN_MS = 5000;
-  let chatRefreshCooldownUntil = 0;
-  const chatMessages = shadow.getElementById('sharedChatMessages');
-  let chatCurrentUser = null;
-  let chatRemoteMessages = [];
-  let chatPendingMessages = [];
   let authApiInstance = null;
-  let chatRetryTimer = null;
-  let chatLivePollTimer = null;
-  let chatLivePollInFlight = false;
   let accountManualSyncCooldownUntil = 0;
   let accountManualSyncCooldownTimer = null;
   let authDialogMode = 'login';
-  const CHAT_STORAGE_KEY = 'bilm-shared-chat';
-  const CHAT_MAX_RETRY_DELAY_MS = 30000;
 
-
-  function setChatNotice(message) {
-    if (!chatMessages) return;
-    if (!message) {
-      renderChatMessages(composeVisibleChatMessages());
-      return;
-    }
-    chatMessages.innerHTML = '';
-    const notice = document.createElement('p');
-    notice.className = 'shared-chat-empty';
-    notice.textContent = message;
-    chatMessages.appendChild(notice);
-  }
-
-  function formatChatTime(ts) {
-    const value = Number(ts || 0) || Date.now();
-    return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
-
-  function normalizeChatMessages(messages = []) {
-    return messages
-      .map((entry) => ({
-        ...entry,
-        createdAtMs: Number(entry?.createdAtMs || Date.now()) || Date.now(),
-        text: String(entry?.text || ''),
-        author: String(entry?.author || 'Account')
-      }))
-      .filter((entry) => entry.text.trim().length > 0)
-      .sort((a, b) => a.createdAtMs - b.createdAtMs);
-  }
-
-  function composeVisibleChatMessages() {
-    return normalizeChatMessages([...(chatRemoteMessages || []), ...(chatPendingMessages || [])]);
-  }
-
-  function loadStoredChatMessages() {
-    const stored = storage.getJSON(CHAT_STORAGE_KEY, []);
-    return normalizeChatMessages(Array.isArray(stored) ? stored : []).slice(-CHAT_MAX_MESSAGES);
-  }
-
-  function saveStoredChatMessages(messages) {
-    const normalized = normalizeChatMessages(messages).slice(-CHAT_MAX_MESSAGES);
-    storage.setJSON(CHAT_STORAGE_KEY, normalized);
-    chatRemoteMessages = normalized;
-  }
-
-  function refreshChatMessages() {
-    chatRemoteMessages = loadStoredChatMessages();
-    renderChatMessages(composeVisibleChatMessages());
-  }
-
-  function getChatSyncErrorMessage(errorLike) {
-    const code = String(errorLike?.code || errorLike?.error || '').toLowerCase();
-    if (code === 'token_expired') return 'Session expired. Please sign in again.';
-    if (code === 'missing_token' || code === 'forbidden' || code === 'invalid_token') return 'Not authorized. Please sign in again.';
-    if (code === 'chat_message_too_large') return 'Message is too long (max 2000 characters).';
-    if (code === 'chat_rate_limited') return 'Chat is rate limited right now. Retrying soon.';
-    if (code === 'chat_payload_invalid') return 'Message format is invalid.';
-    if (errorLike?.status >= 500) return 'Chat server is having trouble. Retrying...';
-    if (errorLike?.retryable === false) return String(errorLike?.message || 'Chat sync failed.');
-    return String(errorLike?.message || 'Network issue while sending chat. Retrying...');
-  }
-
-  function setPendingChat(nextPending) {
-    const pendingId = String(nextPending?.id || '').trim();
-    if (!pendingId) return;
-    let replaced = false;
-    chatPendingMessages = chatPendingMessages.map((entry) => {
-      if (entry.id !== pendingId) return entry;
-      replaced = true;
-      return { ...entry, ...nextPending };
-    });
-    if (!replaced) {
-      chatPendingMessages.push({ ...nextPending });
-    }
-  }
-
-  function removePendingChat(pendingId) {
-    chatPendingMessages = chatPendingMessages.filter((entry) => entry.id !== pendingId);
-  }
-
-  function schedulePendingChatRetry() {
-    if (chatRetryTimer) return;
-    const nextPending = chatPendingMessages.find((entry) => entry.pending && entry.failed && entry.retryable !== false);
-    if (!nextPending) return;
-    const paused = authApiInstance?.isSyncPausedNow?.() === true;
-    const delayMs = paused
-      ? CHAT_PAUSED_POLL_MS
-      : Math.min(CHAT_MAX_RETRY_DELAY_MS, Math.max(1200, Number(nextPending.retryDelayMs || 1200)));
-    chatRetryTimer = window.setTimeout(() => {
-      chatRetryTimer = null;
-      attemptSendPendingChat(nextPending.id).catch((error) => {
-        console.warn('Pending chat retry failed:', error);
-      });
-    }, delayMs);
-  }
-
-  async function pushChatOperation(entry) {
-    if (!authApiInstance || typeof authApiInstance.pushSectorOperationsNow !== 'function') {
-      const fallbackError = new Error('Chat sync API is unavailable.');
-      fallbackError.code = 'chat_api_unavailable';
-      fallbackError.retryable = true;
-      throw fallbackError;
-    }
-
-    const itemKey = `chat:${entry.id}`;
-    await authApiInstance.pushSectorOperationsNow([{
-      sectorKey: 'chat_messages',
-      itemKey,
-      deleted: false,
-      updatedAtMs: Number(entry.createdAtMs || Date.now()) || Date.now(),
-      payload: {
-        id: entry.id,
-        key: itemKey,
-        text: String(entry.text || ''),
-        author: String(entry.author || 'Account'),
-        authorUid: String(entry.authorUid || chatCurrentUser?.uid || 'local'),
-        createdAtMs: Number(entry.createdAtMs || Date.now()) || Date.now(),
-        updatedAt: Number(entry.createdAtMs || Date.now()) || Date.now()
-      }
-    }], 'chat-send');
-  }
-
-  async function attemptSendPendingChat(pendingId) {
-    const pendingEntry = chatPendingMessages.find((entry) => entry.id === pendingId);
-    if (!pendingEntry) return false;
-    if (authApiInstance?.isSyncPausedNow?.()) {
-      schedulePendingChatRetry();
-      return false;
-    }
-
-    setPendingChat({
-      ...pendingEntry,
-      pending: true,
-      failed: false,
-      errorMessage: '',
-      attemptCount: Number(pendingEntry.attemptCount || 0) + 1
-    });
-    renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
+  function cleanupLegacyChatState() {
+    const CHAT_STORAGE_KEY = 'bilm-shared-chat';
+    const SYNC_META_KEY = 'bilm-sync-meta';
+    const CHAT_SYNC_CURSOR_META_KEY = 'lastChatSyncCursorMs';
+    const SYNC_USER_STATE_META_KEY = 'userSyncState';
 
     try {
-      await pushChatOperation(pendingEntry);
-      const current = loadStoredChatMessages();
-      const withoutDupe = current.filter((message) => String(message?.id || '').trim() !== pendingEntry.id);
-      withoutDupe.push({
-        id: pendingEntry.id,
-        key: `chat:${pendingEntry.id}`,
-        text: pendingEntry.text,
-        author: pendingEntry.author,
-        authorUid: pendingEntry.authorUid,
-        createdAtMs: pendingEntry.createdAtMs,
-        updatedAt: pendingEntry.createdAtMs
-      });
-      saveStoredChatMessages(withoutDupe);
-      removePendingChat(pendingEntry.id);
-      renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
-      return true;
-    } catch (error) {
-      const retryable = error?.retryable !== false;
-      const nextDelay = Math.min(
-        CHAT_MAX_RETRY_DELAY_MS,
-        Math.max(1200, Number(pendingEntry.retryDelayMs || 1200) * 2)
-      );
-      setPendingChat({
-        ...pendingEntry,
-        pending: true,
-        failed: true,
-        retryable,
-        retryDelayMs: nextDelay,
-        errorMessage: getChatSyncErrorMessage(error)
-      });
-      renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
-      if (retryable) schedulePendingChatRetry();
-      return false;
-    }
-  }
-
-  function handleChatSyncIssue(issue) {
-    if (!issue) return;
-    const listKey = String(issue.listKey || '').trim();
-    const sectorKey = String(issue.sectorKey || '').trim();
-    if (listKey && listKey !== CHAT_STORAGE_KEY) return;
-    if (sectorKey && sectorKey !== 'chat_messages') return;
-    if (!chatPendingMessages.some((entry) => entry.pending)) return;
-
-    const retryable = issue.retryable !== false;
-    const message = getChatSyncErrorMessage(issue);
-    chatPendingMessages = chatPendingMessages.map((entry) => {
-      if (!entry.pending) return entry;
-      return {
-        ...entry,
-        failed: true,
-        retryable,
-        errorMessage: message,
-        retryDelayMs: Math.min(CHAT_MAX_RETRY_DELAY_MS, Math.max(1200, Number(entry.retryDelayMs || 1200) * 2))
-      };
-    });
-    renderChatMessages(composeVisibleChatMessages());
-    if (retryable) schedulePendingChatRetry();
-  }
-
-  function setChatRefreshCooldown() {
-    if (!chatRefreshBtn) return;
-    chatRefreshCooldownUntil = Date.now() + CHAT_REFRESH_COOLDOWN_MS;
-    chatRefreshBtn.disabled = true;
-    window.setTimeout(() => {
-      if (!chatRefreshBtn) return;
-      if (Date.now() < chatRefreshCooldownUntil) return;
-      chatRefreshBtn.disabled = false;
-      chatRefreshBtn.removeAttribute('aria-busy');
-    }, CHAT_REFRESH_COOLDOWN_MS);
-  }
-
-  function isChatNearBottom() {
-    if (!chatMessages) return true;
-    const distance = chatMessages.scrollHeight - (chatMessages.scrollTop + chatMessages.clientHeight);
-    return distance <= CHAT_STICKY_BOTTOM_THRESHOLD_PX;
-  }
-
-  function renderChatMessages(messages = [], options = {}) {
-    if (!chatMessages) return;
-    const forceBottom = options?.forceBottom === true;
-    const shouldStickToBottom = forceBottom || isChatNearBottom();
-    const previousScrollTop = chatMessages.scrollTop;
-    chatMessages.innerHTML = '';
-    if (!messages.length) {
-      const empty = document.createElement('p');
-      empty.className = 'shared-chat-empty';
-      empty.textContent = 'No messages yet.';
-      chatMessages.appendChild(empty);
-      chatMessages.scrollTop = 0;
-      return;
+      localStorage.removeItem(CHAT_STORAGE_KEY);
+    } catch {
+      // Ignore storage failures.
     }
 
-    messages.forEach((entry) => {
-      const row = document.createElement('article');
-      row.className = 'shared-chat-message';
-
-      const meta = document.createElement('div');
-      meta.className = 'shared-chat-message-meta';
-
-      const left = document.createElement('span');
-      const author = String(entry.author || 'Account').trim() || 'Account';
-      left.textContent = `${author} • ${formatChatTime(entry.createdAtMs)}`;
-
-      const del = document.createElement('button');
-      del.type = 'button';
-      if (entry.pending && entry.failed) {
-        del.textContent = entry.retryable === false ? 'Failed' : 'Retry';
-      } else if (entry.pending) {
-        del.textContent = 'Sending';
-      } else {
-        del.textContent = 'Delete';
-      }
-      del.disabled = Boolean(entry.pending && !entry.failed);
-      del.addEventListener('click', async () => {
-        if (entry.pending) {
-          if (entry.failed && entry.retryable !== false) {
-            await attemptSendPendingChat(entry.id);
-          }
-          return;
-        }
-        try {
-          const current = loadStoredChatMessages();
-          saveStoredChatMessages(current.filter((message) => message.id !== entry.id));
-          renderChatMessages(composeVisibleChatMessages());
-        } catch (error) {
-          console.warn('Failed to delete chat message:', error);
-        }
-      });
-
-      meta.append(left, del);
-
-      const body = document.createElement('p');
-      body.textContent = String(entry.text || '');
-
-      row.append(meta, body);
-      if (entry.pending && entry.failed && entry.errorMessage) {
-        const errorText = document.createElement('p');
-        errorText.className = 'shared-chat-empty';
-        errorText.textContent = `Failed: ${entry.errorMessage}`;
-        row.appendChild(errorText);
-      }
-      chatMessages.appendChild(row);
-    });
-
-    if (shouldStickToBottom) {
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-      return;
-    }
-    const maxTop = Math.max(0, chatMessages.scrollHeight - chatMessages.clientHeight);
-    chatMessages.scrollTop = Math.max(0, Math.min(previousScrollTop, maxTop));
-  }
-
-  function toggleChatPanel(nextOpen) {
-    if (!chatPanel || !chatToggle) return;
-    const open = Boolean(nextOpen);
-    authApiInstance?.noteUserActivity?.('chat-panel-toggle');
-    chatPanel.hidden = !open;
-    chatToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open && chatInput) chatInput.focus();
-    if (open) {
-      renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
-      triggerLiveChatPull('panel-open');
-    }
-    scheduleLiveChatPoll('panel-toggle');
-  }
-
-  function isChatPanelOpen() {
-    return Boolean(chatPanel && chatPanel.hidden === false);
-  }
-
-  function getChatPollIntervalMs() {
-    if (authApiInstance?.isSyncPausedNow?.()) return CHAT_PAUSED_POLL_MS;
-    if (!chatCurrentUser) return CHAT_BACKGROUND_POLL_MS;
-    const pageVisible = document.visibilityState === 'visible';
-    const focused = document.hasFocus?.() === true;
-    const active = pageVisible && focused && isChatPanelOpen();
-    return active ? CHAT_ACTIVE_POLL_MS : CHAT_BACKGROUND_POLL_MS;
-  }
-
-  async function runLiveChatPull(reason = 'poll') {
-    if (!authApiInstance || !chatCurrentUser || chatLivePollInFlight) return false;
-    if (authApiInstance?.isSyncPausedNow?.()) return false;
-    if (typeof authApiInstance.pullChatNow !== 'function') return false;
-    chatLivePollInFlight = true;
     try {
-      await authApiInstance.pullChatNow({ reason, limit: 120 });
-      refreshChatMessages();
-      return true;
-    } catch (error) {
-      console.warn(`Live chat pull failed (${reason}):`, error);
-      return false;
-    } finally {
-      chatLivePollInFlight = false;
+      const raw = localStorage.getItem(SYNC_META_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+
+      let changed = false;
+      if (Object.prototype.hasOwnProperty.call(parsed, CHAT_SYNC_CURSOR_META_KEY)) {
+        delete parsed[CHAT_SYNC_CURSOR_META_KEY];
+        changed = true;
+      }
+
+      const scoped = parsed[SYNC_USER_STATE_META_KEY];
+      if (scoped && typeof scoped === 'object' && !Array.isArray(scoped)) {
+        Object.keys(scoped).forEach((userKey) => {
+          const userState = scoped[userKey];
+          if (!userState || typeof userState !== 'object' || Array.isArray(userState)) return;
+          if (!Object.prototype.hasOwnProperty.call(userState, CHAT_SYNC_CURSOR_META_KEY)) return;
+          delete userState[CHAT_SYNC_CURSOR_META_KEY];
+          changed = true;
+        });
+      }
+
+      if (changed) {
+        localStorage.setItem(SYNC_META_KEY, JSON.stringify(parsed));
+      }
+    } catch {
+      // Ignore storage failures.
     }
   }
 
-  function clearLiveChatPoll() {
-    if (!chatLivePollTimer) return;
-    window.clearTimeout(chatLivePollTimer);
-    chatLivePollTimer = null;
-  }
-
-  function scheduleLiveChatPoll(reason = 'poll') {
-    clearLiveChatPoll();
-    if (!chatCurrentUser || !authApiInstance) return;
-    const delayMs = getChatPollIntervalMs();
-    chatLivePollTimer = window.setTimeout(async () => {
-      chatLivePollTimer = null;
-      await runLiveChatPull(reason);
-      scheduleLiveChatPoll('loop');
-    }, delayMs);
-  }
-
-  function triggerLiveChatPull(reason = 'manual') {
-    runLiveChatPull(reason).finally(() => {
-      scheduleLiveChatPoll('after-pull');
-    });
-  }
-
-  // Always start collapsed on a fresh page load.
-  toggleChatPanel(false);
-
-  if (chatToggle) {
-    chatToggle.addEventListener('click', () => {
-      toggleChatPanel(chatPanel?.hidden === true);
-    });
-  }
-
-  if (chatClose) {
-    chatClose.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      toggleChatPanel(false);
-    });
-  }
+  cleanupLegacyChatState();
 
   const pathParts = location.pathname.split('/').filter(Boolean);
-  const appSections = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test']);
+  const appSections = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test']);
   const section = pathParts.find(part => appSections.has(part)) || 'home';
   const fileName = pathParts.at(-1) || '';
   const isSearchPage = section === 'search' || fileName.startsWith('search');
@@ -939,7 +583,8 @@ async function maybeActivateProxiedMode() {
     if (Date.now() < accountManualSyncCooldownUntil) return;
     startManualSyncCooldown();
     authApi.noteUserActivity?.('navbar-manual-sync');
-    if (!chatCurrentUser) {
+    const currentUser = authApi.getCurrentUser?.() || null;
+    if (!currentUser) {
       if (accountMenuHint) accountMenuHint.textContent = 'Log in required for manual sync.';
       showToast('Log in required.', 'error');
       return;
@@ -948,8 +593,6 @@ async function maybeActivateProxiedMode() {
     try {
       await authApi.syncFromCloudNow?.();
       await authApi.flushSyncNow?.('navbar-manual-sync');
-      await authApi.pullChatNow?.({ reason: 'navbar-manual-sync', limit: 120 });
-      refreshChatMessages();
       showToast('Sync complete.', 'success');
     } catch (error) {
       console.warn('Navbar manual sync failed:', error);
@@ -1089,21 +732,7 @@ async function maybeActivateProxiedMode() {
     authApiInstance = authApi;
     await authApi.init();
 
-    if (chatWidget) {
-      chatWidget.hidden = false;
-    }
-
     const syncAccountButton = (user) => {
-      chatCurrentUser = user || null;
-      if (chatCurrentUser && chatPendingMessages.some((entry) => entry.pending && entry.failed && entry.retryable !== false)) {
-        schedulePendingChatRetry();
-      }
-      if (chatCurrentUser) {
-        triggerLiveChatPull('auth-state');
-      } else {
-        clearLiveChatPoll();
-      }
-
       if (!accountBtn) return;
       accountBtn.textContent = user ? (user.displayName || user.email || 'Account') : 'Account';
       accountBtn.title = user ? 'Open account settings / log out' : 'Log in or create account';
@@ -1117,91 +746,8 @@ async function maybeActivateProxiedMode() {
       }
     };
 
-    refreshChatMessages();
-    chatPendingMessages = [];
-
     syncAccountButton(authApi.getCurrentUser());
-    authApi.onAuthStateChanged(syncAccountButton);
-    authApi.onListSyncApplied?.((event) => {
-      const listKeys = Array.isArray(event?.listKeys) ? event.listKeys : [];
-      if (!listKeys.includes(CHAT_STORAGE_KEY)) return;
-      refreshChatMessages();
-    });
-    authApi.onSyncIssue?.((issue) => {
-      handleChatSyncIssue(issue);
-    });
-    window.addEventListener('storage', (event) => {
-      if (event.key !== CHAT_STORAGE_KEY) return;
-      refreshChatMessages();
-    });
-    window.addEventListener('focus', () => {
-      if (!chatCurrentUser) return;
-      triggerLiveChatPull('window-focus');
-    });
-    document.addEventListener('visibilitychange', () => {
-      if (!chatCurrentUser) return;
-      if (document.visibilityState === 'visible') {
-        triggerLiveChatPull('visibility-visible');
-      } else {
-        scheduleLiveChatPoll('visibility-hidden');
-      }
-    });
-
-    if (chatRefreshBtn) {
-      chatRefreshBtn.addEventListener('click', async () => {
-        authApi.noteUserActivity?.('chat-refresh');
-        if (Date.now() < chatRefreshCooldownUntil) return;
-        chatRefreshBtn.setAttribute('aria-busy', 'true');
-        try {
-          if (typeof authApi.pullChatNow === 'function') {
-            await authApi.pullChatNow({ reason: 'manual-refresh', limit: 120 });
-          } else {
-            await authApi.syncFromCloudNow?.();
-          }
-        } catch (error) {
-          console.warn('Manual chat sync refresh failed:', error);
-        }
-        refreshChatMessages();
-        setChatRefreshCooldown();
-        scheduleLiveChatPoll('manual-refresh');
-      });
-    }
-
-    if (chatForm && chatInput) {
-      chatForm.addEventListener('submit', async (event) => {
-        authApi.noteUserActivity?.('chat-submit');
-        event.preventDefault();
-        const text = chatInput.value.trim();
-        if (!text) return;
-        if (!chatCurrentUser) {
-          setChatNotice('Sign in to sync and send chat messages.');
-          return;
-        }
-
-        const author = chatCurrentUser?.displayName || chatCurrentUser?.email || 'Guest';
-        const authorUid = chatCurrentUser?.uid || 'local';
-
-        const optimisticId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const optimisticMessage = {
-          id: optimisticId,
-          pending: true,
-          failed: false,
-          retryable: true,
-          retryDelayMs: 1200,
-          attemptCount: 0,
-          text,
-          author,
-          authorUid,
-          createdAtMs: Date.now()
-        };
-
-        setPendingChat(optimisticMessage);
-        renderChatMessages(composeVisibleChatMessages(), { forceBottom: true });
-        chatInput.value = '';
-        await attemptSendPendingChat(optimisticId);
-        triggerLiveChatPull('send-success');
-      });
-    }
+    authApi.onAuthStateChanged?.(syncAccountButton);
     updateManualSyncCooldownUi();
   }).catch((error) => {
     console.warn('Auth module unavailable in navbar:', error);

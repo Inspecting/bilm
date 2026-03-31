@@ -1,5 +1,5 @@
 function detectBasePath() {
-  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
   const parts = window.location.pathname.split('/').filter(Boolean);
   if (!parts.length) return '';
   
@@ -26,7 +26,7 @@ function withBase(path) {
   return `${detectBasePath()}${normalized}`;
 }
 
-const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
+const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|search|settings|random|test|shared)(?:\/|$)/i;
 
 function normalizeInternalAppPath(pathname = '') {
   const rawPath = String(pathname || '').trim();

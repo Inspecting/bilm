@@ -108,6 +108,16 @@ function sendNoContent(res, status = 204, headers = {}) {
   res.end();
 }
 
+function sendRedirect(res, location, status = 302, headers = {}) {
+  const safeLocation = String(location || '/');
+  res.writeHead(status, {
+    ...BASE_SECURITY_HEADERS,
+    ...headers,
+    location: safeLocation
+  });
+  res.end();
+}
+
 function normalizeClientIp(rawValue) {
   const rawText = String(rawValue || '').trim();
   if (!rawText) return '';
@@ -1052,6 +1062,12 @@ async function routeRequest(req, res) {
     url = new URL(rawRequestTarget || '/', 'http://localhost');
   } catch {
     sendJson(res, 400, { error: 'Bad Request' }, { 'cache-control': 'no-store' });
+    return;
+  }
+
+  if (url.pathname === '/games' || url.pathname.startsWith('/games/')) {
+    const target = `/home/${url.search || ''}`;
+    sendRedirect(res, target, 302, { 'cache-control': 'no-store' });
     return;
   }
 

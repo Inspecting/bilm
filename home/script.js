@@ -1,5 +1,5 @@
 function detectBasePath() {
-  const appRoots = new Set(['home', 'movies', 'tv', 'games', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
+  const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
   const parts = window.location.pathname.split('/').filter(Boolean);
   if (!parts.length) return '';
   
@@ -32,7 +32,7 @@ function getApiOrigin() {
     : window.location.origin;
 }
 
-const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|games|search|settings|random|test|shared)(?:\/|$)/i;
+const APP_ROUTE_PATTERN = /^\/(?:home|movies|tv|search|settings|random|test|shared)(?:\/|$)/i;
 const HOME_ROW_BATCH_SIZE = 24;
 const HOME_ROW_RENDER_CHUNK_SIZE = 8;
 
