@@ -15,7 +15,3 @@ Explore titles before choosing where to watch them
 BILM is built for discovery and convenience, helping users find what to watch without jumping between multiple platforms.
 
 Even includes anime for wide variation between your preferences.
-
-## Ops
-
-- Direct DNS-only hostname cutover runbook: `docs/dns-direct-cutover.md`
