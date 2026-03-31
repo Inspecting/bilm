@@ -14,6 +14,14 @@ const DEFAULT_HEALTH_CHECK_ALLOWED_HOSTS = new Set([
   'www.omdbapi.com',
   'api.tvmaze.com'
 ]);
+const DEFAULT_CORS_ALLOWED_ORIGINS = new Set([
+  'https://watchbilm.org',
+  'https://www.watchbilm.org',
+  'https://direct.watchbilm.org',
+  'https://bilm.fly.dev',
+  'https://inspecting.github.io',
+  'https://cdn.jsdelivr.net'
+]);
 
 function resolveHealthCheckAllowedHosts() {
   const envValue = String(process.env.HEALTH_CHECK_ALLOWED_HOSTS || '').trim();
@@ -25,6 +33,18 @@ function resolveHealthCheckAllowedHosts() {
     .filter(Boolean)
     .forEach((entry) => hosts.add(entry));
   return hosts;
+}
+
+function resolveCorsAllowedOrigins() {
+  const envValue = String(process.env.CORS_ALLOWED_ORIGINS || '').trim();
+  const origins = new Set([...DEFAULT_CORS_ALLOWED_ORIGINS]);
+  if (!envValue) return origins;
+  envValue
+    .split(',')
+    .map((entry) => normalizeRequestOrigin(entry))
+    .filter(Boolean)
+    .forEach((entry) => origins.add(entry));
+  return origins;
 }
 
 function parseEnvInt(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
@@ -56,13 +76,7 @@ const RATE_LIMITS = Object.freeze({
     windowMs: parseEnvInt('HEALTH_CHECK_RATE_WINDOW_MS', 60_000, { min: 1000, max: 3_600_000 })
   })
 });
-const CORS_ALLOWED_ORIGINS = new Set([
-  'https://watchbilm.org',
-  'https://www.watchbilm.org',
-  'https://bilm.fly.dev',
-  'https://inspecting.github.io',
-  'https://cdn.jsdelivr.net'
-]);
+const CORS_ALLOWED_ORIGINS = resolveCorsAllowedOrigins();
 
 const BASE_SECURITY_HEADERS = Object.freeze({
   'x-content-type-options': 'nosniff',
