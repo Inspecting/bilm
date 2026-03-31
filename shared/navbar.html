@@ -6,7 +6,7 @@
   <nav class="navbar" role="navigation" aria-label="Primary navigation">
     <!-- Logo -->
     <div class="logo-container">
-      <a href="/home/" class="logo" title="Go to Home">
+      <a href="./home/" data-route="/home/" class="logo" title="Go to Home">
         <span class="heart-icon" aria-hidden="true">❤</span>
         Bilm
         <span class="heart-icon" aria-hidden="true">❤</span>
@@ -25,7 +25,7 @@
 
     <!-- Desktop Search Bar -->
     <div class="search-wrapper">
-      <form id="navbarSearchForm" class="search-input-wrapper" action="/search/" method="get">
+      <form id="navbarSearchForm" class="search-input-wrapper" action="./search/" data-route-action="/search/" method="get">
         <input type="text" id="searchInput" name="q" class="search-input" placeholder="Search..." autocomplete="off" spellcheck="false" />
         <button type="submit" class="search-icon" aria-label="Search">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -113,7 +113,15 @@
     <p id="navbarAuthHint">Use your email and password.</p>
     <form id="navbarAuthForm" class="navbar-auth-form" autocomplete="on">
       <input id="navbarAuthEmail" name="email" type="email" placeholder="Email" autocomplete="email" required />
-      <input id="navbarAuthPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
+      <div class="navbar-auth-password-wrap">
+        <input id="navbarAuthPassword" name="password" type="password" placeholder="Password" autocomplete="current-password" required />
+        <button type="button" id="navbarAuthPasswordToggleBtn" class="navbar-auth-password-toggle" aria-label="Show password" title="Show password">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8" />
+          </svg>
+        </button>
+      </div>
       <p id="navbarAuthStatus" class="navbar-auth-status" aria-live="polite"></p>
       <div class="navbar-auth-actions">
         <button type="submit" id="navbarAuthSubmitBtn">Continue</button>

@@ -22,8 +22,9 @@ function detectBasePath() {
 }
 
 const BASE_PATH = detectBasePath();
-const NAVBAR_ASSET_CACHE_KEY = 'bilm-navbar-assets-v1';
+const NAVBAR_ASSET_CACHE_KEY = 'bilm-navbar-assets-v2';
 const NAVBAR_ASSET_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const LEGACY_NAVBAR_ASSET_CACHE_KEYS = ['bilm-navbar-assets-v1'];
 
 function withBase(path) {
   const normalized = path.startsWith('/') ? path : `/${path}`;
@@ -58,6 +59,45 @@ function writeCachedNavbarAssets(html, css) {
   } catch {
     // Ignore storage failures.
   }
+}
+
+function purgeLegacyNavbarAssetCache() {
+  LEGACY_NAVBAR_ASSET_CACHE_KEYS.forEach((key) => {
+    if (!key || key === NAVBAR_ASSET_CACHE_KEY) return;
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Ignore storage failures.
+    }
+  });
+}
+
+function normalizeShadowBaseRoutes(shadowRoot) {
+  if (!shadowRoot) return;
+
+  shadowRoot.querySelectorAll('a[href]').forEach((anchor) => {
+    const explicitRoute = String(anchor.getAttribute('data-route') || '').trim();
+    const href = String(anchor.getAttribute('href') || '').trim();
+    if (explicitRoute) {
+      anchor.setAttribute('href', withBase(explicitRoute));
+      return;
+    }
+    if (href.startsWith('/')) {
+      anchor.setAttribute('href', withBase(href));
+    }
+  });
+
+  shadowRoot.querySelectorAll('form[action]').forEach((form) => {
+    const explicitAction = String(form.getAttribute('data-route-action') || '').trim();
+    const action = String(form.getAttribute('action') || '').trim();
+    if (explicitAction) {
+      form.setAttribute('action', withBase(explicitAction));
+      return;
+    }
+    if (action.startsWith('/')) {
+      form.setAttribute('action', withBase(action));
+    }
+  });
 }
 
 function renderNavbarSkeleton(shadow) {
@@ -202,6 +242,8 @@ async function maybeActivateProxiedMode() {
     return;
   }
 
+  purgeLegacyNavbarAssetCache();
+
   const container = document.getElementById('navbar-placeholder') || document.getElementById('navbarContainer');
   if (!container) return;
 
@@ -237,6 +279,7 @@ async function maybeActivateProxiedMode() {
   }
 
   shadow.innerHTML = `<style>${css}</style>${html}`;
+  normalizeShadowBaseRoutes(shadow);
 
   const globalBanner = shadow.getElementById('globalBanner');
   const globalBannerCloseBtn = shadow.getElementById('globalBannerCloseBtn');
@@ -253,6 +296,7 @@ async function maybeActivateProxiedMode() {
   const authForm = shadow.getElementById('navbarAuthForm');
   const authEmailInput = shadow.getElementById('navbarAuthEmail');
   const authPasswordInput = shadow.getElementById('navbarAuthPassword');
+  const authPasswordToggleBtn = shadow.getElementById('navbarAuthPasswordToggleBtn');
   const authStatus = shadow.getElementById('navbarAuthStatus');
   const authSubmitBtn = shadow.getElementById('navbarAuthSubmitBtn');
   const authSwitchBtn = shadow.getElementById('navbarAuthSwitchBtn');
@@ -273,6 +317,7 @@ async function maybeActivateProxiedMode() {
   let accountManualSyncCooldownUntil = 0;
   let accountManualSyncCooldownTimer = null;
   let authDialogMode = 'login';
+  let authPasswordVisible = false;
 
   function cleanupLegacyChatState() {
     const CHAT_STORAGE_KEY = 'bilm-shared-chat';
@@ -508,6 +553,17 @@ async function maybeActivateProxiedMode() {
     accountBtn.setAttribute('aria-expanded', 'true');
   }
 
+  function setAuthPasswordVisibility(visible) {
+    const shouldShow = Boolean(visible);
+    authPasswordVisible = shouldShow;
+    if (!authPasswordInput) return;
+
+    authPasswordInput.type = shouldShow ? 'text' : 'password';
+    if (!authPasswordToggleBtn) return;
+    authPasswordToggleBtn.setAttribute('aria-label', shouldShow ? 'Hide password' : 'Show password');
+    authPasswordToggleBtn.setAttribute('title', shouldShow ? 'Hide password' : 'Show password');
+  }
+
   function setAuthModalMode(mode = 'login') {
     const normalized = mode === 'signup' ? 'signup' : 'login';
     authDialogMode = normalized;
@@ -525,6 +581,7 @@ async function maybeActivateProxiedMode() {
       authSwitchBtn.textContent = 'Create account';
       authPasswordInput.autocomplete = 'current-password';
     }
+    setAuthPasswordVisibility(false);
     if (authStatus) authStatus.textContent = '';
   }
 
@@ -542,7 +599,19 @@ async function maybeActivateProxiedMode() {
     authModal.hidden = true;
     if (authStatus) authStatus.textContent = '';
     if (authPasswordInput) authPasswordInput.value = '';
+    setAuthPasswordVisibility(false);
   }
+
+  window.bilmAuthUi = window.bilmAuthUi || {};
+  window.bilmAuthUi.open = (mode = 'login') => openAuthModal(mode);
+  window.bilmAuthUi.close = () => closeAuthModal();
+  window.dispatchEvent(new CustomEvent('bilm:auth-modal-ready'));
+  window.addEventListener('bilm:open-auth-modal', (event) => {
+    const mode = String(event?.detail?.mode || '').trim().toLowerCase() === 'signup'
+      ? 'signup'
+      : 'login';
+    openAuthModal(mode);
+  });
 
   function updateManualSyncCooldownUi() {
     if (!accountManualSyncBtn) return;
@@ -664,6 +733,13 @@ async function maybeActivateProxiedMode() {
     });
   }
 
+  if (authPasswordToggleBtn) {
+    authPasswordToggleBtn.addEventListener('click', () => {
+      setAuthPasswordVisibility(!authPasswordVisible);
+      authPasswordInput?.focus();
+    });
+  }
+
   if (authModalCloseBtn) {
     authModalCloseBtn.addEventListener('click', () => {
       closeAuthModal();
@@ -769,6 +845,7 @@ async function maybeActivateProxiedMode() {
   const navbarSearchForm = shadow.getElementById('navbarSearchForm');
   const desktopClearBtn = shadow.getElementById('desktopSearchClearBtn');
   if (navbarSearchForm && searchInput) {
+    navbarSearchForm.setAttribute('action', withBase('/search/'));
     navbarSearchForm.addEventListener('submit', event => {
       event.preventDefault();
       submitSearch(searchInput.value);

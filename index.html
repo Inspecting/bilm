@@ -157,6 +157,7 @@
     let animationId = null;
     let particlesEnabled = true;
     let motionEnabled = true;
+    let hasNavigatedAway = false;
     function isLoadingEnabled() {
       const settings = window.bilmTheme?.getSettings?.();
       if (settings && Object.prototype.hasOwnProperty.call(settings, 'loading')) {
@@ -206,7 +207,31 @@
     }
 
     function redirectToHome() {
+      if (hasNavigatedAway) return;
+      hasNavigatedAway = true;
       window.location.href = getHomeUrl();
+    }
+
+    function isProxiedRequested() {
+      const settings = window.bilmTheme?.getSettings?.();
+      return settings?.proxied === true;
+    }
+
+    async function tryActivateProxyMode() {
+      try {
+        const proxiedActive = await window.bilmProxyGate?.activateProxiedMode?.({
+          targetUrl: 'https://bilm-scramjet.fly.dev/',
+          timeoutMs: 7000
+        });
+        if (proxiedActive) {
+          hasNavigatedAway = true;
+          stopAnimation();
+          return true;
+        }
+      } catch {
+        // Ignore proxy activation errors and continue with normal navigation.
+      }
+      return false;
     }
 
     function resize() {
@@ -284,9 +309,13 @@
     }
 
     function fadeOutAndRedirect() {
+      if (hasNavigatedAway) return;
       document.getElementById('fadeWrapper').classList.add('fade-out');
       document.getElementById('bgCanvas').classList.add('fade-out');
-      setTimeout(redirectToHome, 350);
+      setTimeout(() => {
+        if (hasNavigatedAway) return;
+        redirectToHome();
+      }, 350);
     }
 
     toggleButton.addEventListener('click', () => {
@@ -296,21 +325,33 @@
       if (!nextState) redirectToHome();
     });
 
-    skipButton.addEventListener('click', redirectToHome);
+    skipButton.addEventListener('click', () => {
+      redirectToHome();
+    });
 
     document.addEventListener('DOMContentLoaded', async () => {
-      const proxiedActive = await window.bilmProxyGate?.activateProxiedMode?.({
-        targetUrl: 'https://bilm-scramjet.fly.dev/',
-        timeoutMs: 7000
-      });
-      if (proxiedActive) return;
       updateToggleLabel();
-      if (!isLoadingEnabled()) {
+      const loadingEnabled = isLoadingEnabled();
+      const proxiedRequested = isProxiedRequested();
+
+      if (!loadingEnabled && !proxiedRequested) {
         redirectToHome();
         return;
       }
-      applyParticleSettings(window.bilmTheme?.getSettings?.());
-      setTimeout(fadeOutAndRedirect, 3000);
+
+      const proxyPromise = proxiedRequested ? tryActivateProxyMode() : Promise.resolve(false);
+
+      if (loadingEnabled) {
+        applyParticleSettings(window.bilmTheme?.getSettings?.());
+        setTimeout(fadeOutAndRedirect, 3000);
+      }
+
+      const proxiedActive = await proxyPromise;
+      if (proxiedActive) return;
+
+      if (!loadingEnabled) {
+        redirectToHome();
+      }
     });
 
     window.addEventListener('resize', () => {

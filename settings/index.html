@@ -122,6 +122,10 @@
       box-shadow: 0 0 12px var(--accent-soft);
     }
 
+    .control-row.is-disabled {
+      opacity: 0.78;
+    }
+
     .control-row label {
       font-size: 0.95rem;
       color: var(--text-primary);
@@ -603,10 +607,10 @@
           <option value="vidnest">Vidnest</option>
         </select>
       </div>
-      <div class="control-row" id="proxiedControlRow" style="display: none;">
+      <div class="control-row" id="proxiedControlRow">
         <div>
           <label>Proxied</label>
-          <small>Load Bilm in embedded proxy mode using your account setting.</small>
+          <small id="proxiedControlHint">Load Bilm in embedded proxy mode using your account setting.</small>
         </div>
         <label class="toggle">
           <input id="proxiedToggle" type="checkbox" />
@@ -759,6 +763,7 @@
   const serverSelect = document.getElementById('serverSelect');
   const animeServerSelect = document.getElementById('animeServerSelect');
   const proxiedControlRow = document.getElementById('proxiedControlRow');
+  const proxiedControlHint = document.getElementById('proxiedControlHint');
   const proxiedToggle = document.getElementById('proxiedToggle');
   const openMaintenanceBtn = document.getElementById('openMaintenanceBtn');
   const exportDataBtn = document.getElementById('exportDataBtn');
@@ -960,8 +965,11 @@
 
   function updateProxiedControl(user) {
     const loggedIn = Boolean(user);
-    if (proxiedControlRow) {
-      proxiedControlRow.style.display = loggedIn ? 'flex' : 'none';
+    proxiedControlRow?.classList.toggle('is-disabled', !loggedIn);
+    if (proxiedControlHint) {
+      proxiedControlHint.textContent = loggedIn
+        ? 'Load Bilm in embedded proxy mode using your account setting.'
+        : 'Sign in to enable embedded proxy mode.';
     }
     if (proxiedToggle) {
       proxiedToggle.disabled = !loggedIn;
@@ -1222,23 +1230,46 @@
     toggleBtn.classList.add('btn', 'btn-outline');
   }
 
+  function openGlobalAuthModal(mode = 'login') {
+    const normalizedMode = mode === 'signup' ? 'signup' : 'login';
+    const openFn = window.bilmAuthUi?.open;
+    if (typeof openFn === 'function') {
+      openFn(normalizedMode);
+      return;
+    }
 
-  function openLoginModal() {
+    window.addEventListener('bilm:auth-modal-ready', () => {
+      window.bilmAuthUi?.open?.(normalizedMode);
+    }, { once: true });
+
+    window.dispatchEvent(new CustomEvent('bilm:open-auth-modal', {
+      detail: { mode: normalizedMode }
+    }));
+
+    if (normalizedMode === 'signup') {
+      signUpStatus.textContent = '';
+      signUpModal.classList.add('open');
+      return;
+    }
     loginStatus.textContent = '';
     loginModal.classList.add('open');
   }
 
+
+  function openLoginModal() {
+    openGlobalAuthModal('login');
+  }
+
   function closeLoginModal() {
-    loginModal.classList.remove('open');
+    // Shared navbar modal handles close state.
   }
 
   function openSignUpModal() {
-    signUpStatus.textContent = '';
-    signUpModal.classList.add('open');
+    openGlobalAuthModal('signup');
   }
 
   function closeSignUpModal() {
-    signUpModal.classList.remove('open');
+    // Shared navbar modal handles close state.
   }
 
   function updateAccountUi(user) {
@@ -1252,7 +1283,6 @@
       cloudStatus.textContent = isSyncEnabled()
         ? 'Account ready. Live sync is active on this device.'
         : 'Account ready. Live sync is paused on this device.';
-      loginHelperText.textContent = 'Logged in successfully.';
     } else {
       accountStatusText.textContent = 'You are in guest mode. Log in to use account transfer tools.';
       openSignInBtn.hidden = false;
@@ -1261,7 +1291,6 @@
       openAccountSettingsBtn.disabled = false;
       updateProxiedControl(null);
       cloudStatus.textContent = 'Log in to use account features.';
-      loginHelperText.textContent = 'Use email and password to log in.';
     }
   }
 
@@ -1671,7 +1700,6 @@
     } catch (err) {
       accountStatusText.textContent = 'Account tools are unavailable right now. Refresh and try again.';
       cloudStatus.textContent = `Auth setup failed: ${err.message}`;
-      loginHelperText.textContent = 'If this keeps happening, disable blockers for Firebase and reload.';
       openAccountSettingsBtn.disabled = false;
       updateProxiedControl(null);
     }

@@ -1065,12 +1065,6 @@ async function routeRequest(req, res) {
     return;
   }
 
-  if (url.pathname === '/games' || url.pathname.startsWith('/games/')) {
-    const target = `/home/${url.search || ''}`;
-    sendRedirect(res, target, 302, { 'cache-control': 'no-store' });
-    return;
-  }
-
   if (rawPathname === '/api/anilist') {
     await handleAniListProxy(req, res);
     return;

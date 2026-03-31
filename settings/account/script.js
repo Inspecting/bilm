@@ -120,6 +120,31 @@ document.addEventListener('DOMContentLoaded', () => {
     window.bilmToast?.show?.(message, { tone, duration });
   }
 
+  function openSharedAuthModal(mode = 'login') {
+    const normalizedMode = mode === 'signup' ? 'signup' : 'login';
+    const openFn = window.bilmAuthUi?.open;
+    if (typeof openFn === 'function') {
+      openFn(normalizedMode);
+      return;
+    }
+
+    window.addEventListener('bilm:auth-modal-ready', () => {
+      window.bilmAuthUi?.open?.(normalizedMode);
+    }, { once: true });
+
+    window.dispatchEvent(new CustomEvent('bilm:open-auth-modal', {
+      detail: { mode: normalizedMode }
+    }));
+
+    if (normalizedMode === 'signup') {
+      closeModal(loginModal);
+      openModal(signUpModal);
+      return;
+    }
+    closeModal(signUpModal);
+    openModal(loginModal);
+  }
+
   function openModal(modal) {
     modal?.classList.add('open');
   }
@@ -514,13 +539,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   openLoginModalBtn?.addEventListener('click', () => {
-    closeModal(signUpModal);
-    openModal(loginModal);
+    openSharedAuthModal('login');
   });
 
   openSignUpModalBtn?.addEventListener('click', () => {
-    closeModal(loginModal);
-    openModal(signUpModal);
+    openSharedAuthModal('signup');
   });
 
   closeLoginModalBtn?.addEventListener('click', () => closeModal(loginModal));
@@ -531,13 +554,11 @@ document.addEventListener('DOMContentLoaded', () => {
   closeMergeModalBtn?.addEventListener('click', () => closeModal(mergeModal));
 
   openCreateAccountBtn?.addEventListener('click', () => {
-    closeModal(loginModal);
-    openModal(signUpModal);
+    openSharedAuthModal('signup');
   });
 
   backToLoginBtn?.addEventListener('click', () => {
-    closeModal(signUpModal);
-    openModal(loginModal);
+    openSharedAuthModal('login');
   });
 
   [loginModal, signUpModal, dataModal, mergeModal, cloudAuthPromptModal].forEach((modal) => {
@@ -895,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
   confirmCloudLoginBtn?.addEventListener('click', () => {
     closeModal(cloudAuthPromptModal);
     closeModal(dataModal);
-    openModal(loginModal);
+    openSharedAuthModal('login');
   });
 
   cancelCloudLoginBtn?.addEventListener('click', () => {

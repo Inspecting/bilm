@@ -3,106 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bilm 💜 - Games</title>
-
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#0a0a0a" />
-
-  <link rel="manifest" href="../manifest.json" />
-  <link rel="apple-touch-icon" href="../icon.png" />
-
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <title>Bilm - Games Removed</title>
   <link rel="stylesheet" href="../shared/theme.css" />
-  <link rel="stylesheet" href="./style.css" />
-  <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+    }
 
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .removed-card {
+      width: min(560px, 100%);
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-md);
+      text-align: center;
+      display: grid;
+      gap: 12px;
+    }
+
+    .removed-card h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 3vw, 2.1rem);
+    }
+
+    .removed-card p {
+      margin: 0;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .removed-card a {
+      justify-self: center;
+      margin-top: 8px;
+      text-decoration: none;
+      color: var(--text-inverse);
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-weight: 700;
+    }
+  </style>
 </head>
 <body>
-
-  <div id="navbarContainer"></div>
-  <script src="../shared/navbar.js"></script>
-
-  <main class="games-page">
-    <header class="page-header">
-      <div class="page-title-wrap">
-        <p class="page-kicker">Jump into something fun</p>
-        <h1 class="page-title">Games</h1>
-        <p class="page-subtitle">Fresh picks, favorites, and quick launch tools for your next game.</p>
-      </div>
-      <div class="header-actions">
-        <div class="page-status" id="gameStatus">Loading games…</div>
-      </div>
-      <div class="header-stats" id="headerStats" aria-live="polite">
-        <article class="stat-card">
-          <p class="stat-label">Total games</p>
-          <p class="stat-value" id="statTotal">0</p>
-        </article>
-        <article class="stat-card">
-          <p class="stat-label">Categories</p>
-          <p class="stat-value" id="statCategories">0</p>
-        </article>
-        <article class="stat-card">
-          <p class="stat-label">Favorites</p>
-          <p class="stat-value" id="statFavorites">0</p>
-        </article>
-        <article class="stat-card">
-          <p class="stat-label">Recently played</p>
-          <p class="stat-value" id="statRecent">0</p>
-        </article>
-      </div>
-    </header>
-
-    <section class="page-toolbar" aria-label="Game search and filters">
-      <label class="search-wrap" for="gameSearchInput">
-        <span class="search-label">Search games</span>
-        <input id="gameSearchInput" type="search" placeholder="Search by title, category, or description" autocomplete="off" />
-      </label>
-      <label class="toolbar-field" for="sortSelect">
-        <span class="search-label">Sort</span>
-        <select id="sortSelect">
-          <option value="featured">Featured</option>
-          <option value="name">Name (A-Z)</option>
-          <option value="category">Category</option>
-          <option value="recent">Recently played</option>
-        </select>
-      </label>
-      <button id="favoritesToggleBtn" class="toolbar-button" type="button" aria-pressed="false">Favorites only</button>
-      <button id="randomPlayBtn" class="toolbar-button toolbar-button-accent" type="button">Play random</button>
-      <button id="clearSearchBtn" class="toolbar-button" type="button" hidden>Clear</button>
-    </section>
-
-    <section class="chip-bar" id="categoryChips" aria-label="Category filters"></section>
-
-    <section class="rail-wrap" id="favoriteRailWrap" hidden>
-      <div class="rail-head">
-        <h2>Favorites</h2>
-      </div>
-      <div class="rail-grid" id="favoriteRail"></div>
-    </section>
-
-    <section class="rail-wrap" id="recentRailWrap" hidden>
-      <div class="rail-head">
-        <h2>Recently played</h2>
-      </div>
-      <div class="rail-grid" id="recentRail"></div>
-    </section>
-
-    <p class="results-meta" id="resultsMeta" hidden></p>
-
-    <section class="results-section">
-      <h2 class="section-title" id="resultsTitle">All games</h2>
-      <div id="gameSections" class="results-grid"></div>
-      <button id="loadMoreBtn" class="load-more-btn" type="button" hidden>Load more</button>
-    </section>
-
-    <div class="empty-state" id="gameEmpty" hidden>
-      <p>No games matched the current filters. Try another search or reset favorites/category filters.</p>
-    </div>
+  <main class="removed-card" role="main">
+    <h1>Games Removed</h1>
+    <p>Games are no longer part of Bilm. This route remains only so old bookmarks do not break.</p>
+    <a id="goHomeLink" href="../home/">Go to Home</a>
   </main>
+  <script>
+    (function assignHomeHref() {
+      function detectBasePath() {
+        const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'games', 'index.html']);
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        if (!parts.length) return '';
+        const appRootIndex = parts.findIndex((part) => appRoots.has(part));
+        if (appRootIndex > 0) return `/${parts.slice(0, appRootIndex).join('/')}`;
+        return '';
+      }
 
-  <script src="./script.js"></script>
+      const link = document.getElementById('goHomeLink');
+      if (!link) return;
+      link.setAttribute('href', `${detectBasePath()}/home/`);
+    })();
+  </script>
 </body>
 </html>

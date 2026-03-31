@@ -29,6 +29,7 @@ const animeMoviesPerLoad = 15;
 const ANIME_MOVIE_GENRES = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Romance', 'Sci-Fi'];
 
 let allGenres = [];
+let genresReadyPromise = Promise.resolve([]);
 const genreNameById = new Map();
 const loadedCounts = {};
 const loadedMovieIds = {};
@@ -331,7 +332,8 @@ function initializeFiltersUi() {
 
   if (!filterElements.toggle || !filterElements.drawer || !filterElements.overlay) return;
 
-  filterElements.toggle.addEventListener('click', () => {
+  filterElements.toggle.addEventListener('click', async () => {
+    await Promise.resolve(genresReadyPromise).catch(() => null);
     refreshFilterUiForCurrentMode();
     setFiltersDrawerOpen(true);
   });
@@ -342,6 +344,14 @@ function initializeFiltersUi() {
   filterElements.clear?.addEventListener('click', () => {
     clearAllFilters();
   });
+
+  const syncFilterStateFromUi = () => {
+    collectFilterStateFromUi();
+  };
+  filterElements.drawer.addEventListener('change', syncFilterStateFromUi);
+  filterElements.yearMin?.addEventListener('input', syncFilterStateFromUi);
+  filterElements.yearMax?.addEventListener('input', syncFilterStateFromUi);
+  filterElements.ratingMin?.addEventListener('change', syncFilterStateFromUi);
 
   filterElements.apply?.addEventListener('click', () => {
     collectFilterStateFromUi();
@@ -927,7 +937,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindModeToggleButtons(ensureAnimeSectionsLoaded);
   setContentMode('regular');
 
-  await fetchGenres();
+  genresReadyPromise = fetchGenres();
+  await genresReadyPromise;
   if (pageRequestController.signal.aborted) return;
   const sections = getSections();
 

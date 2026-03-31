@@ -269,9 +269,9 @@ main {
 
 .filters-side-toggle {
   position: fixed;
-  top: 50%;
+  top: clamp(88px, 20vh, 170px);
   left: 12px;
-  transform: translateY(-50%);
+  transform: none;
   z-index: 1200;
   border: 1px solid var(--accent-soft);
   border-radius: 0 12px 12px 0;

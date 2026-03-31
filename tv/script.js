@@ -29,6 +29,7 @@ const animeShowsPerLoad = 15;
 const ANIME_TV_GENRES = ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Mystery', 'Romance', 'Sci-Fi'];
 
 let allGenres = [];
+let genresReadyPromise = Promise.resolve([]);
 const genreNameById = new Map();
 const loadedCounts = {};
 const loadedShowIds = {};
@@ -44,6 +45,8 @@ const apiRequestQueueByHost = new Map();
 const inFlightGetRequests = new Map();
 const inFlightPostRequests = new Map();
 const pageRequestController = new AbortController();
+let animeSectionsBootstrapped = false;
+let animeSectionsLoadPromise = null;
 
 const modeState = { current: 'regular' };
 const filterState = {
@@ -115,11 +118,18 @@ function setContentMode(mode) {
   refreshFilterUiForCurrentMode();
 }
 
-function bindModeToggleButtons() {
+function bindModeToggleButtons(onAnimeSelected) {
   const regularButton = document.getElementById('regularModeButton');
   const animeButton = document.getElementById('animeModeButton');
   if (regularButton) regularButton.addEventListener('click', () => setContentMode('regular'));
-  if (animeButton) animeButton.addEventListener('click', () => setContentMode('anime'));
+  if (animeButton) {
+    animeButton.addEventListener('click', async () => {
+      setContentMode('anime');
+      if (typeof onAnimeSelected === 'function') {
+        await onAnimeSelected();
+      }
+    });
+  }
 }
 
 function slugifySectionTitle(title) {
@@ -321,7 +331,8 @@ function initializeFiltersUi() {
 
   if (!filterElements.toggle || !filterElements.drawer || !filterElements.overlay) return;
 
-  filterElements.toggle.addEventListener('click', () => {
+  filterElements.toggle.addEventListener('click', async () => {
+    await Promise.resolve(genresReadyPromise).catch(() => null);
     refreshFilterUiForCurrentMode();
     setFiltersDrawerOpen(true);
   });
@@ -332,6 +343,14 @@ function initializeFiltersUi() {
   filterElements.clear?.addEventListener('click', () => {
     clearAllFilters();
   });
+
+  const syncFilterStateFromUi = () => {
+    collectFilterStateFromUi();
+  };
+  filterElements.drawer.addEventListener('change', syncFilterStateFromUi);
+  filterElements.yearMin?.addEventListener('input', syncFilterStateFromUi);
+  filterElements.yearMax?.addEventListener('input', syncFilterStateFromUi);
+  filterElements.ratingMin?.addEventListener('change', syncFilterStateFromUi);
 
   filterElements.apply?.addEventListener('click', () => {
     collectFilterStateFromUi();
@@ -889,32 +908,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   initializeFiltersUi();
 
-  bindModeToggleButtons();
+  const ensureAnimeSectionsLoaded = async () => {
+    if (animeSectionsBootstrapped || animeSectionsLoadPromise) return animeSectionsLoadPromise;
+
+    animeSectionsLoadPromise = (async () => {
+      const animeSections = getAnimeTvSections();
+      renderQuickFilters(animeSections, 'animeQuickFilters');
+      animeSections.forEach((section) => createSectionSkeleton(section, animeContainer, 'anime-'));
+
+      const priorityAnimeSections = animeSections.slice(0, PRIORITY_SECTION_COUNT);
+      const deferredAnimeSections = animeSections.slice(PRIORITY_SECTION_COUNT);
+      await runSectionScheduler(priorityAnimeSections, deferredAnimeSections, loadAnimeShowsForSection);
+      animeSections.forEach((section) => setupInfiniteScroll(section, loadAnimeShowsForSection, 'anime-'));
+      animeSectionsBootstrapped = true;
+    })().finally(() => {
+      animeSectionsLoadPromise = null;
+    });
+
+    return animeSectionsLoadPromise;
+  };
+
+  bindModeToggleButtons(ensureAnimeSectionsLoaded);
   setContentMode('regular');
 
-  await fetchGenres();
+  genresReadyPromise = fetchGenres();
+  await genresReadyPromise;
   if (pageRequestController.signal.aborted) return;
   const sections = getSections();
-  const animeSections = getAnimeTvSections();
 
   renderQuickFilters(sections, 'quickFilters');
   sections.forEach((section) => createSectionSkeleton(section, container));
 
-  renderQuickFilters(animeSections, 'animeQuickFilters');
-  animeSections.forEach((section) => createSectionSkeleton(section, animeContainer, 'anime-'));
-
   const prioritySections = sections.slice(0, PRIORITY_SECTION_COUNT);
   const deferredSections = sections.slice(PRIORITY_SECTION_COUNT);
-  const priorityAnimeSections = animeSections.slice(0, PRIORITY_SECTION_COUNT);
-  const deferredAnimeSections = animeSections.slice(PRIORITY_SECTION_COUNT);
-
-  await Promise.all([
-    runSectionScheduler(prioritySections, deferredSections, loadShowsForSection),
-    runSectionScheduler(priorityAnimeSections, deferredAnimeSections, loadAnimeShowsForSection)
-  ]);
+  await runSectionScheduler(prioritySections, deferredSections, loadShowsForSection);
 
   sections.forEach((section) => setupInfiniteScroll(section, loadShowsForSection));
-  animeSections.forEach((section) => setupInfiniteScroll(section, loadAnimeShowsForSection, 'anime-'));
   refreshFilterUiForCurrentMode();
 });
 

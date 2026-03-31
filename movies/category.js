@@ -108,78 +108,182 @@ const animeGenreBySlug = new Map(ANIME_MOVIE_GENRES.map((label) => [toSlug(label
 
 let regularConfigPromise = null;
 let movieGenresPromise = null;
+const API_COOLDOWN_MS = 120;
+const API_MAX_RETRIES = 2;
+const apiCooldownByHost = new Map();
+const apiRequestQueueByHost = new Map();
+const inFlightGetRequests = new Map();
+const inFlightPostRequests = new Map();
 
-async function fetchJSON(url) {
-  const rawUrl = String(url || '').trim();
-  const backupUrl = (() => {
-    try {
-      const parsed = new URL(rawUrl, window.location.href);
-      if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
-      if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
-      const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
-      const backup = new URL(`/api/tmdb/${tmdbPath}`, getApiOrigin());
-      parsed.searchParams.forEach((value, key) => {
-        if (String(key || '').toLowerCase() === 'api_key') return;
-        backup.searchParams.append(key, value);
-      });
-      return backup.toString();
-    } catch {
-      return '';
-    }
-  })();
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+function getRequestHost(rawUrl) {
   try {
-    const response = await fetch(rawUrl);
-    if (!response.ok) throw new Error('Request failed');
-    return await response.json();
-  } catch (error) {
-    if (!backupUrl) return null;
-    try {
-      console.info('[api-fallback] movies category using backup provider', {
-        primaryUrl: rawUrl,
-        backupUrl
-      });
-      const backupResponse = await fetch(backupUrl);
-      if (!backupResponse.ok) throw new Error('Backup request failed');
-      return await backupResponse.json();
-    } catch {
-      console.warn('Movies category fallback failed:', error);
-      return null;
-    }
+    return new URL(String(rawUrl || '').trim(), window.location.href).host || window.location.host;
+  } catch {
+    return window.location.host || 'local';
   }
 }
 
-async function postAniList(url, body) {
-  const payload = JSON.stringify(body || {});
+async function waitForApiCooldown(rawUrl) {
+  const host = getRequestHost(rawUrl);
+  const previous = apiRequestQueueByHost.get(host) || Promise.resolve();
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  apiRequestQueueByHost.set(host, previous.then(() => gate));
+
+  await previous;
+  const now = Date.now();
+  const nextAllowedAt = apiCooldownByHost.get(host) || 0;
+  const waitMs = Math.max(0, nextAllowedAt - now);
+  if (waitMs > 0) {
+    await sleep(waitMs);
+  }
+  apiCooldownByHost.set(host, Date.now() + API_COOLDOWN_MS);
+
+  release();
+  if (apiRequestQueueByHost.get(host) === gate) {
+    apiRequestQueueByHost.delete(host);
+  }
+}
+
+function shouldRetryStatus(status) {
+  return status === 429 || status >= 500;
+}
+
+function getRetryDelayMs(response, attempt) {
+  const retryAfter = Number.parseFloat(response?.headers?.get?.('Retry-After'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(Math.round(retryAfter * 1000), 10000);
+  }
+  return Math.min(250 * (2 ** attempt), 2500);
+}
+
+function getStorageApiBackupGetUrl(rawUrl) {
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: /graphql\.anilist\.co/i.test(url)
-        ? { 'Content-Type': 'text/plain;charset=UTF-8' }
-        : { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: payload
+    const parsed = new URL(String(rawUrl || '').trim(), window.location.href);
+    if (parsed.origin !== 'https://storage-api.watchbilm.org') return '';
+    if (!parsed.pathname.startsWith('/media/tmdb/')) return '';
+    const tmdbPath = parsed.pathname.slice('/media/tmdb/'.length);
+    const backup = new URL(`/api/tmdb/${tmdbPath}`, getApiOrigin());
+    parsed.searchParams.forEach((value, key) => {
+      if (String(key || '').toLowerCase() === 'api_key') return;
+      backup.searchParams.append(key, value);
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } catch (error) {
-    if (/graphql\.anilist\.co/i.test(url)) {
-      console.warn('AniList fallback failed:', error);
-      return null;
-    }
+    return backup.toString();
+  } catch {
+    return '';
+  }
+}
+
+async function fetchWithRetry(rawUrl, options = {}) {
+  const maxRetries = options.maxRetries ?? API_MAX_RETRIES;
+  const requestOptions = options.fetchOptions || {};
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      console.info('[api-fallback] movies category anime using backup provider');
-      const response = await fetch('https://graphql.anilist.co', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: payload
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return await response.json();
-    } catch (fallbackError) {
-      console.warn('AniList backup failed:', fallbackError);
-      return null;
+      await waitForApiCooldown(rawUrl);
+      const response = await fetch(rawUrl, requestOptions);
+      if (response.ok) {
+        return response;
+      }
+      if (attempt < maxRetries && shouldRetryStatus(response.status)) {
+        await sleep(getRetryDelayMs(response, attempt));
+        continue;
+      }
+      throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      if (attempt >= maxRetries) {
+        throw error;
+      }
+      await sleep(Math.min(250 * (2 ** attempt), 2500));
     }
   }
+  throw new Error('Request failed');
+}
+
+async function fetchJSON(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return null;
+  if (inFlightGetRequests.has(rawUrl)) {
+    return inFlightGetRequests.get(rawUrl);
+  }
+
+  const backupUrl = getStorageApiBackupGetUrl(rawUrl);
+  const request = (async () => {
+    try {
+      const response = await fetchWithRetry(rawUrl);
+      return await response.json();
+    } catch (error) {
+      if (!backupUrl) return null;
+      try {
+        console.info('[api-fallback] movies category using backup provider', {
+          primaryUrl: rawUrl,
+          backupUrl
+        });
+        const backupResponse = await fetchWithRetry(backupUrl);
+        return await backupResponse.json();
+      } catch {
+        console.warn('Movies category fallback failed:', error);
+        return null;
+      }
+    }
+  })().finally(() => {
+    inFlightGetRequests.delete(rawUrl);
+  });
+
+  inFlightGetRequests.set(rawUrl, request);
+  return request;
+}
+
+async function postAniList(url, body) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return null;
+  const payload = JSON.stringify(body || {});
+  const cacheKey = `${rawUrl}::${payload}`;
+  if (inFlightPostRequests.has(cacheKey)) {
+    return inFlightPostRequests.get(cacheKey);
+  }
+
+  const request = (async () => {
+    const fetchAniList = async (targetUrl) => {
+      const usePlainText = /graphql\.anilist\.co/i.test(targetUrl);
+      const response = await fetchWithRetry(targetUrl, {
+        fetchOptions: {
+          method: 'POST',
+          headers: usePlainText
+            ? { 'Content-Type': 'text/plain;charset=UTF-8' }
+            : { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: payload
+        }
+      });
+      return await response.json();
+    };
+
+    try {
+      return await fetchAniList(rawUrl);
+    } catch (error) {
+      if (/graphql\.anilist\.co/i.test(rawUrl)) {
+        console.warn('AniList fallback failed:', error);
+        return null;
+      }
+      try {
+        console.info('[api-fallback] movies category anime using backup provider');
+        return await fetchAniList('https://graphql.anilist.co');
+      } catch (fallbackError) {
+        console.warn('AniList backup failed:', fallbackError);
+        return null;
+      }
+    }
+  })().finally(() => {
+    inFlightPostRequests.delete(cacheKey);
+  });
+
+  inFlightPostRequests.set(cacheKey, request);
+  return request;
 }
 
 async function fetchMovieGenres() {

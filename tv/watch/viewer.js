@@ -734,7 +734,16 @@ function tryEmbedMasterFullscreenCommand() {
 }
 
 function getActiveFullscreenElement() {
-  return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
+  return document.fullscreenElement
+    || document.webkitFullscreenElement
+    || document.webkitCurrentFullScreenElement
+    || document.msFullscreenElement
+    || null;
+}
+
+function isNativeFullscreenLikelyActive() {
+  if (getActiveFullscreenElement()) return true;
+  return Boolean(document.fullscreen || document.webkitIsFullScreen);
 }
 
 function doesFullscreenMatch(element) {
@@ -750,10 +759,10 @@ function doesFullscreenMatch(element) {
 async function waitForFullscreenMatch(element, timeoutMs = 450) {
   const endAt = Date.now() + timeoutMs;
   while (Date.now() < endAt) {
-    if (doesFullscreenMatch(element)) return true;
+    if (doesFullscreenMatch(element) || isNativeFullscreenLikelyActive()) return true;
     await new Promise((resolve) => window.setTimeout(resolve, 32));
   }
-  return doesFullscreenMatch(element);
+  return doesFullscreenMatch(element) || isNativeFullscreenLikelyActive();
 }
 
 async function requestElementFullscreen(element) {
@@ -826,7 +835,7 @@ async function exitNativeFullscreen() {
 }
 
 function handleFullscreenStateChange() {
-  const nativeFullscreenActive = Boolean(getActiveFullscreenElement());
+  const nativeFullscreenActive = isNativeFullscreenLikelyActive();
   document.body.classList.toggle('native-fullscreen-active', nativeFullscreenActive);
   document.documentElement.classList.toggle('native-fullscreen-active', nativeFullscreenActive);
   playerWithControls?.classList.toggle('native-fullscreen-shell', nativeFullscreenActive);
@@ -846,26 +855,16 @@ fullscreenBtn.onclick = async () => {
     return;
   }
   exitSimulatedFullscreen();
-  document.body.classList.add('native-fullscreen-active');
-  document.documentElement.classList.add('native-fullscreen-active');
-  setOverlayUiState(true);
+  handleFullscreenStateChange();
 };
 
 if (closeBtn) {
   closeBtn.onclick = async () => {
-    if (getActiveFullscreenElement()) {
+    if (isNativeFullscreenLikelyActive()) {
       await exitNativeFullscreen();
     }
     exitSimulatedFullscreen();
-    if (!getActiveFullscreenElement()) {
-      document.body.classList.remove('native-fullscreen-active');
-      document.documentElement.classList.remove('native-fullscreen-active');
-      setOverlayUiState(false);
-    } else {
-      document.body.classList.add('native-fullscreen-active');
-      document.documentElement.classList.add('native-fullscreen-active');
-      setOverlayUiState(true);
-    }
+    handleFullscreenStateChange();
   };
 }
 

@@ -675,6 +675,104 @@ test('anime sections include view more links on movies and tv browse pages', asy
   expect(tvHref || '').toContain('/tv/category.html?mode=anime');
 });
 
+test('tv browse defers anime API traffic until anime mode is selected', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  let anilistRequests = 0;
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/genre/tv/list')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ genres: [{ id: 16, name: 'Animation' }] })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+  await page.route('**/storage-api.watchbilm.org/media/anilist', async (route) => {
+    anilistRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { Page: { media: [] } } })
+    });
+  });
+
+  await page.goto('/tv/', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+  expect(anilistRequests).toBe(0);
+
+  await page.evaluate(() => {
+    document.getElementById('animeModeButton')?.click();
+  });
+  await expect.poll(() => anilistRequests).toBeGreaterThan(0);
+});
+
+test('tv category age filtering keeps content-rating request concurrency bounded', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile-'), 'Desktop pass covers bounded concurrency instrumentation for this flow.');
+  await mockAuthScript(page, { loggedIn: false });
+  let inflightRatings = 0;
+  let maxInflightRatings = 0;
+  const discoverResults = Array.from({ length: 20 }, (_, index) => ({
+    id: 9000 + index,
+    name: `Show ${index + 1}`,
+    first_air_date: '2020-01-01',
+    vote_average: 8.1,
+    poster_path: `/poster-${index + 1}.jpg`
+  }));
+
+  const tmdbHandler = async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.includes('/discover/tv')) {
+      const requestPage = Number(url.searchParams.get('page') || '1');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          results: requestPage === 1 ? discoverResults : [],
+          total_pages: 1
+        })
+      });
+      return;
+    }
+
+    if (url.pathname.includes('/content_ratings')) {
+      inflightRatings += 1;
+      maxInflightRatings = Math.max(maxInflightRatings, inflightRatings);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      inflightRatings -= 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          results: [{ iso_3166_1: 'US', rating: 'TV-14' }]
+        })
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  };
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/**', tmdbHandler);
+  await page.route('**/api/tmdb/**', tmdbHandler);
+
+  await page.goto('/tv/category.html?mode=regular&section=trending&age=TV-14&title=TV-14', {
+    waitUntil: 'domcontentloaded'
+  });
+
+  await expect.poll(() => maxInflightRatings).toBeGreaterThan(0);
+  expect(maxInflightRatings).toBeLessThanOrEqual(4);
+});
+
 test('navbar removes games/chat controls and clears legacy chat storage keys', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   await page.route('**/storage-api.watchbilm.org/media/tmdb/**', async (route) => {
@@ -735,15 +833,17 @@ test('navbar removes games/chat controls and clears legacy chat storage keys', a
   expect(navbarState.hasScopedChatCursor).toBe(false);
 });
 
-test('games routes redirect to home', async ({ page }) => {
+test('games routes show removed page with home action', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   await page.goto('/games/', { waitUntil: 'domcontentloaded' });
-  await expect(page).toHaveURL(/\/home\/?$/);
+  await expect(page).toHaveURL(/\/games\/?$/);
+  await expect(page.getByRole('heading', { name: 'Games Removed' })).toBeVisible();
+  await expect(page.locator('#goHomeLink')).toHaveAttribute('href', /\/home\/?$/);
 
   await page.goto('/games/play.html?from=test', { waitUntil: 'domcontentloaded' });
-  const redirectedUrl = new URL(page.url());
-  expect(redirectedUrl.pathname.endsWith('/home/')).toBe(true);
-  expect(redirectedUrl.searchParams.get('from')).toBe('test');
+  await expect(page).toHaveURL(/\/games\/play\.html\?from=test$/);
+  await expect(page.getByRole('heading', { name: 'Games Removed' })).toBeVisible();
+  await expect(page.locator('#goHomeLink')).toHaveAttribute('href', /\/home\/?$/);
 });
 
 test('settings exposes diagnostics controls', async ({ page }) => {
@@ -781,11 +881,12 @@ test('guests ignore proxied mode and loading off still redirects home', async ({
   await expect(page).toHaveURL(/\/home\/?$/);
 });
 
-test('settings hides proxied control for guests', async ({ page }) => {
+test('settings shows proxied control immediately for guests in disabled state', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   await setThemeSettings(page, { proxied: true });
   await page.goto('/settings/');
-  await expect(page.locator('#proxiedControlRow')).toBeHidden();
+  await expect(page.locator('#proxiedControlRow')).toBeVisible();
+  await expect(page.locator('#proxiedToggle')).toBeDisabled();
 });
 
 test('settings shows proxied control for logged-in users and persists toggle', async ({ page }) => {
@@ -806,6 +907,40 @@ test('settings shows proxied control for logged-in users and persists toggle', a
     return settings.proxied === true;
   });
   expect(storedProxied).toBe(true);
+});
+
+test('settings and account auth actions open shared navbar auth modal', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+
+  await page.goto('/settings/', { waitUntil: 'domcontentloaded' });
+  await page.click('#openSignInBtn');
+
+  await expect.poll(async () => page.evaluate(() => {
+    const root = document.querySelector('#navbarContainer')?.shadowRoot;
+    const modal = root?.getElementById('navbarAuthModal');
+    return Boolean(modal && !modal.hidden);
+  })).toBe(true);
+
+  await expect.poll(async () => page.evaluate(() => {
+    const root = document.querySelector('#navbarContainer')?.shadowRoot;
+    return Boolean(root?.getElementById('navbarAuthPasswordToggleBtn'));
+  })).toBe(true);
+
+  const panelWidth = await page.evaluate(() => {
+    const root = document.querySelector('#navbarContainer')?.shadowRoot;
+    const panel = root?.querySelector('.navbar-auth-panel');
+    return panel ? Number.parseFloat(getComputedStyle(panel).width) : 0;
+  });
+  expect(panelWidth).toBeGreaterThan(360);
+
+  await page.goto('/settings/account/', { waitUntil: 'domcontentloaded' });
+  await page.click('#openLoginModalBtn');
+
+  await expect.poll(async () => page.evaluate(() => {
+    const root = document.querySelector('#navbarContainer')?.shadowRoot;
+    const modal = root?.getElementById('navbarAuthModal');
+    return Boolean(modal && !modal.hidden);
+  })).toBe(true);
 });
 
 test('watch history keeps duplicate rows and delete removes only one entry', async ({ page }) => {

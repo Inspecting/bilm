@@ -3,76 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bilm 💜 - Play Game</title>
-
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#0a0a0a" />
-
-  <link rel="manifest" href="../manifest.json" />
-  <link rel="apple-touch-icon" href="../icon.png" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet" />
+  <title>Bilm - Games Removed</title>
   <link rel="stylesheet" href="../shared/theme.css" />
-  <link rel="stylesheet" href="./play.css" />
-  <script src="../shared/access.js"></script>
   <script src="../shared/theme.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+    }
 
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .removed-card {
+      width: min(560px, 100%);
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-md);
+      text-align: center;
+      display: grid;
+      gap: 12px;
+    }
+
+    .removed-card h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 3vw, 2.1rem);
+    }
+
+    .removed-card p {
+      margin: 0;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .removed-card a {
+      justify-self: center;
+      margin-top: 8px;
+      text-decoration: none;
+      color: var(--text-inverse);
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-weight: 700;
+    }
+  </style>
 </head>
 <body>
-  <div id="navbarContainer"></div>
-  <script src="../shared/navbar.js"></script>
-
-  <main class="play-main">
-    <header class="play-header">
-      <div class="play-title-wrap">
-        <p class="play-kicker">Now playing</p>
-        <h1 class="play-title" id="gameTitle">Loading game…</h1>
-        <p class="play-description" id="gameDescription"></p>
-        <div class="play-meta" id="gameMeta"></div>
-      </div>
-      <div class="play-header-actions">
-        <button class="action-button action-button-alt" id="favoriteGame" type="button">Add to favorites</button>
-        <a class="back-link" href="./index.html">Back to Games</a>
-      </div>
-    </header>
-
-    <section class="play-content" id="playContent">
-      <div class="play-frame-wrap">
-        <div class="play-frame-toolbar">
-          <span class="frame-label">Gameplay</span>
-          <div class="frame-actions">
-            <button class="action-button action-button-alt" id="reloadGame" type="button">Reload</button>
-            <button class="action-button" id="fullscreenGame" type="button">Fullscreen</button>
-          </div>
-        </div>
-        <div class="play-frame" id="gameFrame"></div>
-      </div>
-      <aside class="play-panel">
-        <img class="play-poster" id="gamePoster" alt="" />
-        <div class="play-panel-meta">
-          <p><span>Category:</span> <strong id="gameCategory">General</strong></p>
-          <p><span>Source:</span> <strong id="gameSource">Unknown</strong></p>
-        </div>
-        <div class="play-actions">
-          <button class="action-button" id="openSource" type="button">Open game in new tab</button>
-          <button class="action-button action-button-alt" id="copyShare" type="button">Copy share link</button>
-        </div>
-      </aside>
-    </section>
-
-    <section class="play-list-section" id="recentWrap" hidden>
-      <h2>Recently played</h2>
-      <div class="play-list" id="recentList"></div>
-    </section>
-
-    <div class="play-empty" id="playEmpty" hidden>
-      <h2>We couldn't load this game.</h2>
-      <p>Head back to the games list and pick another title.</p>
-      <a class="action-button" href="./index.html">Browse games</a>
-    </div>
+  <main class="removed-card" role="main">
+    <h1>Games Removed</h1>
+    <p>The game player has been retired from Bilm. Use the button below to go back to Home.</p>
+    <a id="goHomeLink" href="../home/">Go to Home</a>
   </main>
+  <script>
+    (function assignHomeHref() {
+      function detectBasePath() {
+        const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'games', 'index.html']);
+        const parts = window.location.pathname.split('/').filter(Boolean);
+        if (!parts.length) return '';
+        const appRootIndex = parts.findIndex((part) => appRoots.has(part));
+        if (appRootIndex > 0) return `/${parts.slice(0, appRootIndex).join('/')}`;
+        return '';
+      }
 
-  <script src="./play.js"></script>
+      const link = document.getElementById('goHomeLink');
+      if (!link) return;
+      link.setAttribute('href', `${detectBasePath()}/home/`);
+    })();
+  </script>
 </body>
 </html>
