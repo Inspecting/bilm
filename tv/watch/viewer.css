@@ -239,7 +239,7 @@ main {
   width: 100%;
   aspect-ratio: 16 / 9;
   position: relative;
-  background: var(--surface-player);
+  background: #000;
   overflow: hidden;
   border-radius: 20px;
 }
@@ -250,6 +250,7 @@ iframe {
   border: none;
   display: block;
   border-radius: 20px;
+  background: #000;
 }
 
 #clickShield {
@@ -262,6 +263,23 @@ iframe {
   pointer-events: none;
   background: transparent;
   border-radius: 20px;
+}
+
+#videoPlayer:fullscreen,
+#videoPlayer:-webkit-full-screen,
+#playerContainer:fullscreen,
+#playerContainer:-webkit-full-screen,
+#playerWithControls:fullscreen,
+#playerWithControls:-webkit-full-screen,
+body.native-fullscreen-active #playerWithControls,
+body.native-fullscreen-active #playerContainer,
+body.native-fullscreen-active #videoPlayer {
+  background: #000 !important;
+  border-radius: 0 !important;
+}
+
+body.native-fullscreen-active #clickShield {
+  border-radius: 0 !important;
 }
 
 #playexBar {

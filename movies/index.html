@@ -42,6 +42,48 @@
     <button id="regularModeButton" class="mode-toggle-button is-active" type="button" data-mode="regular" role="tab" aria-selected="true">Regular</button>
     <button id="animeModeButton" class="mode-toggle-button" type="button" data-mode="anime" role="tab" aria-selected="false">Anime</button>
   </div>
+  <button id="filtersToggleBtn" class="filters-side-toggle" type="button" aria-controls="filtersDrawer" aria-expanded="false">Filters</button>
+  <div id="filtersOverlay" class="filters-overlay is-hidden" aria-hidden="true"></div>
+  <aside id="filtersDrawer" class="filters-drawer is-hidden" aria-hidden="true">
+    <div class="filters-drawer-header">
+      <h2>Filters</h2>
+      <button id="closeFiltersBtn" class="filters-close-button" type="button" aria-label="Close filters">✕</button>
+    </div>
+    <div class="filters-drawer-body">
+      <label class="filters-field">
+        <span>Year From</span>
+        <input id="filterYearMin" type="number" inputmode="numeric" min="1900" max="2100" placeholder="Any" />
+      </label>
+      <label class="filters-field">
+        <span>Year To</span>
+        <input id="filterYearMax" type="number" inputmode="numeric" min="1900" max="2100" placeholder="Any" />
+      </label>
+      <label class="filters-field">
+        <span>Minimum Rating</span>
+        <select id="filterRatingMin">
+          <option value="">Any</option>
+          <option value="5">5.0+</option>
+          <option value="6">6.0+</option>
+          <option value="7">7.0+</option>
+          <option value="8">8.0+</option>
+          <option value="9">9.0+</option>
+        </select>
+      </label>
+      <section class="filters-group">
+        <h3>Age Ratings</h3>
+        <div id="filterAgeRatingOptions" class="filter-options"></div>
+      </section>
+      <section class="filters-group">
+        <h3>Genres</h3>
+        <div id="filterGenreOptions" class="filter-options"></div>
+      </section>
+    </div>
+    <div class="filters-drawer-actions">
+      <button id="clearFiltersBtn" class="filters-action secondary" type="button">Clear</button>
+      <button id="applyFiltersBtn" class="filters-action primary" type="button">Apply</button>
+    </div>
+    <p id="filtersSummary" class="filters-summary" role="status" aria-live="polite"></p>
+  </aside>
   <div id="quickFilters" class="quick-filters" aria-label="Quick category filters"></div>
   <div id="movieSections"></div>
   <div id="animeQuickFilters" class="quick-filters is-hidden" aria-label="Anime quick category filters"></div>
