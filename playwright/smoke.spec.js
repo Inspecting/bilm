@@ -332,19 +332,23 @@ test('movie watch fullscreen falls back to simulated shell when native fullscree
   const simulatedStyles = await page.evaluate(() => {
     const shell = document.getElementById('playerWithControls');
     const container = document.getElementById('playerContainer');
+    const shield = document.getElementById('clickShield');
     const shellStyles = shell ? getComputedStyle(shell) : null;
     const containerStyles = container ? getComputedStyle(container) : null;
+    const shieldStyles = shield ? getComputedStyle(shield) : null;
     return {
       shellRadius: shellStyles?.borderRadius || '',
       shellBackground: shellStyles?.backgroundColor || '',
       containerRadius: containerStyles?.borderRadius || '',
-      containerBackground: containerStyles?.backgroundColor || ''
+      containerBackground: containerStyles?.backgroundColor || '',
+      shieldBackground: shieldStyles?.backgroundColor || ''
     };
   });
   expect(simulatedStyles.shellRadius).toBe('0px');
   expect(simulatedStyles.containerRadius).toBe('0px');
   expect(simulatedStyles.shellBackground).toBe('rgb(0, 0, 0)');
   expect(simulatedStyles.containerBackground).toBe('rgb(0, 0, 0)');
+  expect(['rgba(0, 0, 0, 0)', 'transparent']).toContain(simulatedStyles.shieldBackground);
 
   await page.click('#closeBtn');
   await expect(page.locator('#playerWithControls')).not.toHaveClass(/(^| )simulated-fullscreen( |$)/);
@@ -368,19 +372,23 @@ test('tv watch fullscreen fallback hides compact controls and restores on close'
   const simulatedStyles = await page.evaluate(() => {
     const shell = document.getElementById('playerWithControls');
     const container = document.getElementById('playerContainer');
+    const shield = document.getElementById('clickShield');
     const shellStyles = shell ? getComputedStyle(shell) : null;
     const containerStyles = container ? getComputedStyle(container) : null;
+    const shieldStyles = shield ? getComputedStyle(shield) : null;
     return {
       shellRadius: shellStyles?.borderRadius || '',
       shellBackground: shellStyles?.backgroundColor || '',
       containerRadius: containerStyles?.borderRadius || '',
-      containerBackground: containerStyles?.backgroundColor || ''
+      containerBackground: containerStyles?.backgroundColor || '',
+      shieldBackground: shieldStyles?.backgroundColor || ''
     };
   });
   expect(simulatedStyles.shellRadius).toBe('0px');
   expect(simulatedStyles.containerRadius).toBe('0px');
   expect(simulatedStyles.shellBackground).toBe('rgb(0, 0, 0)');
   expect(simulatedStyles.containerBackground).toBe('rgb(0, 0, 0)');
+  expect(['rgba(0, 0, 0, 0)', 'transparent']).toContain(simulatedStyles.shieldBackground);
 
   await page.click('#closeBtn');
   await expect(page.locator('#playerWithControls')).not.toHaveClass(/(^| )simulated-fullscreen( |$)/);
@@ -401,16 +409,20 @@ test('watch fullscreen prefers native fullscreen before simulated fallback', asy
   const nativeStyles = await page.evaluate(() => {
     const htmlHasNativeClass = document.documentElement.classList.contains('native-fullscreen-active');
     const shell = document.getElementById('playerWithControls');
+    const shield = document.getElementById('clickShield');
     const shellStyles = shell ? getComputedStyle(shell) : null;
+    const shieldStyles = shield ? getComputedStyle(shield) : null;
     return {
       htmlHasNativeClass,
       shellRadius: shellStyles?.borderRadius || '',
-      shellBackground: shellStyles?.backgroundColor || ''
+      shellBackground: shellStyles?.backgroundColor || '',
+      shieldBackground: shieldStyles?.backgroundColor || ''
     };
   });
   expect(nativeStyles.htmlHasNativeClass).toBe(true);
   expect(nativeStyles.shellRadius).toBe('0px');
   expect(nativeStyles.shellBackground).toBe('rgb(0, 0, 0)');
+  expect(['rgba(0, 0, 0, 0)', 'transparent']).toContain(nativeStyles.shieldBackground);
   const enterStats = await page.evaluate(() => window.__bilmFullscreenMock);
   expect(enterStats?.requestCount ?? 0).toBeGreaterThan(0);
 
@@ -435,19 +447,23 @@ test('anime watch fullscreen fallback uses the same black no-radius shell', asyn
   const styles = await page.evaluate(() => {
     const shell = document.getElementById('playerWithControls');
     const container = document.getElementById('playerContainer');
+    const shield = document.getElementById('clickShield');
     const shellStyles = shell ? getComputedStyle(shell) : null;
     const containerStyles = container ? getComputedStyle(container) : null;
+    const shieldStyles = shield ? getComputedStyle(shield) : null;
     return {
       shellRadius: shellStyles?.borderRadius || '',
       shellBackground: shellStyles?.backgroundColor || '',
       containerRadius: containerStyles?.borderRadius || '',
-      containerBackground: containerStyles?.backgroundColor || ''
+      containerBackground: containerStyles?.backgroundColor || '',
+      shieldBackground: shieldStyles?.backgroundColor || ''
     };
   });
   expect(styles.shellRadius).toBe('0px');
   expect(styles.containerRadius).toBe('0px');
   expect(styles.shellBackground).toBe('rgb(0, 0, 0)');
   expect(styles.containerBackground).toBe('rgb(0, 0, 0)');
+  expect(['rgba(0, 0, 0, 0)', 'transparent']).toContain(styles.shieldBackground);
 });
 
 test('movie filter drawer apply navigates to canonical URL-driven results', async ({ page }) => {

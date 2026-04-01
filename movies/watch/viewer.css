@@ -296,15 +296,19 @@ body.native-fullscreen-active #videoPlayer {
 
 body.native-fullscreen-active #clickShield {
   border-radius: 0 !important;
-  background: #000 !important;
+  background: transparent !important;
 }
 
 body.native-fullscreen-active #playerWithControls.native-fullscreen-shell,
 body.native-fullscreen-active #playerWithControls.native-fullscreen-shell #playerContainer,
-body.native-fullscreen-active #playerWithControls.native-fullscreen-shell iframe,
-body.native-fullscreen-active #playerWithControls.native-fullscreen-shell #clickShield {
+body.native-fullscreen-active #playerWithControls.native-fullscreen-shell iframe {
   background: #000 !important;
   border-radius: 0 !important;
+}
+
+body.native-fullscreen-active #playerWithControls.native-fullscreen-shell #clickShield {
+  border-radius: 0 !important;
+  background: transparent !important;
 }
 
 html.native-fullscreen-active,
@@ -524,9 +528,12 @@ body.simulated-fullscreen-active,
 body.simulated-fullscreen-active main,
 body.simulated-fullscreen-active #playerWrapper,
 body.simulated-fullscreen-active #playerContainer,
-body.simulated-fullscreen-active iframe,
-body.simulated-fullscreen-active #clickShield {
+body.simulated-fullscreen-active iframe {
   background: #000 !important;
+}
+
+body.simulated-fullscreen-active #clickShield {
+  background: transparent !important;
 }
 
 #playerWithControls.simulated-fullscreen {
@@ -559,6 +566,10 @@ body.simulated-fullscreen-active #clickShield {
 #playerWithControls.simulated-fullscreen iframe,
 #playerWithControls.simulated-fullscreen #clickShield {
   border-radius: 0 !important;
+}
+
+#playerWithControls.simulated-fullscreen #clickShield {
+  background: transparent !important;
 }
 
 .hide-navbar {
