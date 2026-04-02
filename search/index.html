@@ -300,10 +300,12 @@
     let cachedAll = [];
     let activeFilter = 'all';
     let activeSort = 'relevance';
-    const API_COOLDOWN_MS = 250;
+    const API_COOLDOWN_MS = 120;
+    const SEARCH_SLOW_PROVIDER_THRESHOLD_MS = 2000;
+    const SEARCH_REQUEST_TIMEOUT_MS = 6500;
     const SEARCH_PAGE_SIZE = 36;
     const SEARCH_RENDER_CHUNK_SIZE = 10;
-    const SEARCH_RESOLVE_LIMIT = 6;
+    const SEARCH_RESOLVE_LIMIT = 4;
     const SEARCH_RESOLVE_CONCURRENCY = 2;
     const apiCooldownByHost = new Map();
     let renderedResultsCount = 0;
@@ -311,6 +313,7 @@
     let searchRenderToken = 0;
     let resultsObserver = null;
     let resultsRenderInProgress = false;
+    let searchLoadComplete = false;
 
     function normalizeTitle(value) {
       return (value || '').trim().toLowerCase();
@@ -322,6 +325,10 @@
 
     function createTvKey(title, year) {
       return `${normalizeTitle(title)}-${year || 'N/A'}`;
+    }
+
+    function delay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
 
@@ -373,23 +380,152 @@
       return '';
     }
 
-    async function fetchJSON(url) {
-      const primaryUrl = String(url || '').trim();
-      await waitForApiCooldown(primaryUrl);
-      const response = await fetch(primaryUrl);
-      if (response.ok) return response.json();
+    async function fetchJSONDirect(url, options = {}) {
+      const requestUrl = String(url || '').trim();
+      if (!requestUrl) throw new Error('Missing request URL');
+      const timeoutMs = Math.max(500, Number(options.timeoutMs || SEARCH_REQUEST_TIMEOUT_MS) || SEARCH_REQUEST_TIMEOUT_MS);
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timeoutId = controller
+        ? setTimeout(() => {
+            try {
+              controller.abort();
+            } catch {
+              // Ignore abort failures.
+            }
+          }, timeoutMs)
+        : null;
+      try {
+        await waitForApiCooldown(requestUrl);
+        const response = await fetch(requestUrl, controller ? { signal: controller.signal } : undefined);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          throw new Error(`Request timeout (${timeoutMs}ms)`);
+        }
+        throw error;
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
+    }
 
+    async function fetchJSON(url, options = {}) {
+      const primaryUrl = String(url || '').trim();
+      if (!primaryUrl) throw new Error('Missing request URL');
+      const slowThresholdMs = Math.max(
+        300,
+        Number(options.slowThresholdMs || SEARCH_SLOW_PROVIDER_THRESHOLD_MS) || SEARCH_SLOW_PROVIDER_THRESHOLD_MS
+      );
+      const timeoutMs = Math.max(
+        slowThresholdMs + 500,
+        Number(options.timeoutMs || SEARCH_REQUEST_TIMEOUT_MS) || SEARCH_REQUEST_TIMEOUT_MS
+      );
       const backupUrl = buildSearchBackupUrl(primaryUrl);
-      if (!backupUrl) throw new Error(`HTTP ${response.status}`);
-      console.info('[api-fallback] search fetch using backup provider', {
+      const primaryPromise = fetchJSONDirect(primaryUrl, { timeoutMs });
+      if (!backupUrl) return primaryPromise;
+
+      const firstOutcome = await Promise.race([
+        primaryPromise.then((data) => ({ type: 'primary-success', data })).catch((error) => ({ type: 'primary-failure', error })),
+        delay(slowThresholdMs).then(() => ({ type: 'primary-slow' }))
+      ]);
+
+      if (firstOutcome.type === 'primary-success') return firstOutcome.data;
+
+      if (firstOutcome.type === 'primary-failure') {
+        console.info('[api-fallback] search fetch using backup provider', {
+          primaryUrl,
+          backupUrl,
+          reason: String(firstOutcome.error?.message || firstOutcome.error || 'primary-failure')
+        });
+        return fetchJSONDirect(backupUrl, { timeoutMs });
+      }
+
+      console.info('[api-fallback] search fetch provider slow; racing backup provider', {
         primaryUrl,
         backupUrl,
-        status: response.status
+        slowThresholdMs
       });
-      await waitForApiCooldown(backupUrl);
-      const backupResponse = await fetch(backupUrl);
-      if (!backupResponse.ok) throw new Error(`HTTP ${backupResponse.status}`);
-      return backupResponse.json();
+      const backupPromise = fetchJSONDirect(backupUrl, { timeoutMs });
+      const raceOutcome = await Promise.race([
+        primaryPromise.then((data) => ({ type: 'primary-success', data })).catch((error) => ({ type: 'primary-failure', error })),
+        backupPromise.then((data) => ({ type: 'backup-success', data })).catch((error) => ({ type: 'backup-failure', error }))
+      ]);
+
+      if (raceOutcome.type === 'primary-success' || raceOutcome.type === 'backup-success') return raceOutcome.data;
+      if (raceOutcome.type === 'primary-failure') return backupPromise;
+      return primaryPromise;
+    }
+
+    function addTmdbMovieResultsToMap(targetMap, movies) {
+      (movies || []).forEach(item => {
+        const key = createMovieKey(item.title, item.release_date?.slice(0, 4));
+        if (!targetMap.has(key)) {
+          targetMap.set(key, {
+            title: item.title,
+            year: item.release_date?.slice(0, 4) || 'N/A',
+            img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
+            tmdbId: item.id,
+            link: `${BASE_URL}/movies/show.html?id=${item.id}`,
+            source: 'TMDB',
+            rating: item.vote_average,
+            popularity: item.popularity || 0,
+            type: 'movie'
+          });
+        }
+      });
+    }
+
+    function addTmdbTvResultsToMap(targetMap, shows) {
+      (shows || []).forEach(item => {
+        const key = createTvKey(item.name, item.first_air_date?.slice(0, 4));
+        if (!targetMap.has(key)) {
+          targetMap.set(key, {
+            title: item.name,
+            year: item.first_air_date?.slice(0, 4) || 'N/A',
+            img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
+            tmdbId: item.id,
+            link: `${BASE_URL}/tv/show.html?id=${item.id}`,
+            source: 'TMDB',
+            rating: item.vote_average,
+            popularity: item.popularity || 0,
+            type: 'tv'
+          });
+        }
+      });
+    }
+
+    function addOmdbMovieResultsToMap(targetMap, movies) {
+      (movies || []).forEach(item => {
+        const key = createMovieKey(item.Title, item.Year);
+        if (!targetMap.has(key)) {
+          targetMap.set(key, {
+            title: item.Title,
+            year: item.Year,
+            img: item.Poster !== 'N/A' ? item.Poster : NO_IMAGE,
+            imdbId: item.imdbID,
+            tmdbId: null,
+            link: '',
+            source: 'OMDB',
+            popularity: 0,
+            type: 'movie'
+          });
+        }
+      });
+    }
+
+    function addTvmazeResultsToMap(targetMap, shows) {
+      (shows || []).forEach(item => {
+        const key = createTvKey(item.title, item.year);
+        if (!targetMap.has(key)) {
+          targetMap.set(key, item);
+        }
+      });
+    }
+
+    function syncCachedSearchData(movieMap, tvMap) {
+      cachedMovies = Array.from(movieMap.values());
+      cachedTvShows = Array.from(tvMap.values());
+      cachedAll = [...cachedMovies, ...cachedTvShows];
     }
 
     function getYearValue(item) {
@@ -506,8 +642,7 @@
     function fetchTvmazeShows(query) {
       if (!query) return Promise.resolve([]);
       const url = `https://storage-api.watchbilm.org/media/tvmaze/search/shows?q=${encodeURIComponent(query)}`;
-      return waitForApiCooldown(url).then(() => fetch(url))
-        .then(res => res.json())
+      return fetchJSON(url)
         .then(data => {
           if (!Array.isArray(data)) return [];
           return data.map(item => {
@@ -529,88 +664,50 @@
 
     if (queryNormalized) {
       (async () => {
+        searchLoadComplete = false;
+        resultsMessage.textContent = 'Searching...';
+        resultsMessage.hidden = false;
+        combinedSection.style.display = 'block';
+
         const tmdbMovieUrl = `https://storage-api.watchbilm.org/media/tmdb/search/movie?query=${encodeURIComponent(queryNormalized)}`;
         const tmdbTvUrl = `https://storage-api.watchbilm.org/media/tmdb/search/tv?query=${encodeURIComponent(queryNormalized)}`;
         const omdbUrl = `https://storage-api.watchbilm.org/media/omdb?s=${encodeURIComponent(queryNormalized)}&type=movie`;
-
-        const [tmdbMovies, tmdbTV] = await Promise.all([
-          fetchJSON(tmdbMovieUrl).catch(() => ({ results: [] })),
-          fetchJSON(tmdbTvUrl).catch(() => ({ results: [] }))
-        ]);
-        const omdbMovies = await fetchJSON(omdbUrl).catch(() => ({ Search: [] }));
-        const tvmazeShows = await fetchTvmazeShows(queryNormalized);
-
         const movieMap = new Map();
         const tvMap = new Map();
 
-        (tmdbMovies.results || []).forEach(item => {
-          const key = createMovieKey(item.title, item.release_date?.slice(0, 4));
-          if (!movieMap.has(key)) {
-            movieMap.set(key, {
-              title: item.title,
-              year: item.release_date?.slice(0, 4) || 'N/A',
-              img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
-              tmdbId: item.id,
-              link: `${BASE_URL}/movies/show.html?id=${item.id}`,
-              source: 'TMDB',
-              rating: item.vote_average,
-              popularity: item.popularity || 0,
-              type: 'movie'
-            });
-          }
-        });
+        const tmdbMoviesPromise = fetchJSON(tmdbMovieUrl).catch(() => ({ results: [] }));
+        const tmdbTVPromise = fetchJSON(tmdbTvUrl).catch(() => ({ results: [] }));
+        const omdbMoviesPromise = fetchJSON(omdbUrl).catch(() => ({ Search: [] }));
+        const tvmazeShowsPromise = fetchTvmazeShows(queryNormalized);
 
-        (omdbMovies.Search || []).forEach(item => {
-          const key = createMovieKey(item.Title, item.Year);
-          if (!movieMap.has(key)) {
-            movieMap.set(key, {
-              title: item.Title,
-              year: item.Year,
-              img: item.Poster !== 'N/A' ? item.Poster : NO_IMAGE,
-              imdbId: item.imdbID,
-              tmdbId: null,
-              link: '',
-              source: 'OMDB',
-              popularity: 0,
-              type: 'movie'
-            });
-          }
-        });
+        const [tmdbMovies, tmdbTV] = await Promise.all([tmdbMoviesPromise, tmdbTVPromise]);
+        addTmdbMovieResultsToMap(movieMap, tmdbMovies.results || []);
+        addTmdbTvResultsToMap(tvMap, tmdbTV.results || []);
+        syncCachedSearchData(movieMap, tvMap);
+        updateResults(activeFilter, { finalized: false });
 
-        (tmdbTV.results || []).forEach(item => {
-          const key = createTvKey(item.name, item.first_air_date?.slice(0, 4));
-          if (!tvMap.has(key)) {
-            tvMap.set(key, {
-              title: item.name,
-              year: item.first_air_date?.slice(0, 4) || 'N/A',
-              img: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : NO_IMAGE,
-              tmdbId: item.id,
-              link: `${BASE_URL}/tv/show.html?id=${item.id}`,
-              source: 'TMDB',
-              rating: item.vote_average,
-              popularity: item.popularity || 0,
-              type: 'tv'
-            });
-          }
-        });
+        const [omdbMovies, tvmazeShows] = await Promise.all([omdbMoviesPromise, tvmazeShowsPromise]);
+        addOmdbMovieResultsToMap(movieMap, omdbMovies.Search || []);
+        addTvmazeResultsToMap(tvMap, tvmazeShows);
+        syncCachedSearchData(movieMap, tvMap);
+        updateResults(activeFilter, { finalized: false });
 
-        tvmazeShows.forEach(item => {
-          const key = createTvKey(item.title, item.year);
-          if (!tvMap.has(key)) {
-            tvMap.set(key, item);
-          }
-        });
-
-        cachedMovies = await normalizeMovieEntries(Array.from(movieMap.values()), SEARCH_RESOLVE_LIMIT);
-        cachedTvShows = await normalizeTvEntries(Array.from(tvMap.values()), SEARCH_RESOLVE_LIMIT);
+        const [normalizedMovies, normalizedTvShows] = await Promise.all([
+          normalizeMovieEntries(cachedMovies, SEARCH_RESOLVE_LIMIT),
+          normalizeTvEntries(cachedTvShows, SEARCH_RESOLVE_LIMIT)
+        ]);
+        cachedMovies = normalizedMovies;
+        cachedTvShows = normalizedTvShows;
         cachedAll = [...cachedMovies, ...cachedTvShows];
-        updateResults(activeFilter);
+        searchLoadComplete = true;
+        updateResults(activeFilter, { finalized: true });
       })().catch((err) => {
         console.error('Search failed', err);
         disconnectResultsObserver();
         renderedResultsCount = 0;
         currentVisibleItems = [];
         combinedResults.innerHTML = '';
+        searchLoadComplete = true;
         resultsMessage.textContent = 'Failed to load results.';
         resultsMessage.hidden = false;
       });
@@ -619,6 +716,7 @@
       renderedResultsCount = 0;
       currentVisibleItems = [];
       combinedResults.innerHTML = '';
+      searchLoadComplete = true;
       resultsMessage.textContent = 'Please enter a search term.';
       resultsMessage.hidden = false;
     }
@@ -683,7 +781,8 @@
       resultsObserver.observe(resultsSentinel);
     }
 
-    function updateResults(filter) {
+    function updateResults(filter, options = {}) {
+      const finalized = options.finalized ?? searchLoadComplete;
       let items = [];
       if (filter === 'movies') {
         items = cachedMovies;
@@ -703,9 +802,13 @@
         disconnectResultsObserver();
         renderedResultsCount = 0;
         combinedResults.innerHTML = '';
-        resultsMessage.textContent = items.length > 0
-          ? 'Results were found, but some sources could not be linked yet. Try another query.'
-          : 'No results found.';
+        if (!finalized) {
+          resultsMessage.textContent = 'Searching more sources...';
+        } else {
+          resultsMessage.textContent = items.length > 0
+            ? 'Results were found, but some sources could not be linked yet. Try another query.'
+            : 'No results found.';
+        }
         resultsMessage.hidden = false;
         combinedSection.style.display = 'block';
       }

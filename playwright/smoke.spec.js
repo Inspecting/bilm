@@ -228,6 +228,188 @@ test('core routes render', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 });
 
+test('search uses backup providers when storage search exceeds 2 seconds', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  const pngBody = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7n2x0AAAAASUVORK5CYII=', 'base64');
+
+  let tmdbBackupHits = 0;
+  let omdbBackupHits = 0;
+  let tvmazeBackupHits = 0;
+
+  await page.route('**/image.tmdb.org/t/p/w500/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: pngBody
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/search/movie**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2_600));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/search/tv**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2_600));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/omdb**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2_600));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ Search: [] })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tvmaze/search/shows**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2_600));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([])
+    });
+  });
+
+  await page.route('**/api/tmdb/search/movie**', async (route) => {
+    tmdbBackupHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [{
+          id: 99123,
+          title: 'Fast Backup Movie',
+          release_date: '2024-05-10',
+          poster_path: '/fast-backup-movie.png',
+          vote_average: 8.1,
+          popularity: 99
+        }]
+      })
+    });
+  });
+
+  await page.route('**/api/tmdb/search/tv**', async (route) => {
+    tmdbBackupHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route('https://www.omdbapi.com/**', async (route) => {
+    omdbBackupHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ Search: [] })
+    });
+  });
+
+  await page.route('https://api.tvmaze.com/**', async (route) => {
+    tvmazeBackupHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([])
+    });
+  });
+
+  const startMs = Date.now();
+  await page.goto('/search/?q=backup-speed', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.movie-card .card-title', { hasText: 'Fast Backup Movie' })).toBeVisible({ timeout: 10_000 });
+
+  expect(tmdbBackupHits).toBeGreaterThan(0);
+  expect(omdbBackupHits).toBeGreaterThan(0);
+  expect(tvmazeBackupHits).toBeGreaterThan(0);
+  expect(Date.now() - startMs).toBeLessThan(10_000);
+});
+
+test('search shows tmdb results before delayed enrichment finishes', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+  const pngBody = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7n2x0AAAAASUVORK5CYII=', 'base64');
+
+  await page.route('**/image.tmdb.org/t/p/w500/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: pngBody
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/search/movie**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [{
+          id: 77531,
+          title: 'Immediate TMDB Result',
+          release_date: '2025-04-03',
+          poster_path: '/immediate-result.png',
+          vote_average: 7.4,
+          popularity: 55
+        }]
+      })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/search/tv**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/omdb**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        Search: [{
+          Title: 'Slow Enrichment Movie',
+          Year: '2024',
+          imdbID: 'tt1234567',
+          Poster: 'https://example.com/slow-enrichment.jpg'
+        }]
+      })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tvmaze/search/shows**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([])
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/find/**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 4_500));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ movie_results: [] })
+    });
+  });
+
+  const startMs = Date.now();
+  await page.goto('/search/?q=immediate tmdb', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.movie-card .card-title', { hasText: 'Immediate TMDB Result' })).toBeVisible({ timeout: 4_000 });
+  expect(Date.now() - startMs).toBeLessThan(4_000);
+});
+
 test('watch player menus are mutually exclusive', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   await page.goto('/movies/watch/viewer.html?id=447365');
