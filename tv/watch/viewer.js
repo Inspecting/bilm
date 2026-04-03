@@ -528,6 +528,16 @@ function buildCurrentMediaItem(options = {}) {
     updatedAt: Date.now(),
     season: currentSeason,
     episode: currentEpisode,
+    knownSeasonCount: Math.max(
+      Number.parseInt(totalSeasons, 10) || 0,
+      Number.parseInt(currentSeason, 10) || 0,
+      1
+    ),
+    latestSeasonCount: Math.max(
+      Number.parseInt(totalSeasons, 10) || 0,
+      Number.parseInt(currentSeason, 10) || 0,
+      1
+    ),
     source: provider === 'anilist' ? 'AniList' : 'TMDB',
     rating: mediaDetails.rating,
     certification: mediaDetails.certification || ''
@@ -1024,6 +1034,12 @@ window.addEventListener('bilm:sync-applied', (event) => {
   if (relevantListKeyUpdated) {
     syncFavoriteAndWatchLaterButtons();
   }
+  const progressStorageKey = getProgressStorageKey();
+  const progressUpdated = progressStorageKey
+    && storageKeys.some((key) => String(key || '').trim() === progressStorageKey);
+  if (progressUpdated) {
+    applySyncedProgressState();
+  }
   if (storageKeys.some((key) => String(key || '').trim() === PLAYBACK_NOTE_KEY)) {
     loadPlaybackNote();
   }
@@ -1055,6 +1071,19 @@ function normalizeSeasonEpisodeState() {
   if (currentEpisode > maxEpisodes) currentEpisode = maxEpisodes;
 }
 
+function sanitizeSeasonEpisodeMemory(rawValue) {
+  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) return {};
+  const next = {};
+  Object.entries(rawValue).forEach(([seasonValue, episodeValue]) => {
+    const parsedSeason = Number.parseInt(seasonValue, 10);
+    const parsedEpisode = Number.parseInt(episodeValue, 10);
+    if (!Number.isFinite(parsedSeason) || !Number.isFinite(parsedEpisode)) return;
+    if (parsedSeason < 1 || parsedEpisode < 1) return;
+    next[parsedSeason] = parsedEpisode;
+  });
+  return next;
+}
+
 function getProgressStorageKey() {
   if (isAnime) {
     const animeNumericId = Number(animeId || 0) || 0;
@@ -1071,29 +1100,62 @@ function saveProgress() {
   if (!progressKey) return;
   normalizeSeasonEpisodeState();
   seasonEpisodeMemory[currentSeason] = currentEpisode;
+  const normalizedMemory = sanitizeSeasonEpisodeMemory(seasonEpisodeMemory);
+  normalizedMemory[currentSeason] = currentEpisode;
+  seasonEpisodeMemory = normalizedMemory;
   storage.setItem(progressKey, JSON.stringify({
     season: currentSeason,
     episode: currentEpisode,
-    seasonEpisodes: seasonEpisodeMemory
+    seasonEpisodes: normalizedMemory
   }));
+  window.bilmAuth?.noteUserActivity?.('tv-progress');
 }
 
 function loadProgress() {
+  const beforeSeason = currentSeason;
+  const beforeEpisode = currentEpisode;
   const progressKey = getProgressStorageKey();
-  if (!progressKey) return;
+  if (!progressKey) return false;
   const saved = storage.getItem(progressKey);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      currentSeason = parsed.season || 1;
-      seasonEpisodeMemory = parsed.seasonEpisodes || {};
-      currentEpisode = parsed.episode || seasonEpisodeMemory[currentSeason] || 1;
-    } catch {
-      currentSeason = 1;
-      currentEpisode = 1;
-      seasonEpisodeMemory = {};
+  if (!saved) return false;
+  try {
+    const parsed = JSON.parse(saved);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return false;
     }
+    seasonEpisodeMemory = sanitizeSeasonEpisodeMemory(parsed.seasonEpisodes);
+    const parsedSeason = Number.parseInt(parsed.season, 10);
+    currentSeason = Number.isFinite(parsedSeason) && parsedSeason > 0
+      ? parsedSeason
+      : 1;
+    const parsedEpisode = Number.parseInt(parsed.episode, 10);
+    currentEpisode = Number.isFinite(parsedEpisode) && parsedEpisode > 0
+      ? parsedEpisode
+      : (seasonEpisodeMemory[currentSeason] || 1);
+    normalizeSeasonEpisodeState();
+    return currentSeason !== beforeSeason || currentEpisode !== beforeEpisode;
+  } catch {
+    currentSeason = 1;
+    currentEpisode = 1;
+    seasonEpisodeMemory = {};
+    return beforeSeason !== 1 || beforeEpisode !== 1;
   }
+}
+
+function applySyncedProgressState() {
+  const changed = loadProgress();
+  if (!episodesPerSeason[currentSeason]) {
+    episodesPerSeason[currentSeason] = 1;
+  }
+  currentEpisode = getEpisodeForSeason(currentSeason);
+  seasonEpisodeMemory[currentSeason] = currentEpisode;
+  populateEpisodes(episodesPerSeason[currentSeason]);
+  updateControls();
+  loadPlaybackNote();
+  if (changed && mediaDetails) {
+    updateIframe();
+  }
+  return changed;
 }
 
 function buildTvUrl(server) {

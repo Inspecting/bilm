@@ -228,6 +228,74 @@ test('core routes render', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 });
 
+test('home shows and dismisses new season indicator after opening the title', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: false });
+
+  await setLocalJson(page, 'bilm-continue-watching', [
+    {
+      provider: 'tmdb',
+      type: 'tv',
+      key: 'tmdb:tv:1399',
+      id: 1399,
+      tmdbId: 1399,
+      title: 'Game of Thrones',
+      link: '/tv/show.html?id=1399',
+      poster: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+      source: 'TMDB',
+      rating: 8.4,
+      certification: 'TV-MA',
+      season: 2,
+      knownSeasonCount: 2,
+      latestSeasonCount: 2,
+      updatedAt: Date.now()
+    }
+  ]);
+
+  await page.route('**/storage-api.watchbilm.org/**', async (route) => {
+    const url = route.request().url();
+    if (/\/media\/tmdb\/tv\/1399(?:\?.*)?$/i.test(url)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 1399,
+          name: 'Game of Thrones',
+          first_air_date: '2011-04-17',
+          vote_average: 8.4,
+          number_of_seasons: 3,
+          genres: [{ id: 10765, name: 'Sci-Fi & Fantasy' }],
+          seasons: [
+            { season_number: 1, episode_count: 10 },
+            { season_number: 2, episode_count: 10 },
+            { season_number: 3, episode_count: 10 }
+          ]
+        })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.goto('/home/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.card-new-season-badge')).toHaveCount(1);
+
+  await page.locator('#continueItems .movie-card').first().click();
+  await expect(page).toHaveURL(/\/tv\/show\.html\?id=1399/);
+
+  const seenSeasonCount = await page.evaluate(() => {
+    const parsed = JSON.parse(localStorage.getItem('bilm-new-season-seen') || '{}');
+    return Number(parsed['tmdb:tv:1399'] || 0) || 0;
+  });
+  expect(seenSeasonCount).toBe(3);
+
+  await page.goto('/home/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.card-new-season-badge')).toHaveCount(0);
+});
+
 test('search uses backup providers when storage search exceeds 2 seconds', async ({ page }) => {
   await mockAuthScript(page, { loggedIn: false });
   const pngBody = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7n2x0AAAAASUVORK5CYII=', 'base64');
@@ -487,6 +555,103 @@ test('tv watch still attempts iframe load when tmdb metadata fails', async ({ pa
     /https:\/\/embedmaster\.link\/830gqxyfskjlsnbq\/tv\/1399\/1\/1\?bilm_refresh=/,
     { timeout: 15_000 }
   );
+});
+
+test('tv watch applies synced season/episode progress and playback note updates', async ({ page }) => {
+  await mockAuthScript(page, { loggedIn: true, email: 'sync-tv@watchbilm.org' });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/tv/1399/external_ids', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ imdb_id: 'tt0944947' })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/tv/1399/content_ratings', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/tv/1399/similar**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route('**/storage-api.watchbilm.org/media/tmdb/tv/1399/recommendations**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: [] })
+    });
+  });
+
+  await page.route(/https:\/\/storage-api\.watchbilm\.org\/media\/tmdb\/tv\/1399(?:\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 1399,
+        name: 'Game of Thrones',
+        first_air_date: '2011-04-17',
+        vote_average: 8.4,
+        number_of_seasons: 4,
+        poster_path: '/u3bZgnGQ9T01sWNhyveQz0wH0Hl.jpg',
+        genres: [{ id: 10765, name: 'Sci-Fi & Fantasy' }],
+        seasons: [
+          { season_number: 1, episode_count: 10 },
+          { season_number: 2, episode_count: 10 },
+          { season_number: 3, episode_count: 10 },
+          { season_number: 4, episode_count: 10 }
+        ]
+      })
+    });
+  });
+
+  await page.goto('/tv/watch/viewer.html?id=1399', { waitUntil: 'domcontentloaded' });
+
+  await expect.poll(async () => {
+    return page.evaluate(() => document.querySelectorAll('#seasonSelect option').length);
+  }).toBeGreaterThan(0);
+
+  await page.evaluate(() => {
+    const progressKey = 'bilm-tv-progress-tmdb-1399';
+    localStorage.setItem(progressKey, JSON.stringify({
+      season: 2,
+      episode: 3,
+      seasonEpisodes: { 2: 3, 1: 1 }
+    }));
+    localStorage.setItem('bilm-playback-note', JSON.stringify({
+      'tmdb:tv:1399-s2-e3': '1:15'
+    }));
+    window.dispatchEvent(new CustomEvent('bilm:sync-applied', {
+      detail: {
+        source: 'sector-sync',
+        listKeys: [],
+        storageKeys: [progressKey, 'bilm-playback-note']
+      }
+    }));
+  });
+
+  await expect.poll(async () => {
+    return page.evaluate(() => ({
+      season: document.querySelector('#seasonSelect')?.value || '',
+      episode: document.querySelector('#episodeSelect')?.value || '',
+      hours: document.querySelector('#playbackNoteHours')?.value || '',
+      minutes: document.querySelector('#playbackNoteMinutes')?.value || ''
+    }));
+  }).toEqual({
+    season: '2',
+    episode: '3',
+    hours: '1',
+    minutes: '15'
+  });
 });
 
 test('anime watch keeps subtitles disabled', async ({ page }) => {

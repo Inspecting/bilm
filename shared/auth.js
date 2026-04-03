@@ -459,6 +459,7 @@
   const STORAGE_KEY_TO_SECTOR_CONFIG = Object.freeze({
     'bilm-theme-settings': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.settings_profile, itemKey: 'theme_settings' },
     'bilm-playback-note': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.playback_notes, itemKey: 'playback_note' },
+    'bilm-new-season-seen': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.ui_prefs, itemKey: 'new_season_seen' },
     'bilm-history-page-prefs': { sectorKey: EXTRA_SYNC_SECTOR_KEYS.ui_prefs, itemKey: 'history_page_prefs' },
     bilmDisableLoading: { sectorKey: EXTRA_SYNC_SECTOR_KEYS.ui_prefs, itemKey: 'disable_loading' }
   });

@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const FAVORITES_KEY = 'bilm-favorites';
   const WATCH_LATER_KEY = 'bilm-watch-later';
   const SEARCH_HISTORY_KEY = 'bilm-search-history';
+  const NEW_SEASON_SEEN_KEY = 'bilm-new-season-seen';
   const MEDIA_LIST_KEYS = new Set([CONTINUE_KEY, FAVORITES_KEY, WATCH_LATER_KEY]);
   const storage = window.bilmTheme?.storage || {
     getJSON: (key, fallback = []) => {
@@ -170,6 +171,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return parsed.getFullYear();
   }
 
+  function toPositiveInt(value) {
+    const parsed = Number.parseInt(String(value || '').trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+
   function normalizeMediaRating(item) {
     const candidates = [
       item?.rating,
@@ -202,6 +208,86 @@ document.addEventListener('DOMContentLoaded', () => {
   function normalizeCertification(value) {
     const normalized = String(value || '').trim();
     return normalized;
+  }
+
+  function loadNewSeasonSeenState() {
+    const parsed = storage.getJSON(NEW_SEASON_SEEN_KEY, {});
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const next = {};
+    Object.entries(parsed).forEach(([key, value]) => {
+      const normalizedKey = String(key || '').trim();
+      const count = toPositiveInt(value);
+      if (!normalizedKey || !count) return;
+      next[normalizedKey] = count;
+    });
+    return next;
+  }
+
+  function saveNewSeasonSeenState(state) {
+    if (!state || typeof state !== 'object' || Array.isArray(state)) {
+      storage.setJSON(NEW_SEASON_SEEN_KEY, {});
+      return;
+    }
+    storage.setJSON(NEW_SEASON_SEEN_KEY, state);
+  }
+
+  function getNewSeasonBadgeState(item) {
+    const identity = parseStoredMediaIdentity(item);
+    if (identity.provider !== 'tmdb' || identity.mediaType !== 'tv') {
+      return { show: false, latestSeasonCount: 0 };
+    }
+    const key = String(item?.key || '').trim();
+    if (!key) return { show: false, latestSeasonCount: 0 };
+    const latestSeasonCount = toPositiveInt(item?.latestSeasonCount);
+    if (!latestSeasonCount) return { show: false, latestSeasonCount: 0 };
+
+    const knownSeasonCount = Math.max(
+      toPositiveInt(item?.knownSeasonCount),
+      toPositiveInt(item?.season)
+    );
+    const seenState = loadNewSeasonSeenState();
+    const seenSeasonCount = toPositiveInt(seenState[key]);
+    const baseline = Math.max(knownSeasonCount, seenSeasonCount);
+    return {
+      show: latestSeasonCount > baseline,
+      latestSeasonCount
+    };
+  }
+
+  function markNewSeasonSeen(item, latestSeasonCount) {
+    const key = String(item?.key || '').trim();
+    const nextSeasonCount = Math.max(toPositiveInt(latestSeasonCount), toPositiveInt(item?.latestSeasonCount));
+    if (!key || !nextSeasonCount) return;
+
+    const seenState = loadNewSeasonSeenState();
+    if (toPositiveInt(seenState[key]) < nextSeasonCount) {
+      seenState[key] = nextSeasonCount;
+      saveNewSeasonSeenState(seenState);
+    }
+
+    const continueItems = loadList(CONTINUE_KEY);
+    let changed = false;
+    const nextContinue = continueItems.map((entry) => {
+      if (String(entry?.key || '').trim() !== key) return entry;
+      const known = Math.max(
+        toPositiveInt(entry?.knownSeasonCount),
+        toPositiveInt(entry?.season),
+        nextSeasonCount
+      );
+      const latest = Math.max(toPositiveInt(entry?.latestSeasonCount), nextSeasonCount);
+      if (known === toPositiveInt(entry?.knownSeasonCount) && latest === toPositiveInt(entry?.latestSeasonCount)) {
+        return entry;
+      }
+      changed = true;
+      return {
+        ...entry,
+        knownSeasonCount: known,
+        latestSeasonCount: latest
+      };
+    });
+    if (changed) {
+      saveList(CONTINUE_KEY, nextContinue);
+    }
   }
 
   function pickMovieCertification(items) {
@@ -287,7 +373,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const identity = parseStoredMediaIdentity(item);
       if (identity.provider !== 'tmdb') return false;
       if (expectedType && identity.mediaType !== expectedType) return false;
-      return needsRatingHydration(item) || needsCertificationHydration(item) || !item?.type || !Number(item?.tmdbId || item?.id);
+      const shouldHydrateSeasonSignal = key === CONTINUE_KEY && identity.mediaType === 'tv';
+      return shouldHydrateSeasonSignal
+        || needsRatingHydration(item)
+        || needsCertificationHydration(item)
+        || !item?.type
+        || !Number(item?.tmdbId || item?.id);
     });
     if (!targets.length) return;
 
@@ -296,25 +387,59 @@ document.addEventListener('DOMContentLoaded', () => {
       const tmdbId = identity.tmdbId;
       const mediaType = identity.mediaType || expectedType || 'movie';
       if (!tmdbId) return null;
-      const details = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${tmdbId}`);
-      const rating = Number(details?.vote_average);
-      const source = details?.id ? 'TMDB' : item?.source;
-      const endpoint = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
-      const ratingsData = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${tmdbId}/${endpoint}`);
-      const certification = mediaType === 'movie'
-        ? pickMovieCertification(ratingsData?.results)
-        : pickTvCertification(ratingsData?.results);
 
-      if (!Number.isFinite(rating) || rating <= 0) {
-        return {
-          key: item.key,
+      const shouldHydrateSeasonSignal = key === CONTINUE_KEY && mediaType === 'tv';
+      const shouldHydrateRating = needsRatingHydration(item) || !item?.type || !Number(item?.tmdbId || item?.id);
+      const shouldHydrateCertification = needsCertificationHydration(item);
+
+      const details = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${tmdbId}`);
+      if (!details) return null;
+
+      const update = {
+        key: item.key
+      };
+
+      if (shouldHydrateRating) {
+        const rating = Number(details?.vote_average);
+        const source = details?.id ? 'TMDB' : item?.source;
+        Object.assign(update, {
           source,
           type: mediaType,
-          tmdbId,
-          ...(certification ? { certification } : {})
-        };
+          tmdbId
+        });
+        if (Number.isFinite(rating) && rating > 0) {
+          update.rating = rating;
+          update.vote_average = rating;
+        }
       }
-      return { key: item.key, rating, vote_average: rating, source, type: mediaType, tmdbId, ...(certification ? { certification } : {}) };
+
+      if (shouldHydrateCertification) {
+        const endpoint = mediaType === 'movie' ? 'release_dates' : 'content_ratings';
+        const ratingsData = await fetchJSON(`https://storage-api.watchbilm.org/media/tmdb/${mediaType}/${tmdbId}/${endpoint}`);
+        const certification = mediaType === 'movie'
+          ? pickMovieCertification(ratingsData?.results)
+          : pickTvCertification(ratingsData?.results);
+        if (certification) {
+          update.certification = certification;
+        }
+      }
+
+      if (shouldHydrateSeasonSignal) {
+        const latestSeasonCount = Math.max(1, toPositiveInt(details?.number_of_seasons));
+        const knownSeasonCount = Math.max(
+          toPositiveInt(item?.knownSeasonCount),
+          toPositiveInt(item?.season),
+          1
+        );
+        if (latestSeasonCount !== toPositiveInt(item?.latestSeasonCount)) {
+          update.latestSeasonCount = latestSeasonCount;
+        }
+        if (knownSeasonCount !== toPositiveInt(item?.knownSeasonCount)) {
+          update.knownSeasonCount = knownSeasonCount;
+        }
+      }
+
+      return Object.keys(update).length > 1 ? update : null;
     }));
 
     const mapped = new Map(updates.filter(Boolean).map((entry) => [entry.key, entry]));
@@ -329,7 +454,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ...(update.source ? { source: update.source } : {}),
         ...(update.type ? { type: update.type } : {}),
         ...(update.tmdbId ? { tmdbId: update.tmdbId, id: update.tmdbId } : {}),
-        ...(update.certification ? { certification: update.certification } : {})
+        ...(update.certification ? { certification: update.certification } : {}),
+        ...(toPositiveInt(update.knownSeasonCount) ? { knownSeasonCount: toPositiveInt(update.knownSeasonCount) } : {}),
+        ...(toPositiveInt(update.latestSeasonCount) ? { latestSeasonCount: toPositiveInt(update.latestSeasonCount) } : {})
       };
     });
 
@@ -484,6 +611,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return document.createDocumentFragment();
       }
 
+      const newSeasonState = getNewSeasonBadgeState(item);
+      if (newSeasonState.show && !state.editing) {
+        const seasonBadge = document.createElement('span');
+        seasonBadge.className = 'card-new-season-badge';
+        seasonBadge.textContent = 'New Season';
+        seasonBadge.setAttribute('aria-label', 'New season available');
+        card.appendChild(seasonBadge);
+      }
+
       if (state.editing) {
         card.classList.add('is-editing');
       }
@@ -522,6 +658,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const destination = normalizeMediaLink(item);
         if (destination) {
+          if (newSeasonState.show) {
+            markNewSeasonSeen(item, newSeasonState.latestSeasonCount);
+          }
           window.location.href = destination;
         }
       };
@@ -713,7 +852,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.addEventListener('bilm:sync-applied', (event) => {
     const listKeys = Array.isArray(event?.detail?.listKeys) ? event.detail.listKeys : [];
-    if (!listKeys.some((key) => MEDIA_LIST_KEYS.has(String(key || '').trim()))) {
+    const storageKeys = Array.isArray(event?.detail?.storageKeys) ? event.detail.storageKeys : [];
+    const hasRelevantListUpdate = listKeys.some((key) => MEDIA_LIST_KEYS.has(String(key || '').trim()));
+    const hasNewSeasonStateUpdate = storageKeys.some((key) => String(key || '').trim() === NEW_SEASON_SEEN_KEY);
+    if (!hasRelevantListUpdate && !hasNewSeasonStateUpdate) {
       return;
     }
     renderSections();
