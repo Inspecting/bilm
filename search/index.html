@@ -781,6 +781,74 @@
       resultsObserver.observe(resultsSentinel);
     }
 
+    function createFallbackResultCard(item) {
+      const card = document.createElement('article');
+      card.className = 'movie-card';
+      card.dataset.source = String(item?.source || '');
+
+      const image = document.createElement('img');
+      image.src = item?.img || NO_IMAGE;
+      image.alt = `${item?.title || 'Untitled'} poster`;
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      image.addEventListener('error', () => {
+        image.src = NO_IMAGE;
+      });
+
+      const meta = document.createElement('div');
+      meta.className = 'card-meta';
+
+      const title = document.createElement('div');
+      title.className = 'card-title';
+      title.textContent = String(item?.title || 'Untitled');
+
+      const subtitle = document.createElement('div');
+      subtitle.className = 'card-subtitle';
+      const year = String(item?.year || 'N/A').trim() || 'N/A';
+      const source = String(item?.source || '').trim() || 'Unknown source';
+      subtitle.textContent = `${year} · ${source}`;
+
+      meta.appendChild(title);
+      meta.appendChild(subtitle);
+      card.appendChild(image);
+      card.appendChild(meta);
+
+      const destination = String(item?.link || '').trim();
+      if (destination) {
+        card.tabIndex = 0;
+        card.setAttribute('role', 'link');
+        const openDestination = () => {
+          window.location.href = destination;
+        };
+        card.addEventListener('click', openDestination);
+        card.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          openDestination();
+        });
+      }
+
+      return card;
+    }
+
+    function createSearchResultCard(item) {
+      const createMediaCard = window.BilmMediaCard?.createMediaCard;
+      if (typeof createMediaCard === 'function') {
+        try {
+          const card = createMediaCard({
+            item,
+            className: 'movie-card',
+            badgeClassName: 'source-badge-overlay',
+            dataset: { source: item.source }
+          });
+          if (card instanceof HTMLElement) return card;
+        } catch (error) {
+          console.warn('Falling back to basic result card renderer:', error);
+        }
+      }
+      return createFallbackResultCard(item);
+    }
+
     function updateResults(filter, options = {}) {
       const finalized = options.finalized ?? searchLoadComplete;
       let items = [];
@@ -843,12 +911,7 @@
         const chunkEnd = Math.min(index + SEARCH_RENDER_CHUNK_SIZE, nextSlice.length);
         while (index < chunkEnd) {
           const item = nextSlice[index];
-          const card = window.BilmMediaCard.createMediaCard({
-            item,
-            className: 'movie-card',
-            badgeClassName: 'source-badge-overlay',
-            dataset: { source: item.source }
-          });
+          const card = createSearchResultCard(item);
           fragment.appendChild(card);
           index += 1;
         }
