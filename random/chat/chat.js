@@ -50,7 +50,11 @@
   function buildApiBases() {
     const originProxy = new URL('/api/chat', getApiOrigin()).toString().replace(/\/$/, '');
     const directCloudflare = 'https://chat-api.watchbilm.org';
-    const ordered = [originProxy, directCloudflare];
+    const host = String(window.location.hostname || '').trim().toLowerCase();
+    const preferDirectHost = host === 'watchbilm.org' || host === 'www.watchbilm.org';
+    const ordered = preferDirectHost
+      ? [directCloudflare, originProxy]
+      : [originProxy, directCloudflare];
     return [...new Set(ordered.map((value) => String(value || '').trim()).filter(Boolean))];
   }
 
