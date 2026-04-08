@@ -36,6 +36,14 @@ function parseEnvInt(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } 
   return normalized;
 }
 
+function parseEnvBool(name, fallback = false) {
+  const rawValue = String(process.env[name] || '').trim().toLowerCase();
+  if (!rawValue) return fallback;
+  if (rawValue === '1' || rawValue === 'true' || rawValue === 'yes' || rawValue === 'on') return true;
+  if (rawValue === '0' || rawValue === 'false' || rawValue === 'no' || rawValue === 'off') return false;
+  return fallback;
+}
+
 function resolveChatApiBase() {
   const rawValue = String(process.env.CHAT_API_BASE || 'https://chat-api.watchbilm.org').trim();
   if (!rawValue) return 'https://chat-api.watchbilm.org';
@@ -54,6 +62,7 @@ function resolveChatApiBase() {
 
 const HEALTH_CHECK_ALLOWED_HOSTS = resolveHealthCheckAllowedHosts();
 const CHAT_API_BASE = resolveChatApiBase();
+const CHAT_PROXY_ALLOW_AUTH_BYPASS = parseEnvBool('CHAT_PROXY_ALLOW_AUTH_BYPASS', false);
 const RATE_LIMIT_STORE = new Map();
 let nextRateLimitSweepAtMs = 0;
 const RATE_LIMIT_STORE_SOFT_CAP = 5000;
@@ -916,12 +925,14 @@ async function handleChatApiProxy(req, res, rawPathname, url) {
   const contentType = String(req.headers['content-type'] || '').trim();
   if (contentType) headers['content-type'] = contentType;
 
-  const bypassHeader = String(req.headers['x-bilm-auth-bypass'] || '').trim();
-  if (bypassHeader) headers['x-bilm-auth-bypass'] = bypassHeader;
-  const bypassEmail = String(req.headers['x-bilm-auth-email'] || '').trim();
-  if (bypassEmail) headers['x-bilm-auth-email'] = bypassEmail;
-  const bypassUid = String(req.headers['x-bilm-auth-uid'] || '').trim();
-  if (bypassUid) headers['x-bilm-auth-uid'] = bypassUid;
+  if (CHAT_PROXY_ALLOW_AUTH_BYPASS) {
+    const bypassHeader = String(req.headers['x-bilm-auth-bypass'] || '').trim();
+    if (bypassHeader) headers['x-bilm-auth-bypass'] = bypassHeader;
+    const bypassEmail = String(req.headers['x-bilm-auth-email'] || '').trim();
+    if (bypassEmail) headers['x-bilm-auth-email'] = bypassEmail;
+    const bypassUid = String(req.headers['x-bilm-auth-uid'] || '').trim();
+    if (bypassUid) headers['x-bilm-auth-uid'] = bypassUid;
+  }
 
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => abortController.abort(), 12000);
