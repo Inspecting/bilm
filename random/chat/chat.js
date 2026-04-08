@@ -468,7 +468,7 @@
     if (!conversationId) return;
     if (!state.currentUser) return;
     try {
-      const payload = await authedRequest(`/conversations/${encodeURIComponent(conversationId)}/messages?limit=180`);
+      const payload = await authedRequest(`/conversations/${encodeURIComponent(conversationId)}/messages?limit=180&before=${Number.MAX_SAFE_INTEGER}`);
       state.messagesByConversation.set(conversationId, Array.isArray(payload.messages) ? payload.messages : []);
       if (payload.conversation?.id) {
         state.conversationsById.set(payload.conversation.id, payload.conversation);
