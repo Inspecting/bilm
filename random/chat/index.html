@@ -52,20 +52,13 @@
             <p id="activeChatMeta">No messages yet.</p>
           </div>
           <div class="chat-view-actions">
-            <button id="closeTabBtn" class="chat-btn chat-btn-ghost" type="button">Close Tab</button>
-            <button id="deleteMessagesBtn" class="chat-btn chat-btn-ghost" type="button">Delete Messages</button>
-            <button id="deleteChatBtn" class="chat-btn chat-btn-danger" type="button">Delete Chat</button>
+            <button id="closeTabBtn" class="chat-btn chat-btn-ghost chat-btn-icon" type="button" aria-label="Close tab" title="Close tab">x</button>
+            <button id="deleteMessagesBtn" class="chat-btn chat-btn-ghost" type="button">Delete Chats</button>
+            <button id="selectAllMessagesBtn" class="chat-btn chat-btn-ghost" type="button" hidden>Select All</button>
+            <button id="cancelMessageSelectionBtn" class="chat-btn chat-btn-ghost" type="button" hidden>Cancel</button>
+            <button id="confirmDeleteMessagesBtn" class="chat-btn chat-btn-danger" type="button" hidden>Delete Chats</button>
           </div>
         </header>
-
-        <div id="messageSelectionBar" class="message-selection-bar" hidden>
-          <span id="selectionCountLabel">0 selected</span>
-          <div class="message-selection-actions">
-            <button id="selectAllMessagesBtn" class="chat-btn chat-btn-ghost" type="button">Select All</button>
-            <button id="cancelMessageSelectionBtn" class="chat-btn chat-btn-ghost" type="button">Cancel</button>
-            <button id="confirmDeleteMessagesBtn" class="chat-btn chat-btn-danger" type="button">Delete Selected</button>
-          </div>
-        </div>
 
         <div id="messageList" class="message-list" aria-live="polite"></div>
 

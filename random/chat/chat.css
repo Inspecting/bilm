@@ -141,11 +141,15 @@ body {
   padding-right: 3px;
 }
 
+.conversation-item-wrap {
+  position: relative;
+}
+
 .conversation-item {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-3) 90%, transparent);
-  padding: 10px;
+  padding: 10px 38px 10px 10px;
   width: 100%;
   text-align: left;
   font: inherit;
@@ -163,6 +167,30 @@ body {
 .conversation-item.is-active {
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-soft) 50%, transparent);
+}
+
+.conversation-delete-btn {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, #ef4444 48%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #ef4444 18%, var(--surface-input-soft));
+  color: #ffd7d7;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.conversation-delete-btn:hover {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ef4444 28%, transparent);
 }
 
 .conversation-email {
@@ -296,23 +324,14 @@ body {
   justify-content: flex-end;
 }
 
-.message-selection-bar {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px;
-  background: color-mix(in srgb, var(--surface-2) 96%, transparent);
-  display: flex;
+.chat-btn-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.message-selection-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: center;
+  text-transform: lowercase;
 }
 
 .message-list {
@@ -565,15 +584,6 @@ body {
 
   .chat-view-actions {
     width: 100%;
-    justify-content: flex-start;
-  }
-
-  .message-selection-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .message-selection-actions {
     justify-content: flex-start;
   }
 

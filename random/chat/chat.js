@@ -361,18 +361,28 @@
   }
 
   function updateSelectionControls() {
-    if (!elements.messageSelectionBar || !elements.selectionCountLabel || !elements.confirmDeleteMessagesBtn) return;
+    const hasConversation = Boolean(getActiveConversation());
     const messages = getMessagesForConversation(state.activeConversationId);
+    const hasMessages = hasConversation && messages.length > 0;
+    const canManageMessages = Boolean(state.currentUser) && hasMessages;
     const selectedCount = getSelectedMessageIds().length;
-    const hasMessages = messages.length > 0;
-    elements.messageSelectionBar.hidden = !state.selectionMode;
-    elements.selectionCountLabel.textContent = `${selectedCount} selected`;
-    elements.confirmDeleteMessagesBtn.disabled = selectedCount < 1;
+    const deleteLabel = selectedCount > 0 ? `Delete Chats (${selectedCount})` : 'Delete Chats';
+
+    if (elements.deleteMessagesBtn) {
+      elements.deleteMessagesBtn.hidden = state.selectionMode;
+      elements.deleteMessagesBtn.disabled = !canManageMessages;
+    }
     if (elements.selectAllMessagesBtn) {
+      elements.selectAllMessagesBtn.hidden = !state.selectionMode;
       elements.selectAllMessagesBtn.disabled = !hasMessages;
     }
-    if (elements.deleteMessagesBtn) {
-      elements.deleteMessagesBtn.disabled = !hasMessages || !state.currentUser;
+    if (elements.cancelMessageSelectionBtn) {
+      elements.cancelMessageSelectionBtn.hidden = !state.selectionMode;
+    }
+    if (elements.confirmDeleteMessagesBtn) {
+      elements.confirmDeleteMessagesBtn.hidden = !state.selectionMode;
+      elements.confirmDeleteMessagesBtn.disabled = selectedCount < 1;
+      elements.confirmDeleteMessagesBtn.textContent = deleteLabel;
     }
   }
 
@@ -440,6 +450,9 @@
     }
 
     conversations.forEach((conversation) => {
+      const itemWrap = document.createElement('div');
+      itemWrap.className = 'conversation-item-wrap';
+
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'conversation-item';
@@ -471,7 +484,23 @@
       item.appendChild(title);
       item.appendChild(preview);
       item.appendChild(meta);
-      elements.conversationList.appendChild(item);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'conversation-delete-btn';
+      deleteBtn.textContent = 'x';
+      deleteBtn.setAttribute('aria-label', `Delete chat with ${conversation.partnerEmail || 'this user'}`);
+      deleteBtn.title = 'Delete chat';
+      deleteBtn.disabled = !state.currentUser;
+      deleteBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void deleteConversationById(conversation.id);
+      });
+
+      itemWrap.appendChild(item);
+      itemWrap.appendChild(deleteBtn);
+      elements.conversationList.appendChild(itemWrap);
     });
   }
 
@@ -803,16 +832,18 @@
     }
   }
 
-  async function deleteActiveConversation() {
-    const conversation = getActiveConversation();
+  async function deleteConversationById(conversationId) {
+    const normalizedId = String(conversationId || '').trim();
+    if (!normalizedId) return;
+    const conversation = state.conversationsById.get(normalizedId);
     if (!conversation) return;
     if (!confirm(`Delete chat with ${conversation.partnerEmail}? This will hide it from your list.`)) return;
     try {
-      await authedRequest(`/conversations/${encodeURIComponent(conversation.id)}`, { method: 'DELETE' });
-      state.conversations = state.conversations.filter((entry) => entry.id !== conversation.id);
-      state.conversationsById.delete(conversation.id);
-      state.messagesByConversation.delete(conversation.id);
-      closeConversationTab(conversation.id);
+      await authedRequest(`/conversations/${encodeURIComponent(normalizedId)}`, { method: 'DELETE' });
+      state.conversations = state.conversations.filter((entry) => entry.id !== normalizedId);
+      state.conversationsById.delete(normalizedId);
+      state.messagesByConversation.delete(normalizedId);
+      closeConversationTab(normalizedId);
       renderConversationList();
       showToast('Chat deleted.', 'success');
     } catch (error) {
@@ -929,9 +960,6 @@
     elements.activeChatMeta = document.getElementById('activeChatMeta');
     elements.closeTabBtn = document.getElementById('closeTabBtn');
     elements.deleteMessagesBtn = document.getElementById('deleteMessagesBtn');
-    elements.deleteChatBtn = document.getElementById('deleteChatBtn');
-    elements.messageSelectionBar = document.getElementById('messageSelectionBar');
-    elements.selectionCountLabel = document.getElementById('selectionCountLabel');
     elements.selectAllMessagesBtn = document.getElementById('selectAllMessagesBtn');
     elements.cancelMessageSelectionBtn = document.getElementById('cancelMessageSelectionBtn');
     elements.confirmDeleteMessagesBtn = document.getElementById('confirmDeleteMessagesBtn');
@@ -1000,10 +1028,6 @@
         return;
       }
       beginMessageSelection();
-    });
-
-    elements.deleteChatBtn.addEventListener('click', () => {
-      void deleteActiveConversation();
     });
 
     elements.selectAllMessagesBtn.addEventListener('click', () => {
