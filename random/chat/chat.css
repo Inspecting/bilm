@@ -145,6 +145,10 @@ body {
   position: relative;
 }
 
+.conversation-item-wrap.is-deleting {
+  pointer-events: none;
+}
+
 .conversation-item {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -169,6 +173,13 @@ body {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-soft) 50%, transparent);
 }
 
+.conversation-item-wrap.is-deleting .conversation-item {
+  border-color: color-mix(in srgb, #ef4444 72%, transparent);
+  background: color-mix(in srgb, #ef4444 22%, var(--surface-3));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ef4444 38%, transparent), 0 0 16px color-mix(in srgb, #ef4444 28%, transparent);
+  color: #ffd7d7;
+}
+
 .conversation-delete-btn {
   position: absolute;
   top: 7px;
@@ -191,6 +202,12 @@ body {
 
 .conversation-delete-btn:hover {
   box-shadow: 0 0 0 2px color-mix(in srgb, #ef4444 28%, transparent);
+}
+
+.conversation-item-wrap.is-deleting .conversation-delete-btn {
+  border-color: color-mix(in srgb, #ef4444 78%, transparent);
+  background: color-mix(in srgb, #ef4444 45%, var(--surface-input-soft));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ef4444 42%, transparent), 0 0 16px color-mix(in srgb, #ef4444 32%, transparent);
 }
 
 .conversation-email {
@@ -223,53 +240,8 @@ body {
   min-height: 72vh;
   padding: 14px;
   display: grid;
-  gap: 10px;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.chat-tabs-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-
-.chat-tabs {
-  display: flex;
-  gap: 8px;
-  overflow: auto;
-  padding-bottom: 3px;
-}
-
-.chat-tab {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-input-soft);
-  color: var(--text-muted);
-  padding: 7px 10px 7px 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.chat-tab.is-active {
-  color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--accent) 58%, transparent);
-  background: color-mix(in srgb, var(--accent-soft) 44%, var(--surface-input-soft));
-}
-
-.chat-tab-close {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  padding: 0;
+  gap: 0;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .chat-empty {
@@ -322,16 +294,6 @@ body {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.chat-btn-icon {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-transform: lowercase;
 }
 
 .message-list {

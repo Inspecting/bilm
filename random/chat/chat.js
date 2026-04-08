@@ -1,6 +1,6 @@
 (() => {
-  const TAB_STORAGE_KEY = 'bilm-chat-open-tabs-v1';
-  const ACTIVE_TAB_STORAGE_KEY = 'bilm-chat-active-tab-v1';
+  const LEGACY_TAB_STORAGE_KEYS = ['bilm-chat-open-tabs-v1', 'bilm-chat-active-tab-v1'];
+  const ACTIVE_CONVERSATION_STORAGE_KEY = 'bilm-chat-active-conversation-v1';
   const POLL_INTERVAL_MS = 12000;
   const MESSAGE_LENGTH_LIMIT = 2000;
   const MESSAGE_INPUT_MIN_HEIGHT = 40;
@@ -12,12 +12,10 @@
     currentUser: null,
     conversations: [],
     conversationsById: new Map(),
-    openTabs: [],
     activeConversationId: '',
     messagesByConversation: new Map(),
     selectionMode: false,
     selectedMessageIds: new Set(),
-    tabsHydrated: false,
     filterText: '',
     pollingTimer: null,
     loadingConversations: false,
@@ -25,27 +23,6 @@
   };
 
   const elements = {};
-
-  function detectBasePath() {
-    const appRoots = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test', 'shared', 'index.html']);
-    const parts = window.location.pathname.split('/').filter(Boolean);
-    if (!parts.length) return '';
-
-    const appRootIndex = parts.findIndex((part) => appRoots.has(part));
-    if (appRootIndex >= 0) {
-      if (appRootIndex === 0) return '';
-      return `/${parts.slice(0, appRootIndex).join('/')}`;
-    }
-    if (parts[0] === 'gh' && parts.length >= 3) return `/${parts.slice(0, 3).join('/')}`;
-    if (parts[0] === 'npm' && parts.length >= 2) return `/${parts.slice(0, 2).join('/')}`;
-    if (parts.length === 1) return `/${parts[0]}`;
-    return '';
-  }
-
-  function withBase(path) {
-    const normalized = path.startsWith('/') ? path : `/${path}`;
-    return `${detectBasePath()}${normalized}`;
-  }
 
   function getApiOrigin() {
     return String(window.location.hostname || '').toLowerCase() === 'cdn.jsdelivr.net'
@@ -123,33 +100,34 @@
     state.conversationsById = new Map(normalized.map((conversation) => [conversation.id, conversation]));
   }
 
-  function readStoredTabs() {
-    const storedTabs = safeParse(localStorage.getItem(TAB_STORAGE_KEY), []);
-    return Array.isArray(storedTabs) ? storedTabs.filter((item) => typeof item === 'string' && item.trim()) : [];
+  function cleanupLegacyTabState() {
+    LEGACY_TAB_STORAGE_KEYS.forEach((key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Ignore storage failures.
+      }
+    });
   }
 
-  function saveTabState() {
-    localStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(state.openTabs));
-    if (state.activeConversationId) {
-      localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, state.activeConversationId);
-    } else {
-      localStorage.removeItem(ACTIVE_TAB_STORAGE_KEY);
+  function readStoredActiveConversationId() {
+    try {
+      return String(localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY) || '').trim();
+    } catch {
+      return '';
     }
   }
 
-  function hydrateTabState() {
-    if (state.tabsHydrated) return;
-    state.tabsHydrated = true;
-    state.openTabs = readStoredTabs();
-    state.activeConversationId = String(localStorage.getItem(ACTIVE_TAB_STORAGE_KEY) || '').trim();
-  }
-
-  function reconcileTabs() {
-    state.openTabs = state.openTabs.filter((conversationId) => state.conversationsById.has(conversationId));
-    if (!state.openTabs.includes(state.activeConversationId)) {
-      state.activeConversationId = state.openTabs[0] || '';
+  function saveActiveConversationId() {
+    try {
+      if (state.activeConversationId) {
+        localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, state.activeConversationId);
+      } else {
+        localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage failures.
     }
-    saveTabState();
   }
 
   function setLoginStatus(user) {
@@ -426,6 +404,48 @@
     renderMessages();
   }
 
+  function setActiveConversation(conversationId, { fetch = true } = {}) {
+    const nextConversationId = String(conversationId || '').trim();
+    if (!nextConversationId || !state.conversationsById.has(nextConversationId)) {
+      if (state.activeConversationId) {
+        state.activeConversationId = '';
+        clearMessageSelection();
+        saveActiveConversationId();
+      }
+      renderConversationList();
+      renderActiveConversationHeader();
+      syncMainView();
+      renderMessages();
+      return;
+    }
+
+    if (state.activeConversationId && state.activeConversationId !== nextConversationId) {
+      clearMessageSelection();
+    }
+    state.activeConversationId = nextConversationId;
+    saveActiveConversationId();
+    renderConversationList();
+    renderActiveConversationHeader();
+    syncMainView();
+    renderMessages();
+    if (fetch) {
+      void fetchMessages(nextConversationId, { quiet: true });
+    }
+  }
+
+  function getConversationListRowById(conversationId) {
+    if (!elements.conversationList) return null;
+    const targetId = String(conversationId || '').trim();
+    if (!targetId) return null;
+    const rows = elements.conversationList.querySelectorAll('.conversation-item-wrap[data-conversation-id]');
+    for (const row of rows) {
+      if (String(row.dataset.conversationId || '').trim() === targetId) {
+        return row;
+      }
+    }
+    return null;
+  }
+
   function renderConversationList() {
     if (!elements.conversationList) return;
     elements.conversationList.innerHTML = '';
@@ -453,13 +473,14 @@
     conversations.forEach((conversation) => {
       const itemWrap = document.createElement('div');
       itemWrap.className = 'conversation-item-wrap';
+      itemWrap.dataset.conversationId = String(conversation.id || '').trim();
 
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'conversation-item';
       if (conversation.id === state.activeConversationId) item.classList.add('is-active');
       item.addEventListener('click', () => {
-        openConversationTab(conversation.id, { focus: true });
+        setActiveConversation(conversation.id);
       });
 
       const title = document.createElement('span');
@@ -502,39 +523,6 @@
       itemWrap.appendChild(item);
       itemWrap.appendChild(deleteBtn);
       elements.conversationList.appendChild(itemWrap);
-    });
-  }
-
-  function renderTabs() {
-    if (!elements.chatTabs) return;
-    elements.chatTabs.innerHTML = '';
-    state.openTabs.forEach((conversationId) => {
-      const conversation = state.conversationsById.get(conversationId);
-      if (!conversation) return;
-
-      const tab = document.createElement('button');
-      tab.type = 'button';
-      tab.className = 'chat-tab';
-      if (conversationId === state.activeConversationId) tab.classList.add('is-active');
-      tab.addEventListener('click', () => openConversationTab(conversationId, { focus: true }));
-
-      const label = document.createElement('span');
-      label.textContent = conversation.partnerEmail || 'Conversation';
-
-      const close = document.createElement('button');
-      close.type = 'button';
-      close.className = 'chat-tab-close';
-      close.textContent = '×';
-      close.setAttribute('aria-label', 'Close tab');
-      close.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        closeConversationTab(conversationId);
-      });
-
-      tab.appendChild(label);
-      tab.appendChild(close);
-      elements.chatTabs.appendChild(tab);
     });
   }
 
@@ -654,9 +642,13 @@
     if (!state.currentUser) {
       setConversations([]);
       state.messagesByConversation.clear();
+      state.activeConversationId = '';
+      clearMessageSelection();
+      saveActiveConversationId();
       renderConversationList();
-      renderTabs();
+      renderActiveConversationHeader();
       syncMainView();
+      renderMessages();
       return;
     }
     if (state.loadingConversations) return;
@@ -664,15 +656,19 @@
     try {
       const payload = await authedRequest('/conversations?limit=200');
       setConversations(Array.isArray(payload.conversations) ? payload.conversations : []);
-      hydrateTabState();
-      reconcileTabs();
+      if (!state.activeConversationId || !state.conversationsById.has(state.activeConversationId)) {
+        clearMessageSelection();
+        const storedActiveConversationId = readStoredActiveConversationId();
+        state.activeConversationId = state.conversationsById.has(storedActiveConversationId)
+          ? storedActiveConversationId
+          : (state.conversations[0]?.id || '');
+      }
+      saveActiveConversationId();
       renderConversationList();
-      renderTabs();
       renderActiveConversationHeader();
       syncMainView();
-      if (state.activeConversationId) {
-        await fetchMessages(state.activeConversationId, { quiet: true });
-      }
+      renderMessages();
+      if (state.activeConversationId) await fetchMessages(state.activeConversationId, { quiet: true });
     } catch (error) {
       if (isAuthError(error)) {
         promptForAuth('Your session expired. Log in or create an account to load chats.');
@@ -682,37 +678,6 @@
     } finally {
       state.loadingConversations = false;
     }
-  }
-
-  function openConversationTab(conversationId, { focus = true } = {}) {
-    if (!state.conversationsById.has(conversationId)) return;
-    if (!state.openTabs.includes(conversationId)) state.openTabs.push(conversationId);
-    if (focus) {
-      if (state.activeConversationId && state.activeConversationId !== conversationId) {
-        clearMessageSelection();
-      }
-      state.activeConversationId = conversationId;
-    }
-    saveTabState();
-    renderConversationList();
-    renderTabs();
-    renderActiveConversationHeader();
-    syncMainView();
-    void fetchMessages(conversationId, { quiet: true });
-  }
-
-  function closeConversationTab(conversationId) {
-    state.openTabs = state.openTabs.filter((id) => id !== conversationId);
-    if (state.activeConversationId === conversationId) {
-      clearMessageSelection();
-      state.activeConversationId = state.openTabs[0] || '';
-    }
-    saveTabState();
-    renderConversationList();
-    renderTabs();
-    renderActiveConversationHeader();
-    syncMainView();
-    renderMessages();
   }
 
   function openNewChatModal(prefill = '') {
@@ -742,7 +707,7 @@
       state.conversations.unshift(conversation);
     }
     state.conversationsById.set(conversation.id, conversation);
-    openConversationTab(conversation.id, { focus: true });
+    setActiveConversation(conversation.id);
     return conversation;
   }
 
@@ -764,7 +729,6 @@
       closeNewChatModal();
       showToast(`Opened chat with ${conversation.partnerEmail}.`, 'success');
       renderConversationList();
-      renderTabs();
       renderActiveConversationHeader();
       syncMainView();
     } catch (error) {
@@ -821,7 +785,6 @@
       autoResizeMessageInput();
       setComposerStatus('Message sent.', 'success');
       renderConversationList();
-      renderTabs();
       renderActiveConversationHeader();
       renderMessages();
     } catch (error) {
@@ -845,15 +808,28 @@
     const conversation = state.conversationsById.get(normalizedId);
     if (!conversation) return;
     if (!confirm(`Delete chat with ${conversation.partnerEmail}? This will hide it from your list.`)) return;
+    const row = getConversationListRowById(normalizedId);
+    row?.classList.add('is-deleting');
     try {
       await authedRequest(`/conversations/${encodeURIComponent(normalizedId)}`, { method: 'DELETE' });
       state.conversations = state.conversations.filter((entry) => entry.id !== normalizedId);
       state.conversationsById.delete(normalizedId);
       state.messagesByConversation.delete(normalizedId);
-      closeConversationTab(normalizedId);
+      if (state.activeConversationId === normalizedId) {
+        clearMessageSelection();
+        state.activeConversationId = state.conversations[0]?.id || '';
+        saveActiveConversationId();
+      }
       renderConversationList();
+      renderActiveConversationHeader();
+      syncMainView();
+      renderMessages();
+      if (state.activeConversationId) {
+        await fetchMessages(state.activeConversationId, { quiet: true });
+      }
       showToast('Chat deleted.', 'success');
     } catch (error) {
+      row?.classList.remove('is-deleting');
       if (isAuthError(error)) {
         promptForAuth('Create an account or log in to manage chats.');
         return;
@@ -889,7 +865,6 @@
       renderMessages();
       await loadConversations({ quiet: true });
       renderConversationList();
-      renderTabs();
       renderActiveConversationHeader();
       showToast('Messages deleted.', 'success');
     } catch (error) {
@@ -959,13 +934,10 @@
     elements.refreshChatsBtn = document.getElementById('refreshChatsBtn');
     elements.conversationFilterInput = document.getElementById('conversationFilterInput');
     elements.conversationList = document.getElementById('conversationList');
-    elements.chatTabs = document.getElementById('chatTabs');
-    elements.newTabBtn = document.getElementById('newTabBtn');
     elements.chatEmptyState = document.getElementById('chatEmptyState');
     elements.chatView = document.getElementById('chatView');
     elements.activeChatTitle = document.getElementById('activeChatTitle');
     elements.activeChatMeta = document.getElementById('activeChatMeta');
-    elements.closeTabBtn = document.getElementById('closeTabBtn');
     elements.deleteMessagesBtn = document.getElementById('deleteMessagesBtn');
     elements.selectAllMessagesBtn = document.getElementById('selectAllMessagesBtn');
     elements.cancelMessageSelectionBtn = document.getElementById('cancelMessageSelectionBtn');
@@ -999,14 +971,6 @@
       openNewChatModal();
     });
 
-    elements.newTabBtn.addEventListener('click', () => {
-      if (!state.currentUser) {
-        promptForAuth('Create an account or log in to open a chat tab.');
-        return;
-      }
-      openNewChatModal();
-    });
-
     elements.refreshChatsBtn.addEventListener('click', async () => {
       if (!state.currentUser) {
         promptForAuth('Create an account or log in to load chats.');
@@ -1022,11 +986,6 @@
     elements.conversationFilterInput.addEventListener('input', () => {
       state.filterText = String(elements.conversationFilterInput.value || '').trim();
       renderConversationList();
-    });
-
-    elements.closeTabBtn.addEventListener('click', () => {
-      if (!state.activeConversationId) return;
-      closeConversationTab(state.activeConversationId);
     });
 
     elements.deleteMessagesBtn.addEventListener('click', () => {
@@ -1100,6 +1059,7 @@
   }
 
   async function init() {
+    cleanupLegacyTabState();
     bindElements();
     bindEvents();
     state.apiBases = buildApiBases();
@@ -1110,7 +1070,8 @@
     autoResizeMessageInput();
     setComposerStatus('Loading chat...', 'muted');
     renderConversationList();
-    renderTabs();
+    renderActiveConversationHeader();
+    renderMessages();
     syncMainView();
     await initAuth();
     syncMainView();
