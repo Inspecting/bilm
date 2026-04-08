@@ -20,7 +20,8 @@
     tabsHydrated: false,
     filterText: '',
     pollingTimer: null,
-    loadingConversations: false
+    loadingConversations: false,
+    sendingMessage: false
   };
 
   const elements = {};
@@ -604,7 +605,7 @@
     }
     const canCompose = hasActive && Boolean(state.currentUser);
     elements.messageInput.disabled = !canCompose;
-    elements.sendMessageBtn.disabled = !canCompose;
+    elements.sendMessageBtn.disabled = !canCompose || state.sendingMessage;
     updateSelectionControls();
   }
 
@@ -778,6 +779,10 @@
 
   async function sendMessage(event) {
     event.preventDefault();
+    if (state.sendingMessage) {
+      setComposerStatus('Sending...', 'muted');
+      return;
+    }
     if (!state.currentUser) {
       promptForAuth('Create an account or log in to send messages.');
       return;
@@ -791,6 +796,7 @@
       return;
     }
 
+    state.sendingMessage = true;
     elements.sendMessageBtn.disabled = true;
     setComposerStatus('Sending...', 'muted');
     try {
@@ -827,6 +833,7 @@
       setComposerStatus(error.message || 'Failed to send.', 'error');
       showToast(error.message || 'Failed to send.', 'error');
     } finally {
+      state.sendingMessage = false;
       elements.sendMessageBtn.disabled = false;
       syncMainView();
     }
