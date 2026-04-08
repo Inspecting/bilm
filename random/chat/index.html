@@ -53,9 +53,19 @@
           </div>
           <div class="chat-view-actions">
             <button id="closeTabBtn" class="chat-btn chat-btn-ghost" type="button">Close Tab</button>
+            <button id="deleteMessagesBtn" class="chat-btn chat-btn-ghost" type="button">Delete Messages</button>
             <button id="deleteChatBtn" class="chat-btn chat-btn-danger" type="button">Delete Chat</button>
           </div>
         </header>
+
+        <div id="messageSelectionBar" class="message-selection-bar" hidden>
+          <span id="selectionCountLabel">0 selected</span>
+          <div class="message-selection-actions">
+            <button id="selectAllMessagesBtn" class="chat-btn chat-btn-ghost" type="button">Select All</button>
+            <button id="cancelMessageSelectionBtn" class="chat-btn chat-btn-ghost" type="button">Cancel</button>
+            <button id="confirmDeleteMessagesBtn" class="chat-btn chat-btn-danger" type="button">Delete Selected</button>
+          </div>
+        </div>
 
         <div id="messageList" class="message-list" aria-live="polite"></div>
 

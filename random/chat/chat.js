@@ -12,6 +12,8 @@
     openTabs: [],
     activeConversationId: '',
     messagesByConversation: new Map(),
+    selectionMode: false,
+    selectedMessageIds: new Set(),
     tabsHydrated: false,
     filterText: '',
     pollingTimer: null,
@@ -323,6 +325,76 @@
     return state.conversationsById.get(state.activeConversationId) || null;
   }
 
+  function getMessagesForConversation(conversationId) {
+    if (!conversationId) return [];
+    const messages = state.messagesByConversation.get(conversationId);
+    return Array.isArray(messages) ? messages : [];
+  }
+
+  function clearMessageSelection() {
+    state.selectionMode = false;
+    state.selectedMessageIds = new Set();
+  }
+
+  function getSelectedMessageIds() {
+    return [...state.selectedMessageIds].filter((id) => typeof id === 'string' && id.trim());
+  }
+
+  function updateSelectionControls() {
+    if (!elements.messageSelectionBar || !elements.selectionCountLabel || !elements.confirmDeleteMessagesBtn) return;
+    const messages = getMessagesForConversation(state.activeConversationId);
+    const selectedCount = getSelectedMessageIds().length;
+    const hasMessages = messages.length > 0;
+    elements.messageSelectionBar.hidden = !state.selectionMode;
+    elements.selectionCountLabel.textContent = `${selectedCount} selected`;
+    elements.confirmDeleteMessagesBtn.disabled = selectedCount < 1;
+    if (elements.selectAllMessagesBtn) {
+      elements.selectAllMessagesBtn.disabled = !hasMessages;
+    }
+    if (elements.deleteMessagesBtn) {
+      elements.deleteMessagesBtn.disabled = !hasMessages || !state.currentUser;
+    }
+  }
+
+  function beginMessageSelection() {
+    const conversation = getActiveConversation();
+    if (!conversation) return;
+    const messages = getMessagesForConversation(conversation.id);
+    if (!messages.length) {
+      showToast('No messages to delete yet.', 'info');
+      return;
+    }
+    state.selectionMode = true;
+    state.selectedMessageIds = new Set();
+    updateSelectionControls();
+    renderMessages();
+  }
+
+  function cancelMessageSelection() {
+    clearMessageSelection();
+    updateSelectionControls();
+    renderMessages();
+  }
+
+  function toggleMessageSelection(messageId) {
+    const id = String(messageId || '').trim();
+    if (!id) return;
+    if (state.selectedMessageIds.has(id)) {
+      state.selectedMessageIds.delete(id);
+    } else {
+      state.selectedMessageIds.add(id);
+    }
+    updateSelectionControls();
+    renderMessages();
+  }
+
+  function selectAllMessagesInActiveConversation() {
+    const messages = getMessagesForConversation(state.activeConversationId);
+    state.selectedMessageIds = new Set(messages.map((message) => String(message?.id || '').trim()).filter(Boolean));
+    updateSelectionControls();
+    renderMessages();
+  }
+
   function renderConversationList() {
     if (!elements.conversationList) return;
     elements.conversationList.innerHTML = '';
@@ -421,36 +493,70 @@
     const conversation = getActiveConversation();
     elements.messageList.innerHTML = '';
     if (!conversation) return;
-    const messages = state.messagesByConversation.get(conversation.id) || [];
+    const messages = getMessagesForConversation(conversation.id);
     if (!messages.length) {
       const empty = document.createElement('div');
       empty.className = 'message-empty';
       empty.textContent = 'No messages yet. Say hello.';
       elements.messageList.appendChild(empty);
+      updateSelectionControls();
       return;
     }
     const currentEmail = normalizeEmail(state.currentUser?.email || '');
     messages.forEach((message) => {
       const row = document.createElement('article');
       row.className = `message-row ${normalizeEmail(message.senderEmail) === currentEmail ? 'mine' : 'theirs'}`;
-      row.textContent = String(message.text || '');
+
+      const messageId = String(message?.id || '').trim();
+      const isSelected = messageId && state.selectedMessageIds.has(messageId);
+      if (state.selectionMode) {
+        row.classList.add('is-selectable');
+        if (isSelected) row.classList.add('is-selected');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'message-select-checkbox';
+        checkbox.checked = Boolean(isSelected);
+        checkbox.addEventListener('click', (event) => {
+          event.stopPropagation();
+          toggleMessageSelection(messageId);
+        });
+        row.appendChild(checkbox);
+      }
+
+      const body = document.createElement('div');
+      body.className = 'message-body';
+      body.textContent = String(message.text || '');
+      row.appendChild(body);
 
       const meta = document.createElement('span');
       meta.className = 'message-meta';
       meta.textContent = `${message.senderEmail || 'unknown'} • ${formatDateTime(message.createdAtMs)}`;
       row.appendChild(meta);
+
+      if (state.selectionMode) {
+        row.addEventListener('click', () => {
+          toggleMessageSelection(messageId);
+        });
+      }
       elements.messageList.appendChild(row);
     });
-    elements.messageList.scrollTop = elements.messageList.scrollHeight;
+    updateSelectionControls();
+    if (!state.selectionMode) {
+      elements.messageList.scrollTop = elements.messageList.scrollHeight;
+    }
   }
 
   function syncMainView() {
     const hasActive = Boolean(getActiveConversation());
     elements.chatEmptyState.hidden = hasActive;
     elements.chatView.hidden = !hasActive;
+    if (!hasActive) {
+      clearMessageSelection();
+    }
     const canCompose = hasActive && Boolean(state.currentUser);
     elements.messageInput.disabled = !canCompose;
     elements.sendMessageBtn.disabled = !canCompose;
+    updateSelectionControls();
   }
 
   function renderActiveConversationHeader() {
@@ -469,7 +575,12 @@
     if (!state.currentUser) return;
     try {
       const payload = await authedRequest(`/conversations/${encodeURIComponent(conversationId)}/messages?limit=180&before=${Number.MAX_SAFE_INTEGER}`);
-      state.messagesByConversation.set(conversationId, Array.isArray(payload.messages) ? payload.messages : []);
+      const nextMessages = Array.isArray(payload.messages) ? payload.messages : [];
+      state.messagesByConversation.set(conversationId, nextMessages);
+      if (state.selectionMode && conversationId === state.activeConversationId) {
+        const allowed = new Set(nextMessages.map((message) => String(message?.id || '').trim()).filter(Boolean));
+        state.selectedMessageIds = new Set(getSelectedMessageIds().filter((id) => allowed.has(id)));
+      }
       if (payload.conversation?.id) {
         state.conversationsById.set(payload.conversation.id, payload.conversation);
         state.conversations = state.conversations.map((entry) => (
@@ -526,7 +637,12 @@
   function openConversationTab(conversationId, { focus = true } = {}) {
     if (!state.conversationsById.has(conversationId)) return;
     if (!state.openTabs.includes(conversationId)) state.openTabs.push(conversationId);
-    if (focus) state.activeConversationId = conversationId;
+    if (focus) {
+      if (state.activeConversationId && state.activeConversationId !== conversationId) {
+        clearMessageSelection();
+      }
+      state.activeConversationId = conversationId;
+    }
     saveTabState();
     renderConversationList();
     renderTabs();
@@ -538,6 +654,7 @@
   function closeConversationTab(conversationId) {
     state.openTabs = state.openTabs.filter((id) => id !== conversationId);
     if (state.activeConversationId === conversationId) {
+      clearMessageSelection();
       state.activeConversationId = state.openTabs[0] || '';
     }
     saveTabState();
@@ -685,6 +802,48 @@
     }
   }
 
+  async function deleteSelectedMessages() {
+    const conversation = getActiveConversation();
+    if (!conversation) return;
+    const messageIds = getSelectedMessageIds();
+    if (!messageIds.length) {
+      showToast('Select at least one message to delete.', 'info');
+      return;
+    }
+
+    const shouldDelete = confirm(`Delete ${messageIds.length} selected message${messageIds.length === 1 ? '' : 's'}?`);
+    if (!shouldDelete) return;
+
+    elements.confirmDeleteMessagesBtn.disabled = true;
+    try {
+      await authedRequest(`/conversations/${encodeURIComponent(conversation.id)}/messages/delete`, {
+        method: 'POST',
+        body: { messageIds }
+      });
+      const currentMessages = getMessagesForConversation(conversation.id);
+      const removeSet = new Set(messageIds);
+      const remaining = currentMessages.filter((message) => !removeSet.has(String(message?.id || '').trim()));
+      state.messagesByConversation.set(conversation.id, remaining);
+      state.selectedMessageIds = new Set();
+      state.selectionMode = false;
+      renderMessages();
+      await loadConversations({ quiet: true });
+      renderConversationList();
+      renderTabs();
+      renderActiveConversationHeader();
+      showToast('Messages deleted.', 'success');
+    } catch (error) {
+      if (isAuthError(error)) {
+        promptForAuth('Create an account or log in to manage messages.');
+        return;
+      }
+      showToast(error.message || 'Could not delete messages.', 'error');
+    } finally {
+      elements.confirmDeleteMessagesBtn.disabled = false;
+      updateSelectionControls();
+    }
+  }
+
   function startPolling() {
     stopPolling();
     state.pollingTimer = window.setInterval(async () => {
@@ -706,6 +865,7 @@
     state.currentUser = user || null;
     setLoginStatus(state.currentUser);
     if (!state.currentUser) {
+      clearMessageSelection();
       stopPolling();
       setComposerStatus('Log in to start chatting.', 'muted');
       loadConversations({ quiet: true });
@@ -746,7 +906,13 @@
     elements.activeChatTitle = document.getElementById('activeChatTitle');
     elements.activeChatMeta = document.getElementById('activeChatMeta');
     elements.closeTabBtn = document.getElementById('closeTabBtn');
+    elements.deleteMessagesBtn = document.getElementById('deleteMessagesBtn');
     elements.deleteChatBtn = document.getElementById('deleteChatBtn');
+    elements.messageSelectionBar = document.getElementById('messageSelectionBar');
+    elements.selectionCountLabel = document.getElementById('selectionCountLabel');
+    elements.selectAllMessagesBtn = document.getElementById('selectAllMessagesBtn');
+    elements.cancelMessageSelectionBtn = document.getElementById('cancelMessageSelectionBtn');
+    elements.confirmDeleteMessagesBtn = document.getElementById('confirmDeleteMessagesBtn');
     elements.messageList = document.getElementById('messageList');
     elements.messageComposer = document.getElementById('messageComposer');
     elements.messageInput = document.getElementById('messageInput');
@@ -805,8 +971,26 @@
       closeConversationTab(state.activeConversationId);
     });
 
+    elements.deleteMessagesBtn.addEventListener('click', () => {
+      if (!state.currentUser) {
+        promptForAuth('Create an account or log in to manage messages.');
+        return;
+      }
+      beginMessageSelection();
+    });
+
     elements.deleteChatBtn.addEventListener('click', () => {
       void deleteActiveConversation();
+    });
+
+    elements.selectAllMessagesBtn.addEventListener('click', () => {
+      selectAllMessagesInActiveConversation();
+    });
+    elements.cancelMessageSelectionBtn.addEventListener('click', () => {
+      cancelMessageSelection();
+    });
+    elements.confirmDeleteMessagesBtn.addEventListener('click', () => {
+      void deleteSelectedMessages();
     });
 
     elements.messageComposer.addEventListener('submit', (event) => {
@@ -814,7 +998,7 @@
     });
 
     elements.messageInput.addEventListener('keydown', (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
         void sendMessage(event);
       }
@@ -846,6 +1030,9 @@
       if (event.key === 'Escape') {
         closeNewChatModal();
         closeAuthPromptModal();
+        if (state.selectionMode) {
+          cancelMessageSelection();
+        }
       }
     });
 
