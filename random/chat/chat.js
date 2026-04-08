@@ -160,13 +160,22 @@
 
   function isAuthError(error) {
     const status = Number(error?.status || 0);
-    if (status === 401 || status === 403) return true;
     const code = String(error?.code || '').trim().toLowerCase();
-    return code === 'missing_token'
+    const message = String(error?.message || '').trim().toLowerCase();
+    if (status === 401) return true;
+    if (code === 'missing_token'
       || code === 'token_expired'
       || code === 'invalid_token'
-      || code === 'email_required'
-      || code === 'forbidden';
+      || code === 'email_required') {
+      return true;
+    }
+    if (status !== 403) return false;
+    return message.includes('token')
+      || message.includes('authorization')
+      || message.includes('auth')
+      || message.includes('sign in')
+      || message.includes('signed in')
+      || message.includes('email required');
   }
 
   function normalizeRequestError(error) {
@@ -181,6 +190,23 @@
       return fallback;
     }
     return input;
+  }
+
+  function shouldTryNextApiBase(error) {
+    const status = Number(error?.status || 0);
+    if (!Number.isFinite(status) || status <= 0) return true;
+    return status === 401
+      || status === 403
+      || status === 404
+      || status === 405
+      || status === 408
+      || status === 409
+      || status === 425
+      || status === 429
+      || status === 500
+      || status === 502
+      || status === 503
+      || status === 504;
   }
 
   function ensureAuthModalOpen(mode = 'login') {
@@ -203,10 +229,18 @@
 
   async function authedRequest(path, { method = 'GET', body = undefined } = {}) {
     if (!state.currentUser || typeof state.currentUser.getIdToken !== 'function') {
-      throw new Error('Log in required.');
+      const error = new Error('Log in required.');
+      error.status = 401;
+      error.code = 'missing_session';
+      throw error;
     }
     const token = await state.currentUser.getIdToken();
-    if (!token) throw new Error('Missing auth token.');
+    if (!token) {
+      const error = new Error('Missing auth token.');
+      error.status = 401;
+      error.code = 'missing_token';
+      throw error;
+    }
 
     let lastError = null;
     for (let index = 0; index < state.apiBases.length; index += 1) {
@@ -230,8 +264,18 @@
         const response = await fetch(`${apiBase}${path}`, requestInit);
         const text = await response.text();
         const payload = text ? safeParse(text, null) : null;
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
         if (response.ok) {
-          return payload || {};
+          const validJsonPayload = payload && typeof payload === 'object' && !Array.isArray(payload);
+          if (validJsonPayload) {
+            return payload;
+          }
+          const error = new Error('Chat endpoint returned an invalid response.');
+          error.status = 502;
+          error.code = 'invalid_chat_response';
+          error.apiBase = apiBase;
+          error.contentType = contentType;
+          throw error;
         }
 
         const error = new Error(String(payload?.message || payload?.error || `Request failed (${response.status})`));
@@ -239,23 +283,19 @@
         error.code = payload?.code || '';
         error.apiBase = apiBase;
 
-        const authFailure = error.status === 401 || error.status === 403;
-        if (authFailure || isLastBase) {
+        if (isLastBase) {
           throw error;
         }
-        const retryableStatus = error.status === 404
-          || error.status === 429
-          || error.status === 500
-          || error.status === 502
-          || error.status === 503
-          || error.status === 504;
-        if (!retryableStatus) {
+        if (!shouldTryNextApiBase(error)) {
           throw error;
         }
         lastError = error;
       } catch (rawError) {
         const error = normalizeRequestError(rawError);
-        if (isAuthError(error) || isLastBase) {
+        if (isLastBase) {
+          throw error;
+        }
+        if (!shouldTryNextApiBase(error)) {
           throw error;
         }
         lastError = error;
