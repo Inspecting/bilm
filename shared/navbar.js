@@ -365,11 +365,12 @@ async function maybeActivateProxiedMode() {
   cleanupLegacyChatState();
 
   const pathParts = location.pathname.split('/').filter(Boolean);
-  const appSections = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'test']);
+  const appSections = new Set(['home', 'movies', 'tv', 'search', 'settings', 'random', 'chat', 'test']);
   const section = pathParts.find(part => appSections.has(part)) || 'home';
   const fileName = pathParts.at(-1) || '';
   const isSearchPage = section === 'search' || fileName.startsWith('search');
-  let page = section;
+  const isChatPage = section === 'random' && String(pathParts[1] || '').toLowerCase() === 'chat';
+  let page = isChatPage ? 'chat' : section;
 
 
   const logoLink = shadow.querySelector('.logo');
@@ -515,7 +516,10 @@ async function maybeActivateProxiedMode() {
     }
     btn.onclick = () => {
       const target = btn.dataset.page;
-      window.location.href = withBase(`/${target === 'home' ? 'home' : target}/`);
+      const route = target === 'chat'
+        ? '/random/chat/'
+        : `/${target === 'home' ? 'home' : target}/`;
+      window.location.href = withBase(route);
     };
   });
 
@@ -535,7 +539,10 @@ async function maybeActivateProxiedMode() {
         document.body.style.overflow = 'hidden';
         return;
       }
-      window.location.href = withBase(`/${target === 'home' ? 'home' : target}/`);
+      const route = target === 'chat'
+        ? '/random/chat/'
+        : `/${target === 'home' ? 'home' : target}/`;
+      window.location.href = withBase(route);
     };
   });
 

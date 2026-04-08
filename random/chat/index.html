@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bilm - Chat</title>
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="manifest" href="../../manifest.json" />
+  <link rel="apple-touch-icon" href="../../icon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../../shared/theme.css" />
+  <link rel="stylesheet" href="./chat.css" />
+  <script src="../../shared/access.js"></script>
+  <script src="../../shared/theme.js"></script>
+</head>
+<body>
+  <div id="navbarContainer"></div>
+  <script src="../../shared/navbar.js"></script>
+
+  <main class="chat-page">
+    <section class="chat-sidebar">
+      <div class="chat-sidebar-header">
+        <h1>Chat</h1>
+        <p id="chatLoginStatus">Checking account status...</p>
+      </div>
+      <div class="chat-sidebar-actions">
+        <button id="newChatBtn" class="chat-btn chat-btn-primary" type="button">New Chat</button>
+        <button id="refreshChatsBtn" class="chat-btn chat-btn-ghost" type="button">Refresh</button>
+      </div>
+      <label class="chat-search-wrap" for="conversationFilterInput">
+        <span>Find conversation</span>
+        <input id="conversationFilterInput" type="search" placeholder="Type an email..." autocomplete="off" spellcheck="false" />
+      </label>
+      <div id="conversationList" class="conversation-list" aria-live="polite"></div>
+    </section>
+
+    <section class="chat-main">
+      <div class="chat-tabs-row">
+        <div id="chatTabs" class="chat-tabs" role="tablist" aria-label="Open chats"></div>
+        <button id="newTabBtn" class="chat-btn chat-btn-primary" type="button">New Tab</button>
+      </div>
+
+      <div id="chatEmptyState" class="chat-empty">
+        <h2>No Chat Open</h2>
+        <p>Open a conversation from the left side or start a new one by email.</p>
+      </div>
+
+      <div id="chatView" class="chat-view" hidden>
+        <header class="chat-view-header">
+          <div>
+            <h2 id="activeChatTitle">Conversation</h2>
+            <p id="activeChatMeta">No messages yet.</p>
+          </div>
+          <div class="chat-view-actions">
+            <button id="closeTabBtn" class="chat-btn chat-btn-ghost" type="button">Close Tab</button>
+            <button id="deleteChatBtn" class="chat-btn chat-btn-danger" type="button">Delete Chat</button>
+          </div>
+        </header>
+
+        <div id="messageList" class="message-list" aria-live="polite"></div>
+
+        <form id="messageComposer" class="message-composer" autocomplete="off">
+          <textarea
+            id="messageInput"
+            rows="3"
+            maxlength="2000"
+            placeholder="Write a message..."
+            required
+          ></textarea>
+          <div class="message-composer-actions">
+            <span id="composerStatus" class="composer-status"></span>
+            <button id="sendMessageBtn" class="chat-btn chat-btn-primary" type="submit">Send</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="newChatModal" class="chat-modal" hidden>
+    <div class="chat-modal-panel" role="dialog" aria-modal="true" aria-labelledby="newChatModalTitle">
+      <button type="button" id="newChatModalCloseBtn" class="chat-modal-close" aria-label="Close">×</button>
+      <h3 id="newChatModalTitle">Start New Chat</h3>
+      <p>Enter the user email you want to chat with.</p>
+      <form id="newChatForm" class="chat-modal-form">
+        <input id="newChatEmailInput" type="email" placeholder="name@example.com" autocomplete="email" required />
+        <p id="newChatFormStatus" class="chat-modal-status" aria-live="polite"></p>
+        <div class="chat-modal-actions">
+          <button type="button" id="cancelNewChatBtn" class="chat-btn chat-btn-ghost">Cancel</button>
+          <button type="submit" class="chat-btn chat-btn-primary">Open Chat</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../../shared/toast.js" defer></script>
+  <script src="../../shared/auth.js" defer></script>
+  <script src="./chat.js" defer></script>
+</body>
+</html>

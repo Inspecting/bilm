@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const HEALTH_CHECK_TARGETS = [
     { label: 'Storage API', url: 'https://storage-api.watchbilm.org/media/tmdb/configuration' },
     { label: 'Data API (health)', url: 'https://data-api.watchbilm.org/health' },
+    { label: 'Chat API (health)', url: 'https://chat-api.watchbilm.org/health' },
     {
       label: 'Data API Login Gate',
       url: `https://data-api.watchbilm.org/?userId=${HEALTH_CHECK_SAMPLE_USER_ID}`,
@@ -64,6 +65,12 @@ document.addEventListener('DOMContentLoaded', () => {
     {
       label: 'Data API Sync Pull Gate',
       url: `https://data-api.watchbilm.org/sync/sectors/pull?userId=${HEALTH_CHECK_SAMPLE_USER_ID}&since=0&limit=1`,
+      method: 'GET',
+      expectedStatuses: [200, 401]
+    },
+    {
+      label: 'Chat API Conversation Gate',
+      url: 'https://chat-api.watchbilm.org/conversations',
       method: 'GET',
       expectedStatuses: [200, 401]
     },

@@ -9,6 +9,7 @@ const STATIC_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=86400'
 const DEFAULT_HEALTH_CHECK_ALLOWED_HOSTS = new Set([
   'storage-api.watchbilm.org',
   'data-api.watchbilm.org',
+  'chat-api.watchbilm.org',
   'graphql.anilist.co',
   'api.themoviedb.org',
   'www.omdbapi.com',
@@ -35,7 +36,24 @@ function parseEnvInt(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } 
   return normalized;
 }
 
+function resolveChatApiBase() {
+  const rawValue = String(process.env.CHAT_API_BASE || 'https://chat-api.watchbilm.org').trim();
+  if (!rawValue) return 'https://chat-api.watchbilm.org';
+  try {
+    const parsed = new URL(rawValue);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return 'https://chat-api.watchbilm.org';
+    }
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return 'https://chat-api.watchbilm.org';
+  }
+}
+
 const HEALTH_CHECK_ALLOWED_HOSTS = resolveHealthCheckAllowedHosts();
+const CHAT_API_BASE = resolveChatApiBase();
 const RATE_LIMIT_STORE = new Map();
 let nextRateLimitSweepAtMs = 0;
 const RATE_LIMIT_STORE_SOFT_CAP = 5000;
@@ -50,6 +68,10 @@ const RATE_LIMITS = Object.freeze({
   anilist: Object.freeze({
     limit: parseEnvInt('ANILIST_PROXY_RATE_LIMIT', 60, { min: 10, max: 5000 }),
     windowMs: parseEnvInt('ANILIST_PROXY_RATE_WINDOW_MS', 60_000, { min: 1000, max: 3_600_000 })
+  }),
+  chat: Object.freeze({
+    limit: parseEnvInt('CHAT_PROXY_RATE_LIMIT', 120, { min: 10, max: 5000 }),
+    windowMs: parseEnvInt('CHAT_PROXY_RATE_WINDOW_MS', 60_000, { min: 1000, max: 3_600_000 })
   }),
   healthcheck: Object.freeze({
     limit: parseEnvInt('HEALTH_CHECK_RATE_LIMIT', 20, { min: 5, max: 2000 }),
@@ -815,6 +837,136 @@ async function handleTmdbProxy(req, res, pathname, searchParams) {
   }
 }
 
+async function handleChatApiProxy(req, res, rawPathname, url) {
+  const corsHeaders = buildCorsHeaders(req);
+  if (req.method === 'OPTIONS') {
+    const preflightCorsHeaders = buildCorsHeaders(req, {
+      methods: 'GET, POST, DELETE, OPTIONS',
+      defaultAllowHeaders: 'accept, content-type, authorization',
+      includePreflight: true
+    });
+    sendNoContent(res, 204, {
+      ...preflightCorsHeaders,
+      allow: 'GET, POST, DELETE, OPTIONS',
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'DELETE') {
+    sendJson(res, 405, { error: 'Method Not Allowed' }, {
+      ...corsHeaders,
+      allow: 'GET, POST, DELETE, OPTIONS',
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  const { blocked, headers: rateLimitHeadersMap } = enforceRateLimit(req, res, 'chat', corsHeaders);
+  if (blocked) return;
+
+  const upstreamPath = rawPathname === '/api/chat'
+    ? '/conversations'
+    : rawPathname.replace(/^\/api\/chat/, '') || '/';
+
+  let upstreamUrl;
+  try {
+    upstreamUrl = new URL(upstreamPath, `${CHAT_API_BASE}/`);
+  } catch {
+    sendJson(res, 500, { error: 'Chat API base URL is invalid' }, {
+      ...corsHeaders,
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
+    return;
+  }
+
+  url.searchParams.forEach((value, key) => {
+    upstreamUrl.searchParams.append(key, value);
+  });
+
+  let requestBody = null;
+  if (req.method === 'POST' || req.method === 'DELETE') {
+    try {
+      requestBody = await readRequestBody(req, 128 * 1024);
+    } catch (error) {
+      if (error?.statusCode === 413) {
+        sendJson(res, 413, { error: 'Payload too large' }, {
+          ...corsHeaders,
+          ...rateLimitHeadersMap,
+          'cache-control': 'no-store'
+        });
+        return;
+      }
+      sendJson(res, 400, { error: 'Invalid request payload' }, {
+        ...corsHeaders,
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
+      return;
+    }
+  }
+
+  const headers = {
+    accept: sanitizeAcceptHeader(req.headers.accept)
+  };
+  const authHeader = String(req.headers.authorization || '').trim();
+  if (authHeader) headers.authorization = authHeader;
+
+  const contentType = String(req.headers['content-type'] || '').trim();
+  if (contentType) headers['content-type'] = contentType;
+
+  const bypassHeader = String(req.headers['x-bilm-auth-bypass'] || '').trim();
+  if (bypassHeader) headers['x-bilm-auth-bypass'] = bypassHeader;
+  const bypassEmail = String(req.headers['x-bilm-auth-email'] || '').trim();
+  if (bypassEmail) headers['x-bilm-auth-email'] = bypassEmail;
+  const bypassUid = String(req.headers['x-bilm-auth-uid'] || '').trim();
+  if (bypassUid) headers['x-bilm-auth-uid'] = bypassUid;
+
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), 12000);
+  try {
+    const upstream = await fetch(upstreamUrl.toString(), {
+      method: req.method,
+      headers,
+      body: requestBody && requestBody.length > 0 ? requestBody : undefined,
+      signal: abortController.signal
+    });
+
+    const responseHeaders = {
+      ...BASE_SECURITY_HEADERS,
+      ...corsHeaders,
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    };
+    const upstreamContentType = upstream.headers.get('content-type');
+    if (upstreamContentType) responseHeaders['content-type'] = upstreamContentType;
+    res.writeHead(upstream.status, responseHeaders);
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    const payload = await upstream.arrayBuffer();
+    res.end(Buffer.from(payload));
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      sendJson(res, 504, { error: 'Chat API upstream timed out' }, {
+        ...corsHeaders,
+        ...rateLimitHeadersMap,
+        'cache-control': 'no-store'
+      });
+      return;
+    }
+    sendJson(res, 502, { error: 'Chat API proxy request failed' }, {
+      ...corsHeaders,
+      ...rateLimitHeadersMap,
+      'cache-control': 'no-store'
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function sanitizeHealthTargets(rawTargets = []) {
   if (!Array.isArray(rawTargets)) return [];
   const allowedMethods = new Set(['HEAD', 'GET', 'POST', 'OPTIONS']);
@@ -1075,6 +1227,10 @@ async function routeRequest(req, res) {
   }
   if (rawPathname === '/api/tmdb' || rawPathname.startsWith('/api/tmdb/')) {
     await handleTmdbProxy(req, res, rawPathname, url.searchParams);
+    return;
+  }
+  if (rawPathname === '/api/chat' || rawPathname.startsWith('/api/chat/')) {
+    await handleChatApiProxy(req, res, rawPathname, url);
     return;
   }
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
