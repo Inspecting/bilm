@@ -22,9 +22,9 @@ function detectBasePath() {
 }
 
 const BASE_PATH = detectBasePath();
-const NAVBAR_ASSET_CACHE_KEY = 'bilm-navbar-assets-v2';
+const NAVBAR_ASSET_CACHE_KEY = 'bilm-navbar-assets-v3';
 const NAVBAR_ASSET_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-const LEGACY_NAVBAR_ASSET_CACHE_KEYS = ['bilm-navbar-assets-v1'];
+const LEGACY_NAVBAR_ASSET_CACHE_KEYS = ['bilm-navbar-assets-v1', 'bilm-navbar-assets-v2'];
 
 function withBase(path) {
   const normalized = path.startsWith('/') ? path : `/${path}`;
