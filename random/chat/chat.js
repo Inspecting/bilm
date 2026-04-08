@@ -2,6 +2,9 @@
   const TAB_STORAGE_KEY = 'bilm-chat-open-tabs-v1';
   const ACTIVE_TAB_STORAGE_KEY = 'bilm-chat-active-tab-v1';
   const POLL_INTERVAL_MS = 12000;
+  const MESSAGE_LENGTH_LIMIT = 2000;
+  const MESSAGE_INPUT_MIN_HEIGHT = 40;
+  const MESSAGE_INPUT_MAX_HEIGHT = 180;
 
   const state = {
     apiBases: [],
@@ -94,6 +97,23 @@
     if (!elements.composerStatus) return;
     elements.composerStatus.textContent = String(message || '');
     elements.composerStatus.dataset.tone = tone;
+  }
+
+  function updateMessageCharCount() {
+    if (!elements.messageInput || !elements.messageCharCount) return;
+    const maxLength = Number(elements.messageInput.getAttribute('maxlength') || MESSAGE_LENGTH_LIMIT);
+    const currentLength = String(elements.messageInput.value || '').length;
+    elements.messageCharCount.textContent = `${currentLength}/${maxLength}`;
+    elements.messageCharCount.classList.toggle('is-near-limit', currentLength >= Math.floor(maxLength * 0.9));
+  }
+
+  function autoResizeMessageInput() {
+    if (!elements.messageInput) return;
+    const input = elements.messageInput;
+    input.style.height = 'auto';
+    const targetHeight = Math.min(MESSAGE_INPUT_MAX_HEIGHT, Math.max(MESSAGE_INPUT_MIN_HEIGHT, input.scrollHeight));
+    input.style.height = `${targetHeight}px`;
+    input.style.overflowY = input.scrollHeight > MESSAGE_INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
   }
 
   function setConversations(conversations) {
@@ -762,6 +782,8 @@
         state.messagesByConversation.set(conversation.id, [...current, nextMessage]);
       }
       elements.messageInput.value = '';
+      updateMessageCharCount();
+      autoResizeMessageInput();
       setComposerStatus('Message sent.', 'success');
       renderConversationList();
       renderTabs();
@@ -916,6 +938,7 @@
     elements.messageList = document.getElementById('messageList');
     elements.messageComposer = document.getElementById('messageComposer');
     elements.messageInput = document.getElementById('messageInput');
+    elements.messageCharCount = document.getElementById('messageCharCount');
     elements.sendMessageBtn = document.getElementById('sendMessageBtn');
     elements.composerStatus = document.getElementById('composerStatus');
     elements.newChatModal = document.getElementById('newChatModal');
@@ -1003,6 +1026,10 @@
         void sendMessage(event);
       }
     });
+    elements.messageInput.addEventListener('input', () => {
+      updateMessageCharCount();
+      autoResizeMessageInput();
+    });
 
     elements.newChatForm.addEventListener('submit', (event) => {
       void submitNewChatForm(event);
@@ -1045,6 +1072,11 @@
     bindElements();
     bindEvents();
     state.apiBases = buildApiBases();
+    if (elements.messageInput) {
+      elements.messageInput.setAttribute('maxlength', String(MESSAGE_LENGTH_LIMIT));
+    }
+    updateMessageCharCount();
+    autoResizeMessageInput();
     setComposerStatus('Loading chat...', 'muted');
     renderConversationList();
     renderTabs();
