@@ -92,6 +92,19 @@
     </div>
   </div>
 
+  <div id="authPromptModal" class="chat-modal" hidden>
+    <div class="chat-modal-panel" role="dialog" aria-modal="true" aria-labelledby="authPromptTitle">
+      <button type="button" id="authPromptCloseBtn" class="chat-modal-close" aria-label="Close">×</button>
+      <h3 id="authPromptTitle">Sign In Required</h3>
+      <p id="authPromptMessage">To use chat, log in or create an account.</p>
+      <div class="chat-modal-actions auth-prompt-actions">
+        <button type="button" id="authPromptCancelBtn" class="chat-btn chat-btn-ghost">Not Now</button>
+        <button type="button" id="authPromptSignupBtn" class="chat-btn chat-btn-ghost">Create Account</button>
+        <button type="button" id="authPromptLoginBtn" class="chat-btn chat-btn-primary">Log In</button>
+      </div>
+    </div>
+  </div>
+
   <script src="../../shared/toast.js" defer></script>
   <script src="../../shared/auth.js" defer></script>
   <script src="./chat.js" defer></script>

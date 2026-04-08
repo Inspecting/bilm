@@ -4,7 +4,7 @@
   const POLL_INTERVAL_MS = 12000;
 
   const state = {
-    apiBase: '',
+    apiBases: [],
     authApi: null,
     currentUser: null,
     conversations: [],
@@ -45,6 +45,17 @@
     return String(window.location.hostname || '').toLowerCase() === 'cdn.jsdelivr.net'
       ? 'https://watchbilm.org'
       : window.location.origin;
+  }
+
+  function buildApiBases() {
+    const originProxy = new URL('/api/chat', getApiOrigin()).toString().replace(/\/$/, '');
+    const directCloudflare = 'https://chat-api.watchbilm.org';
+    const ordered = [originProxy, directCloudflare];
+    return [...new Set(ordered.map((value) => String(value || '').trim()).filter(Boolean))];
+  }
+
+  function normalizeAuthMode(mode = 'login') {
+    return String(mode || '').trim().toLowerCase() === 'signup' ? 'signup' : 'login';
   }
 
   function safeParse(raw, fallback = null) {
@@ -123,12 +134,71 @@
     elements.chatLoginStatus.textContent = `Logged in as ${user.email || 'account user'}.`;
   }
 
-  function ensureAuthModalOpen(mode = 'login') {
-    if (window.bilmAuthUi?.open) {
-      window.bilmAuthUi.open(mode);
+  function closeAuthPromptModal() {
+    if (!elements.authPromptModal) return;
+    elements.authPromptModal.hidden = true;
+  }
+
+  function openAuthPromptModal(message = 'To use chat, log in or create an account.') {
+    if (!elements.authPromptModal) {
+      ensureAuthModalOpen('login');
       return;
     }
-    window.dispatchEvent(new CustomEvent('bilm:open-auth-modal', { detail: { mode } }));
+    if (elements.authPromptMessage) {
+      elements.authPromptMessage.textContent = String(message || 'To use chat, log in or create an account.');
+    }
+    elements.authPromptModal.hidden = false;
+  }
+
+  function promptForAuth(message = 'To use chat, log in or create an account.') {
+    const alreadyOpen = Boolean(elements.authPromptModal && !elements.authPromptModal.hidden);
+    openAuthPromptModal(message);
+    if (!alreadyOpen) {
+      showToast('Log in or create an account to keep chatting.', 'info');
+    }
+  }
+
+  function isAuthError(error) {
+    const status = Number(error?.status || 0);
+    if (status === 401 || status === 403) return true;
+    const code = String(error?.code || '').trim().toLowerCase();
+    return code === 'missing_token'
+      || code === 'token_expired'
+      || code === 'invalid_token'
+      || code === 'email_required'
+      || code === 'forbidden';
+  }
+
+  function normalizeRequestError(error) {
+    const input = error instanceof Error ? error : new Error(String(error?.message || error || 'Chat request failed.'));
+    const message = String(input.message || '').toLowerCase();
+    const networkFailure = input.name === 'TypeError'
+      || message.includes('failed to fetch')
+      || message.includes('networkerror');
+    if (networkFailure) {
+      const fallback = new Error('Chat request failed. Check your connection and try again.');
+      fallback.code = 'network_request_failed';
+      return fallback;
+    }
+    return input;
+  }
+
+  function ensureAuthModalOpen(mode = 'login') {
+    const normalizedMode = normalizeAuthMode(mode);
+    if (window.bilmAuthUi?.open) {
+      window.bilmAuthUi.open(normalizedMode);
+      return;
+    }
+    let opened = false;
+    const tryOpenNow = () => {
+      if (opened) return;
+      if (!window.bilmAuthUi?.open) return;
+      opened = true;
+      window.bilmAuthUi.open(normalizedMode);
+    };
+    window.addEventListener('bilm:auth-modal-ready', tryOpenNow, { once: true });
+    window.dispatchEvent(new CustomEvent('bilm:open-auth-modal', { detail: { mode: normalizedMode } }));
+    window.setTimeout(tryOpenNow, 250);
   }
 
   async function authedRequest(path, { method = 'GET', body = undefined } = {}) {
@@ -138,30 +208,61 @@
     const token = await state.currentUser.getIdToken();
     if (!token) throw new Error('Missing auth token.');
 
-    const headers = {
-      accept: 'application/json',
-      authorization: `Bearer ${token}`
-    };
-    const requestInit = {
-      method,
-      headers,
-      cache: 'no-store'
-    };
-    if (typeof body !== 'undefined') {
-      headers['content-type'] = 'application/json';
-      requestInit.body = JSON.stringify(body);
+    let lastError = null;
+    for (let index = 0; index < state.apiBases.length; index += 1) {
+      const apiBase = state.apiBases[index];
+      const isLastBase = index === state.apiBases.length - 1;
+      const headers = {
+        accept: 'application/json',
+        authorization: `Bearer ${token}`
+      };
+      const requestInit = {
+        method,
+        headers,
+        cache: 'no-store'
+      };
+      if (typeof body !== 'undefined') {
+        headers['content-type'] = 'application/json';
+        requestInit.body = JSON.stringify(body);
+      }
+
+      try {
+        const response = await fetch(`${apiBase}${path}`, requestInit);
+        const text = await response.text();
+        const payload = text ? safeParse(text, null) : null;
+        if (response.ok) {
+          return payload || {};
+        }
+
+        const error = new Error(String(payload?.message || payload?.error || `Request failed (${response.status})`));
+        error.status = response.status;
+        error.code = payload?.code || '';
+        error.apiBase = apiBase;
+
+        const authFailure = error.status === 401 || error.status === 403;
+        if (authFailure || isLastBase) {
+          throw error;
+        }
+        const retryableStatus = error.status === 404
+          || error.status === 429
+          || error.status === 500
+          || error.status === 502
+          || error.status === 503
+          || error.status === 504;
+        if (!retryableStatus) {
+          throw error;
+        }
+        lastError = error;
+      } catch (rawError) {
+        const error = normalizeRequestError(rawError);
+        if (isAuthError(error) || isLastBase) {
+          throw error;
+        }
+        lastError = error;
+      }
     }
 
-    const response = await fetch(`${state.apiBase}${path}`, requestInit);
-    const text = await response.text();
-    const payload = text ? safeParse(text, null) : null;
-    if (!response.ok) {
-      const error = new Error(String(payload?.message || payload?.error || `Request failed (${response.status})`));
-      error.status = response.status;
-      error.code = payload?.code || '';
-      throw error;
-    }
-    return payload || {};
+    throw normalizeRequestError(lastError || new Error('Chat request failed.'));
   }
 
   async function ensureAuthReady() {
@@ -336,6 +437,10 @@
         renderMessages();
       }
     } catch (error) {
+      if (isAuthError(error)) {
+        promptForAuth('Your session expired. Log in or create an account to load messages.');
+        return;
+      }
       if (!quiet) setComposerStatus(error.message || 'Failed to load messages.', 'error');
     }
   }
@@ -364,6 +469,10 @@
         await fetchMessages(state.activeConversationId, { quiet: true });
       }
     } catch (error) {
+      if (isAuthError(error)) {
+        promptForAuth('Your session expired. Log in or create an account to load chats.');
+        return;
+      }
       if (!quiet) showToast(error.message || 'Could not load chats.', 'error');
     } finally {
       state.loadingConversations = false;
@@ -429,7 +538,8 @@
   async function submitNewChatForm(event) {
     event.preventDefault();
     if (!state.currentUser) {
-      ensureAuthModalOpen('login');
+      closeNewChatModal();
+      promptForAuth('Create an account or log in to start a chat.');
       return;
     }
     const targetEmail = normalizeEmail(elements.newChatEmailInput.value);
@@ -447,6 +557,11 @@
       renderActiveConversationHeader();
       syncMainView();
     } catch (error) {
+      if (isAuthError(error)) {
+        closeNewChatModal();
+        promptForAuth('Create an account or log in to start a chat.');
+        return;
+      }
       elements.newChatFormStatus.textContent = error.message || 'Could not open chat.';
     }
   }
@@ -454,8 +569,7 @@
   async function sendMessage(event) {
     event.preventDefault();
     if (!state.currentUser) {
-      showToast('Log in to send messages.', 'error');
-      ensureAuthModalOpen('login');
+      promptForAuth('Create an account or log in to send messages.');
       return;
     }
     const conversation = getActiveConversation();
@@ -493,6 +607,11 @@
       renderActiveConversationHeader();
       renderMessages();
     } catch (error) {
+      if (isAuthError(error)) {
+        setComposerStatus('Create an account or log in to send messages.', 'error');
+        promptForAuth('Create an account or log in to send messages.');
+        return;
+      }
       setComposerStatus(error.message || 'Failed to send.', 'error');
       showToast(error.message || 'Failed to send.', 'error');
     } finally {
@@ -514,6 +633,10 @@
       renderConversationList();
       showToast('Chat deleted.', 'success');
     } catch (error) {
+      if (isAuthError(error)) {
+        promptForAuth('Create an account or log in to manage chats.');
+        return;
+      }
       showToast(error.message || 'Could not delete chat.', 'error');
     }
   }
@@ -544,6 +667,7 @@
       loadConversations({ quiet: true });
       return;
     }
+    closeAuthPromptModal();
     startPolling();
     setComposerStatus('', 'muted');
     void loadConversations({ quiet: true });
@@ -590,13 +714,18 @@
     elements.newChatEmailInput = document.getElementById('newChatEmailInput');
     elements.newChatFormStatus = document.getElementById('newChatFormStatus');
     elements.cancelNewChatBtn = document.getElementById('cancelNewChatBtn');
+    elements.authPromptModal = document.getElementById('authPromptModal');
+    elements.authPromptMessage = document.getElementById('authPromptMessage');
+    elements.authPromptCloseBtn = document.getElementById('authPromptCloseBtn');
+    elements.authPromptCancelBtn = document.getElementById('authPromptCancelBtn');
+    elements.authPromptSignupBtn = document.getElementById('authPromptSignupBtn');
+    elements.authPromptLoginBtn = document.getElementById('authPromptLoginBtn');
   }
 
   function bindEvents() {
     elements.newChatBtn.addEventListener('click', () => {
       if (!state.currentUser) {
-        showToast('Log in first.', 'error');
-        ensureAuthModalOpen('login');
+        promptForAuth('Create an account or log in to start a chat.');
         return;
       }
       openNewChatModal();
@@ -604,14 +733,17 @@
 
     elements.newTabBtn.addEventListener('click', () => {
       if (!state.currentUser) {
-        showToast('Log in first.', 'error');
-        ensureAuthModalOpen('login');
+        promptForAuth('Create an account or log in to open a chat tab.');
         return;
       }
       openNewChatModal();
     });
 
     elements.refreshChatsBtn.addEventListener('click', async () => {
+      if (!state.currentUser) {
+        promptForAuth('Create an account or log in to load chats.');
+        return;
+      }
       await loadConversations();
       if (state.activeConversationId) {
         await fetchMessages(state.activeConversationId);
@@ -652,9 +784,25 @@
     elements.newChatModal.addEventListener('click', (event) => {
       if (event.target === elements.newChatModal) closeNewChatModal();
     });
+    elements.authPromptCancelBtn.addEventListener('click', closeAuthPromptModal);
+    elements.authPromptCloseBtn.addEventListener('click', closeAuthPromptModal);
+    elements.authPromptModal.addEventListener('click', (event) => {
+      if (event.target === elements.authPromptModal) closeAuthPromptModal();
+    });
+    elements.authPromptLoginBtn.addEventListener('click', () => {
+      closeAuthPromptModal();
+      ensureAuthModalOpen('login');
+    });
+    elements.authPromptSignupBtn.addEventListener('click', () => {
+      closeAuthPromptModal();
+      ensureAuthModalOpen('signup');
+    });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') closeNewChatModal();
+      if (event.key === 'Escape') {
+        closeNewChatModal();
+        closeAuthPromptModal();
+      }
     });
 
     window.addEventListener('pagehide', () => {
@@ -665,7 +813,7 @@
   async function init() {
     bindElements();
     bindEvents();
-    state.apiBase = new URL('/api/chat', getApiOrigin()).toString().replace(/\/$/, '');
+    state.apiBases = buildApiBases();
     setComposerStatus('Loading chat...', 'muted');
     renderConversationList();
     renderTabs();

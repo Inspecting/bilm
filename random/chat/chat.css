@@ -460,6 +460,11 @@ body {
   gap: 8px;
 }
 
+.auth-prompt-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 980px) {
   .chat-page {
     grid-template-columns: 1fr;
