@@ -101,6 +101,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const firebaseBackupCadenceText = document.getElementById('firebaseBackupCadenceText');
   const firebaseBackupCooldownText = document.getElementById('firebaseBackupCooldownText');
 
+  const accountLinkPanel = document.getElementById('accountLinkPanel');
+  const accountLinkSummaryText = document.getElementById('accountLinkSummaryText');
+  const accountLinkActiveCard = document.getElementById('accountLinkActiveCard');
+  const accountLinkActiveMeta = document.getElementById('accountLinkActiveMeta');
+  const accountLinkMyScopesText = document.getElementById('accountLinkMyScopesText');
+  const accountLinkPartnerScopesText = document.getElementById('accountLinkPartnerScopesText');
+  const accountLinkPendingCard = document.getElementById('accountLinkPendingCard');
+  const accountLinkPendingText = document.getElementById('accountLinkPendingText');
+  const accountLinkIncomingCard = document.getElementById('accountLinkIncomingCard');
+  const accountLinkIncomingList = document.getElementById('accountLinkIncomingList');
+  const openAccountLinkModalBtn = document.getElementById('openAccountLinkModalBtn');
+  const refreshAccountLinksBtn = document.getElementById('refreshAccountLinksBtn');
+  const editAccountLinkScopesBtn = document.getElementById('editAccountLinkScopesBtn');
+  const unlinkAccountBtn = document.getElementById('unlinkAccountBtn');
+
+  const accountLinkModal = document.getElementById('accountLinkModal');
+  const accountLinkModalTitle = document.getElementById('accountLinkModalTitle');
+  const accountLinkModalDescription = document.getElementById('accountLinkModalDescription');
+  const accountLinkEmailInput = document.getElementById('accountLinkEmailInput');
+  const accountLinkEmailStatus = document.getElementById('accountLinkEmailStatus');
+  const accountLinkSelectAllBtn = document.getElementById('accountLinkSelectAllBtn');
+  const accountLinkClearAllBtn = document.getElementById('accountLinkClearAllBtn');
+  const accountLinkScopeOptions = document.getElementById('accountLinkScopeOptions');
+  const accountLinkScopeHint = document.getElementById('accountLinkScopeHint');
+  const submitAccountLinkBtn = document.getElementById('submitAccountLinkBtn');
+  const closeAccountLinkModalBtn = document.getElementById('closeAccountLinkModalBtn');
+
   let pendingImportPayload = null;
   let activeImportSlot = null;
   let reopenMergeAfterImportClose = false;
@@ -115,6 +142,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const BACKUP_LOCAL_ALLOWLIST = [/^bilm-/, /^theme-/];
   const BACKUP_SESSION_ALLOWLIST = [/^bilm-/];
   const BACKUP_EXCLUDED_STORAGE_KEY_PATTERNS = [/^tmdb-/i, /^debug-/i];
+  const ACCOUNT_LINK_SCOPE_DEFINITIONS = Object.freeze([
+    {
+      key: 'continueWatching',
+      label: 'Continue Watching',
+      description: 'Sync in-progress titles and where you left off.'
+    },
+    {
+      key: 'favorites',
+      label: 'Favorites',
+      description: 'Share each account\'s favorite movies and shows.'
+    },
+    {
+      key: 'watchHistory',
+      label: 'Watch History',
+      description: 'Share watched titles and timestamps.'
+    },
+    {
+      key: 'searchHistory',
+      label: 'Search History',
+      description: 'Share previous searches for faster recommendations.'
+    },
+    {
+      key: 'secretChat',
+      label: 'Secret Chat',
+      description: 'Share secure chat context (only for chat-active accounts).'
+    }
+  ]);
+
+  let accountLinkState = {
+    links: [],
+    incomingRequests: [],
+    pendingRequests: [],
+    activeLink: null,
+    chatReady: false
+  };
+  let accountLinkModalMode = 'create';
+  let accountLinkEditingLinkId = '';
+  let accountLinkTargetCapabilities = null;
+  let accountLinkCapabilitiesLookupTimer = null;
 
   function showToast(message, tone = 'info', duration = 1000) {
     window.bilmToast?.show?.(message, { tone, duration });
@@ -169,6 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeModal(dataModal);
     closeModal(mergeModal);
     closeModal(cloudAuthPromptModal);
+    closeAccountLinkModal();
     pendingImportPayload = null;
     reopenMergeAfterImportClose = false;
   }
@@ -438,6 +505,454 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function createDefaultAccountLinkScopes() {
+    return ACCOUNT_LINK_SCOPE_DEFINITIONS.reduce((scopes, definition) => {
+      scopes[definition.key] = false;
+      return scopes;
+    }, {});
+  }
+
+  function normalizeAccountLinkShareScopes(rawScopes = {}) {
+    const source = rawScopes && typeof rawScopes === 'object' && !Array.isArray(rawScopes)
+      ? rawScopes
+      : {};
+    const normalized = createDefaultAccountLinkScopes();
+    ACCOUNT_LINK_SCOPE_DEFINITIONS.forEach((definition) => {
+      const camelKey = definition.key;
+      const snakeKey = camelKey.replace(/[A-Z]/g, (character) => `_${character.toLowerCase()}`);
+      normalized[camelKey] = source[camelKey] === true || source[snakeKey] === true;
+    });
+    return normalized;
+  }
+
+  function getEnabledScopeLabels(scopes = {}) {
+    const normalized = normalizeAccountLinkShareScopes(scopes);
+    return ACCOUNT_LINK_SCOPE_DEFINITIONS
+      .filter((definition) => normalized[definition.key] === true)
+      .map((definition) => definition.label);
+  }
+
+  function formatScopeSummary(scopes = {}) {
+    const labels = getEnabledScopeLabels(scopes);
+    return labels.length ? labels.join(', ') : 'Nothing selected.';
+  }
+
+  function setAccountLinkSummary(text) {
+    if (!accountLinkSummaryText) return;
+    accountLinkSummaryText.textContent = text;
+  }
+
+  function closeAccountLinkModal() {
+    closeModal(accountLinkModal);
+    accountLinkTargetCapabilities = null;
+    accountLinkEditingLinkId = '';
+    accountLinkModalMode = 'create';
+    if (accountLinkCapabilitiesLookupTimer) {
+      window.clearTimeout(accountLinkCapabilitiesLookupTimer);
+      accountLinkCapabilitiesLookupTimer = null;
+    }
+  }
+
+  function getAccountLinkModalSelectedScopes() {
+    const selected = createDefaultAccountLinkScopes();
+    accountLinkScopeOptions?.querySelectorAll('input[type="checkbox"][data-scope-key]').forEach((checkbox) => {
+      const scopeKey = String(checkbox.dataset.scopeKey || '').trim();
+      if (!scopeKey || !Object.prototype.hasOwnProperty.call(selected, scopeKey)) return;
+      selected[scopeKey] = checkbox.checked;
+    });
+    return normalizeAccountLinkShareScopes(selected);
+  }
+
+  function setAccountLinkModalScopeSelection(nextScopes = {}) {
+    const normalized = normalizeAccountLinkShareScopes(nextScopes);
+    accountLinkScopeOptions?.querySelectorAll('input[type="checkbox"][data-scope-key]').forEach((checkbox) => {
+      const scopeKey = String(checkbox.dataset.scopeKey || '').trim();
+      if (!scopeKey || !Object.prototype.hasOwnProperty.call(normalized, scopeKey)) return;
+      checkbox.checked = normalized[scopeKey] === true;
+    });
+  }
+
+  function renderAccountLinkScopeOptions({ selectedScopes = {}, chatEligible = false } = {}) {
+    if (!accountLinkScopeOptions) return;
+    const normalizedScopes = normalizeAccountLinkShareScopes(selectedScopes);
+    accountLinkScopeOptions.innerHTML = '';
+    ACCOUNT_LINK_SCOPE_DEFINITIONS.forEach((definition) => {
+      if (definition.key === 'secretChat' && chatEligible !== true && normalizedScopes.secretChat !== true) {
+        return;
+      }
+      const row = document.createElement('label');
+      row.className = 'scope-option';
+
+      const head = document.createElement('span');
+      head.className = 'scope-option-head';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.scopeKey = definition.key;
+      input.checked = normalizedScopes[definition.key] === true;
+      head.appendChild(input);
+
+      const text = document.createElement('span');
+      text.textContent = definition.label;
+      head.appendChild(text);
+
+      const help = document.createElement('span');
+      help.className = 'scope-option-help';
+      help.textContent = definition.description;
+
+      row.appendChild(head);
+      row.appendChild(help);
+      accountLinkScopeOptions.appendChild(row);
+    });
+    if (accountLinkScopeHint) {
+      accountLinkScopeHint.textContent = chatEligible
+        ? 'Secret Chat is available because this partner account already has chat activity.'
+        : 'Secret Chat appears only when the partner account already has chat history.';
+    }
+  }
+
+  function updateAccountLinkActionButtons({ busy = false, submitLabel = '' } = {}) {
+    if (submitAccountLinkBtn) {
+      if (submitLabel) submitAccountLinkBtn.textContent = submitLabel;
+      submitAccountLinkBtn.disabled = busy;
+    }
+    if (accountLinkSelectAllBtn) accountLinkSelectAllBtn.disabled = busy;
+    if (accountLinkClearAllBtn) accountLinkClearAllBtn.disabled = busy;
+    if (closeAccountLinkModalBtn) closeAccountLinkModalBtn.disabled = busy;
+    if (accountLinkEmailInput) accountLinkEmailInput.disabled = busy || accountLinkEmailInput.dataset.locked === '1';
+  }
+
+  async function lookupAccountLinkCapabilities(targetEmail, { quiet = false } = {}) {
+    const normalizedEmail = String(targetEmail || '').trim().toLowerCase();
+    if (!isValidEmail(normalizedEmail)) {
+      accountLinkTargetCapabilities = null;
+      if (!quiet && accountLinkEmailStatus) {
+        accountLinkEmailStatus.textContent = 'Enter a valid email to check chat eligibility.';
+      }
+      return null;
+    }
+    if (accountLinkEmailStatus && !quiet) {
+      accountLinkEmailStatus.textContent = 'Checking account availability...';
+    }
+    try {
+      const payload = await window.bilmAuth.getAccountLinkTargetCapabilities(normalizedEmail);
+      accountLinkTargetCapabilities = payload || null;
+      const enforceBlockingChecks = accountLinkModalMode === 'create';
+      if (accountLinkEmailStatus) {
+        if (enforceBlockingChecks && payload?.requesterBlocked) {
+          accountLinkEmailStatus.textContent = 'You already have a pending or active link. Unlink first.';
+        } else if (enforceBlockingChecks && payload?.targetBlocked) {
+          accountLinkEmailStatus.textContent = 'That account already has a pending or active link.';
+        } else if (payload?.accountFound !== true) {
+          accountLinkEmailStatus.textContent = 'No account found yet for this email. They can still approve later once they sign in.';
+        } else {
+          accountLinkEmailStatus.textContent = payload?.chatEligible
+            ? 'Account found. Secret Chat is available.'
+            : 'Account found. Secret Chat stays hidden until this account uses chat.';
+        }
+      }
+      const selectedScopes = getAccountLinkModalSelectedScopes();
+      if (payload?.chatEligible !== true) {
+        selectedScopes.secretChat = false;
+      }
+      renderAccountLinkScopeOptions({
+        selectedScopes,
+        chatEligible: payload?.chatEligible === true
+      });
+      setAccountLinkModalScopeSelection(selectedScopes);
+      return payload;
+    } catch (error) {
+      accountLinkTargetCapabilities = null;
+      if (accountLinkEmailStatus) {
+        accountLinkEmailStatus.textContent = `Could not verify account: ${error.message || 'request failed.'}`;
+      }
+      return null;
+    }
+  }
+
+  function queueAccountLinkCapabilitiesLookup(targetEmail) {
+    if (accountLinkCapabilitiesLookupTimer) {
+      window.clearTimeout(accountLinkCapabilitiesLookupTimer);
+    }
+    accountLinkCapabilitiesLookupTimer = window.setTimeout(() => {
+      accountLinkCapabilitiesLookupTimer = null;
+      void lookupAccountLinkCapabilities(targetEmail);
+    }, 260);
+  }
+
+  function getOutgoingPendingLink() {
+    const pending = Array.isArray(accountLinkState?.pendingRequests) ? accountLinkState.pendingRequests : [];
+    return pending.find((link) => link?.myRole === 'requester') || null;
+  }
+
+  async function refreshAccountLinkState({ silent = false } = {}) {
+    if (!accountLinkPanel || !window.bilmAuth) return;
+    const user = window.bilmAuth.getCurrentUser?.();
+    if (!user) {
+      accountLinkState = {
+        links: [],
+        incomingRequests: [],
+        pendingRequests: [],
+        activeLink: null,
+        chatReady: false
+      };
+      setAccountLinkSummary('Sign in to request, approve, or manage account links.');
+      if (accountLinkActiveCard) accountLinkActiveCard.hidden = true;
+      if (accountLinkPendingCard) accountLinkPendingCard.hidden = true;
+      if (accountLinkIncomingCard) accountLinkIncomingCard.hidden = true;
+      if (openAccountLinkModalBtn) openAccountLinkModalBtn.disabled = true;
+      if (refreshAccountLinksBtn) refreshAccountLinksBtn.disabled = true;
+      return;
+    }
+
+    if (!window.bilmAuth.getAccountLinkState) {
+      setAccountLinkSummary('Account linking is unavailable until auth sync finishes loading.');
+      if (openAccountLinkModalBtn) openAccountLinkModalBtn.disabled = true;
+      if (refreshAccountLinksBtn) refreshAccountLinksBtn.disabled = true;
+      return;
+    }
+
+    if (!silent) setAccountLinkSummary('Loading account link status...');
+    if (refreshAccountLinksBtn) refreshAccountLinksBtn.disabled = true;
+    try {
+      const payload = await window.bilmAuth.getAccountLinkState();
+      accountLinkState = {
+        links: Array.isArray(payload?.links) ? payload.links : [],
+        incomingRequests: Array.isArray(payload?.incomingRequests) ? payload.incomingRequests : [],
+        pendingRequests: Array.isArray(payload?.pendingRequests) ? payload.pendingRequests : [],
+        activeLink: payload?.activeLink && typeof payload.activeLink === 'object' ? payload.activeLink : null,
+        chatReady: payload?.chatReady === true
+      };
+    } catch (error) {
+      setAccountLinkSummary(`Could not load account links: ${error.message || 'request failed.'}`);
+      if (refreshAccountLinksBtn) refreshAccountLinksBtn.disabled = false;
+      if (openAccountLinkModalBtn) openAccountLinkModalBtn.disabled = false;
+      return;
+    } finally {
+      if (refreshAccountLinksBtn) refreshAccountLinksBtn.disabled = false;
+    }
+
+    const activeLink = accountLinkState.activeLink;
+    const incoming = Array.isArray(accountLinkState.incomingRequests) ? accountLinkState.incomingRequests : [];
+    const outgoingPending = getOutgoingPendingLink();
+    const hasBlockingLink = Boolean(activeLink || outgoingPending || incoming.length);
+
+    if (openAccountLinkModalBtn) openAccountLinkModalBtn.disabled = hasBlockingLink;
+    if (editAccountLinkScopesBtn) editAccountLinkScopesBtn.disabled = !activeLink;
+    if (unlinkAccountBtn) unlinkAccountBtn.disabled = !activeLink;
+
+    if (activeLink) {
+      if (accountLinkActiveCard) accountLinkActiveCard.hidden = false;
+      if (accountLinkActiveMeta) {
+        const linkedAt = Number(activeLink?.activatedAtMs || activeLink?.updatedAtMs || 0);
+        const linkedText = linkedAt > 0 ? `Linked since ${formatSyncAt(linkedAt)}.` : 'Link is active.';
+        accountLinkActiveMeta.textContent = `${activeLink?.partner?.email || 'Partner'} is linked. ${linkedText}`;
+      }
+      if (accountLinkMyScopesText) accountLinkMyScopesText.textContent = formatScopeSummary(activeLink?.me?.shareScopes);
+      if (accountLinkPartnerScopesText) accountLinkPartnerScopesText.textContent = formatScopeSummary(activeLink?.partner?.shareScopes);
+      setAccountLinkSummary('Account link is active. You can adjust sharing scopes or unlink anytime.');
+    } else if (accountLinkActiveCard) {
+      accountLinkActiveCard.hidden = true;
+    }
+
+    if (outgoingPending) {
+      if (accountLinkPendingCard) accountLinkPendingCard.hidden = false;
+      if (accountLinkPendingText) {
+        const targetEmail = outgoingPending?.partner?.email || outgoingPending?.target?.email || 'the other account';
+        accountLinkPendingText.textContent = `Waiting for ${targetEmail} to approve your request.`;
+      }
+      if (!activeLink) {
+        setAccountLinkSummary('You have a pending request. Sharing starts after the other account approves.');
+      }
+    } else if (accountLinkPendingCard) {
+      accountLinkPendingCard.hidden = true;
+    }
+
+    if (accountLinkIncomingCard) {
+      accountLinkIncomingCard.hidden = incoming.length < 1;
+    }
+    if (accountLinkIncomingList) {
+      accountLinkIncomingList.innerHTML = '';
+      incoming.forEach((link) => {
+        const card = document.createElement('article');
+        card.className = 'incoming-request-card';
+
+        const title = document.createElement('h4');
+        title.textContent = link?.partner?.email || 'Incoming request';
+        card.appendChild(title);
+
+        const detail = document.createElement('p');
+        detail.className = 'muted';
+        detail.textContent = `They want to share: ${formatScopeSummary(link?.partner?.shareScopes)}`;
+        card.appendChild(detail);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const approveBtn = document.createElement('button');
+        approveBtn.type = 'button';
+        approveBtn.className = 'btn';
+        approveBtn.textContent = 'Approve';
+        approveBtn.addEventListener('click', () => {
+          void openAccountLinkModalForMode('approve', {
+            linkId: link?.id || '',
+            partnerEmail: link?.partner?.email || '',
+            shareScopes: link?.me?.shareScopes || {}
+          });
+        });
+        actions.appendChild(approveBtn);
+
+        const declineBtn = document.createElement('button');
+        declineBtn.type = 'button';
+        declineBtn.className = 'btn btn-outline';
+        declineBtn.textContent = 'Decline';
+        declineBtn.addEventListener('click', async () => {
+          if (!confirm('Decline this account-link request?')) return;
+          try {
+            await window.bilmAuth.respondToAccountLinkRequest({
+              linkId: String(link?.id || '').trim(),
+              action: 'decline'
+            });
+            showToast('Request declined.', 'success');
+            await refreshAccountLinkState({ silent: true });
+          } catch (error) {
+            statusText.textContent = `Decline failed: ${error.message}`;
+          }
+        });
+        actions.appendChild(declineBtn);
+
+        card.appendChild(actions);
+        accountLinkIncomingList.appendChild(card);
+      });
+    }
+
+    if (!activeLink && !outgoingPending && incoming.length < 1) {
+      setAccountLinkSummary('No linked account yet. Send one secure request to get started.');
+    } else if (!activeLink && incoming.length > 0) {
+      setAccountLinkSummary('You have incoming account-link requests waiting for approval.');
+    }
+  }
+
+  async function openAccountLinkModalForMode(mode = 'create', options = {}) {
+    await ensureAuthReady();
+    const user = window.bilmAuth.getCurrentUser?.();
+    if (!user) {
+      statusText.textContent = 'Log in first to manage account linking.';
+      return;
+    }
+    accountLinkModalMode = mode;
+    accountLinkEditingLinkId = String(options?.linkId || '').trim();
+    accountLinkTargetCapabilities = null;
+
+    const initialScopes = normalizeAccountLinkShareScopes(
+      options?.shareScopes
+      || window.bilmAuth.getAccountLinkScopeTemplate?.()
+      || createDefaultAccountLinkScopes()
+    );
+    const partnerEmail = String(options?.partnerEmail || '').trim().toLowerCase();
+
+    if (accountLinkEmailInput) {
+      accountLinkEmailInput.value = partnerEmail;
+      accountLinkEmailInput.dataset.locked = mode === 'create' ? '0' : '1';
+      accountLinkEmailInput.disabled = mode !== 'create';
+    }
+
+    if (mode === 'create') {
+      accountLinkModalTitle.textContent = 'Link Account';
+      accountLinkModalDescription.textContent = 'Send a secure account-link request. The partner account must approve before sharing starts.';
+      submitAccountLinkBtn.textContent = 'Send Request';
+      accountLinkEmailStatus.textContent = 'Enter an email to check availability.';
+    } else if (mode === 'approve') {
+      accountLinkModalTitle.textContent = 'Approve Account Link';
+      accountLinkModalDescription.textContent = 'Choose what you want to share, then approve the request.';
+      submitAccountLinkBtn.textContent = 'Approve Request';
+      accountLinkEmailStatus.textContent = 'Checking partner capabilities...';
+    } else {
+      accountLinkModalTitle.textContent = 'Edit Sharing Scope';
+      accountLinkModalDescription.textContent = 'Adjust what this linked account can receive from you.';
+      submitAccountLinkBtn.textContent = 'Save Sharing';
+      accountLinkEmailStatus.textContent = 'Checking partner capabilities...';
+    }
+
+    renderAccountLinkScopeOptions({
+      selectedScopes: initialScopes,
+      chatEligible: false
+    });
+    setAccountLinkModalScopeSelection(initialScopes);
+    openModal(accountLinkModal);
+
+    if (mode === 'create') {
+      accountLinkEmailInput?.focus();
+    } else if (partnerEmail) {
+      await lookupAccountLinkCapabilities(partnerEmail);
+    }
+  }
+
+  async function submitAccountLinkModal() {
+    await ensureAuthReady();
+    if (!window.bilmAuth?.createAccountLinkRequest) {
+      throw new Error('Account linking is unavailable right now.');
+    }
+    const selectedScopes = getAccountLinkModalSelectedScopes();
+    const hasSelection = Object.values(selectedScopes).some((value) => value === true);
+    if (!hasSelection) {
+      throw new Error('Select at least one category to share.');
+    }
+
+    const targetEmail = String(accountLinkEmailInput?.value || '').trim().toLowerCase();
+    if (!isValidEmail(targetEmail)) {
+      throw new Error('Enter a valid partner email.');
+    }
+    if (String(accountLinkTargetCapabilities?.targetEmail || '').trim().toLowerCase() !== targetEmail) {
+      await lookupAccountLinkCapabilities(targetEmail, { quiet: true });
+    }
+    if (accountLinkModalMode === 'create') {
+      if (accountLinkTargetCapabilities?.requesterBlocked) {
+        throw new Error('You already have a pending or active account link.');
+      }
+      if (accountLinkTargetCapabilities?.targetBlocked) {
+        throw new Error('That account already has a pending or active account link.');
+      }
+    }
+    if (selectedScopes.secretChat && accountLinkTargetCapabilities?.chatEligible !== true) {
+      throw new Error('Secret Chat is unavailable until the partner account has chat activity.');
+    }
+
+    updateAccountLinkActionButtons({ busy: true, submitLabel: 'Sending...' });
+    try {
+      if (accountLinkModalMode === 'approve') {
+        await window.bilmAuth.respondToAccountLinkRequest({
+          linkId: accountLinkEditingLinkId,
+          action: 'approve',
+          shareScopes: selectedScopes
+        });
+        showToast('Account link approved.', 'success');
+      } else if (accountLinkModalMode === 'edit') {
+        await window.bilmAuth.updateAccountLinkScopes({
+          linkId: accountLinkEditingLinkId,
+          shareScopes: selectedScopes
+        });
+        showToast('Sharing scopes updated.', 'success');
+      } else {
+        await window.bilmAuth.createAccountLinkRequest({
+          targetEmail,
+          shareScopes: selectedScopes
+        });
+        showToast('Link request sent.', 'success');
+      }
+      closeAccountLinkModal();
+      await refreshAccountLinkState({ silent: true });
+    } finally {
+      const idleLabel = accountLinkModalMode === 'approve'
+        ? 'Approve Request'
+        : (accountLinkModalMode === 'edit' ? 'Save Sharing' : 'Send Request');
+      updateAccountLinkActionButtons({
+        busy: false,
+        submitLabel: idleLabel
+      });
+    }
+  }
+
   async function requestCloudLoginPermission() {
     await ensureAuthReady();
     if (window.bilmAuth.getCurrentUser()) return true;
@@ -518,7 +1033,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (manualFirebaseBackupBtn) {
       manualFirebaseBackupBtn.disabled = !loggedIn;
     }
+    if (refreshAccountLinksBtn) {
+      refreshAccountLinksBtn.disabled = !loggedIn;
+    }
+    if (openAccountLinkModalBtn) {
+      openAccountLinkModalBtn.disabled = !loggedIn;
+    }
     usernameInput.value = user?.displayName || '';
+    if (!loggedIn) {
+      setAccountLinkSummary('Sign in to request, approve, or manage account links.');
+      if (accountLinkActiveCard) accountLinkActiveCard.hidden = true;
+      if (accountLinkPendingCard) accountLinkPendingCard.hidden = true;
+      if (accountLinkIncomingCard) accountLinkIncomingCard.hidden = true;
+    }
   }
 
   function openDataModal({ title, message, code = '', importMode = false }) {
@@ -552,6 +1079,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeDataImportModal();
   });
   closeMergeModalBtn?.addEventListener('click', () => closeModal(mergeModal));
+  closeAccountLinkModalBtn?.addEventListener('click', () => closeAccountLinkModal());
 
   openCreateAccountBtn?.addEventListener('click', () => {
     openSharedAuthModal('signup');
@@ -561,11 +1089,15 @@ document.addEventListener('DOMContentLoaded', () => {
     openSharedAuthModal('login');
   });
 
-  [loginModal, signUpModal, dataModal, mergeModal, cloudAuthPromptModal].forEach((modal) => {
+  [loginModal, signUpModal, dataModal, mergeModal, cloudAuthPromptModal, accountLinkModal].forEach((modal) => {
     modal?.addEventListener('click', (event) => {
       if (event.target === modal) {
         if (modal === dataModal) {
           closeDataImportModal();
+          return;
+        }
+        if (modal === accountLinkModal) {
+          closeAccountLinkModal();
           return;
         }
         closeModal(modal);
@@ -585,6 +1117,92 @@ document.addEventListener('DOMContentLoaded', () => {
   signUpForm?.addEventListener('submit', (event) => {
     event.preventDefault();
     signUpBtn.click();
+  });
+
+  openAccountLinkModalBtn?.addEventListener('click', () => {
+    void openAccountLinkModalForMode('create');
+  });
+
+  refreshAccountLinksBtn?.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      await refreshAccountLinkState();
+    } catch (error) {
+      statusText.textContent = `Link refresh failed: ${error.message}`;
+    }
+  });
+
+  editAccountLinkScopesBtn?.addEventListener('click', () => {
+    const activeLink = accountLinkState?.activeLink;
+    if (!activeLink?.id) return;
+    void openAccountLinkModalForMode('edit', {
+      linkId: activeLink.id,
+      partnerEmail: activeLink?.partner?.email || '',
+      shareScopes: activeLink?.me?.shareScopes || {}
+    });
+  });
+
+  unlinkAccountBtn?.addEventListener('click', async () => {
+    try {
+      await ensureAuthReady();
+      const activeLink = accountLinkState?.activeLink;
+      if (!activeLink?.id) return;
+      if (!confirm(`Unlink account ${activeLink?.partner?.email || ''}?`)) return;
+      unlinkAccountBtn.disabled = true;
+      await window.bilmAuth.unlinkAccountLink(activeLink.id);
+      showToast('Account unlinked.', 'success');
+      await refreshAccountLinkState({ silent: true });
+    } catch (error) {
+      statusText.textContent = `Unlink failed: ${error.message}`;
+    } finally {
+      unlinkAccountBtn.disabled = false;
+    }
+  });
+
+  accountLinkEmailInput?.addEventListener('input', () => {
+    if (accountLinkEmailInput.dataset.locked === '1') return;
+    const selected = getAccountLinkModalSelectedScopes();
+    if (!isValidEmail(accountLinkEmailInput.value)) {
+      accountLinkTargetCapabilities = null;
+      selected.secretChat = false;
+      renderAccountLinkScopeOptions({
+        selectedScopes: selected,
+        chatEligible: false
+      });
+      setAccountLinkModalScopeSelection(selected);
+      if (accountLinkEmailStatus) {
+        accountLinkEmailStatus.textContent = 'Enter a valid email to check account availability.';
+      }
+      return;
+    }
+    queueAccountLinkCapabilitiesLookup(accountLinkEmailInput.value);
+  });
+
+  accountLinkSelectAllBtn?.addEventListener('click', () => {
+    const selected = getAccountLinkModalSelectedScopes();
+    ACCOUNT_LINK_SCOPE_DEFINITIONS.forEach((definition) => {
+      if (definition.key === 'secretChat' && accountLinkTargetCapabilities?.chatEligible !== true) {
+        selected[definition.key] = false;
+        return;
+      }
+      selected[definition.key] = true;
+    });
+    setAccountLinkModalScopeSelection(selected);
+  });
+
+  accountLinkClearAllBtn?.addEventListener('click', () => {
+    setAccountLinkModalScopeSelection(createDefaultAccountLinkScopes());
+  });
+
+  submitAccountLinkBtn?.addEventListener('click', async () => {
+    try {
+      await submitAccountLinkModal();
+    } catch (error) {
+      statusText.textContent = `Account link update failed: ${error.message || 'request failed.'}`;
+      if (accountLinkEmailStatus) {
+        accountLinkEmailStatus.textContent = error.message || 'Account link request failed.';
+      }
+    }
   });
 
   exportDataBtn?.addEventListener('click', () => {
@@ -944,10 +1562,12 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshFirebaseBackupStatus();
       updateMergeUi();
       updateAccountUi(window.bilmAuth.getCurrentUser());
+      await refreshAccountLinkState({ silent: true });
       window.bilmAuth.onAuthStateChanged((user) => {
         updateAccountUi(user);
         refreshLastSyncText();
         refreshFirebaseBackupStatus();
+        void refreshAccountLinkState({ silent: true });
       });
       window.bilmAuth.onListSyncApplied?.(() => {
         refreshLastSyncText();

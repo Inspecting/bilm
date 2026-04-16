@@ -1,6 +1,10 @@
 :root {
   --chat-radius: 14px;
   --chat-shadow: 0 14px 34px color-mix(in srgb, var(--bg-main) 54%, transparent);
+  --chat-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --chat-mobile-nav-height: 64px;
+  --chat-keyboard-inset: 0px;
+  --chat-mobile-bottom-offset: calc(var(--chat-mobile-nav-height) + var(--chat-safe-bottom) + 10px + var(--chat-keyboard-inset));
 }
 
 * {
@@ -20,7 +24,7 @@ body {
 
 .chat-page {
   width: min(1260px, 96vw);
-  margin: 90px auto 26px;
+  margin: 90px auto calc(26px + var(--chat-safe-bottom));
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 14px;
@@ -305,7 +309,8 @@ body {
   display: grid;
   align-content: start;
   gap: 8px;
-  min-height: 280px;
+  min-height: 0;
+  padding-bottom: 18px;
 }
 
 .message-row {
@@ -381,6 +386,9 @@ body {
   padding: 10px;
   display: grid;
   gap: 8px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 .message-composer textarea {
@@ -513,6 +521,7 @@ body {
   .chat-page {
     grid-template-columns: 1fr;
     margin-top: 78px;
+    margin-bottom: calc(24px + var(--chat-safe-bottom));
     width: min(980px, 96vw);
   }
 
@@ -532,12 +541,26 @@ body {
 
 @media (max-width: 768px) {
   .chat-page {
-    margin: 16px auto 84px;
+    margin: 16px auto calc(var(--chat-mobile-bottom-offset) + 12px);
+    min-height: calc(100dvh - 16px - var(--chat-mobile-bottom-offset));
   }
 
   .chat-main,
   .chat-sidebar {
     padding: 10px;
+  }
+
+  .chat-main {
+    min-height: calc(100dvh - 170px - var(--chat-mobile-bottom-offset));
+    padding-bottom: calc(10px + var(--chat-safe-bottom));
+  }
+
+  .chat-view {
+    gap: 8px;
+  }
+
+  .message-list {
+    padding-bottom: 20px;
   }
 
   .chat-view-header {

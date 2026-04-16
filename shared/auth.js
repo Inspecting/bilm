@@ -17,6 +17,14 @@
   const SECTOR_SYNC_PUSH_PATH = '/sync/sectors/push';
   const SECTOR_SYNC_PULL_PATH = '/sync/sectors/pull';
   const SECTOR_SYNC_BOOTSTRAP_PATH = '/sync/sectors/bootstrap';
+  const ACCOUNT_LINK_LIST_PATH = '/links';
+  const ACCOUNT_LINK_TARGET_CAPABILITIES_PATH = '/links/target-capabilities';
+  const ACCOUNT_LINK_REQUEST_PATH = '/links/request';
+  const ACCOUNT_LINK_RESPOND_PATH = '/links/respond';
+  const ACCOUNT_LINK_SCOPES_PATH = '/links/scopes';
+  const ACCOUNT_LINK_UNLINK_PATH = '/links/unlink';
+  const ACCOUNT_LINK_CHAT_READY_PATH = '/links/chat-ready';
+  const ACCOUNT_LINK_SHARED_FEED_PATH = '/links/shared-feed';
   const TRANSFER_API_DISABLE_KEY = 'bilm-transfer-api-disabled';
 
   let transferApiDisabled = false;
@@ -332,6 +340,133 @@
     return await response.json();
   }
 
+  async function callAccountLinkApi(user, path, {
+    method = 'GET',
+    query = {},
+    body = null
+  } = {}) {
+    if (transferApiDisabled) return null;
+    const authorization = await getTransferAuthHeader(user);
+    const url = new URL(`${DATA_API_BASE}${path}`);
+    Object.entries(query || {}).forEach(([key, value]) => {
+      if (value === null || typeof value === 'undefined') return;
+      url.searchParams.set(key, String(value));
+    });
+    const headers = {
+      accept: 'application/json,text/plain;q=0.9,*/*;q=0.8',
+      authorization
+    };
+    if (method === 'POST') {
+      headers['content-type'] = 'application/json';
+    }
+
+    let response;
+    try {
+      response = await fetch(url.toString(), {
+        method,
+        headers,
+        body: method === 'POST' ? JSON.stringify(body || {}) : undefined
+      });
+    } catch (error) {
+      if (shouldDisableTransferApi(error)) disableTransferApi(`network/CORS failure on ${path}`);
+      throw error;
+    }
+
+    if (response.status === 404 && method === 'GET') {
+      return null;
+    }
+    if (!response.ok) {
+      const parsedError = await parseTransferError(response);
+      logTransferFailure('account-link', parsedError, { endpoint: path });
+      throw parsedError;
+    }
+    const raw = await response.text();
+    if (!raw.trim()) return {};
+    return safeParse(raw, {}) || {};
+  }
+
+  async function fetchAccountLinkStateFromTransferApi(user, userId) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_LIST_PATH, {
+      method: 'GET',
+      query: { userId }
+    });
+  }
+
+  async function fetchAccountLinkTargetCapabilitiesFromTransferApi(user, userId, targetEmail) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_TARGET_CAPABILITIES_PATH, {
+      method: 'GET',
+      query: {
+        userId,
+        email: String(targetEmail || '').trim().toLowerCase()
+      }
+    });
+  }
+
+  async function createAccountLinkRequestInTransferApi(user, userId, { targetEmail, shareScopes }) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_REQUEST_PATH, {
+      method: 'POST',
+      body: {
+        userId,
+        targetEmail: String(targetEmail || '').trim().toLowerCase(),
+        shareScopes: shareScopes && typeof shareScopes === 'object' ? shareScopes : {}
+      }
+    });
+  }
+
+  async function respondToAccountLinkRequestInTransferApi(user, userId, { linkId, action, shareScopes }) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_RESPOND_PATH, {
+      method: 'POST',
+      body: {
+        userId,
+        linkId: String(linkId || '').trim(),
+        action: String(action || '').trim().toLowerCase(),
+        shareScopes: shareScopes && typeof shareScopes === 'object' ? shareScopes : {}
+      }
+    });
+  }
+
+  async function updateAccountLinkScopesInTransferApi(user, userId, { linkId, shareScopes }) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_SCOPES_PATH, {
+      method: 'POST',
+      body: {
+        userId,
+        linkId: String(linkId || '').trim(),
+        shareScopes: shareScopes && typeof shareScopes === 'object' ? shareScopes : {}
+      }
+    });
+  }
+
+  async function unlinkAccountLinkInTransferApi(user, userId, { linkId }) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_UNLINK_PATH, {
+      method: 'POST',
+      body: {
+        userId,
+        linkId: String(linkId || '').trim()
+      }
+    });
+  }
+
+  async function markAccountChatReadyInTransferApi(user, userId) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_CHAT_READY_PATH, {
+      method: 'POST',
+      body: { userId }
+    });
+  }
+
+  async function pullLinkedSharedFeedFromTransferApi(user, userId, {
+    sinceMs = 0,
+    limit = 250
+  } = {}) {
+    return await callAccountLinkApi(user, ACCOUNT_LINK_SHARED_FEED_PATH, {
+      method: 'GET',
+      query: {
+        userId,
+        since: String(Math.max(0, Number(sinceMs || 0) || 0)),
+        limit: String(Math.max(1, Math.min(500, Number(limit || 250) || 250)))
+      }
+    });
+  }
+
   const subscribers = new Set();
   let initPromise;
   let modules;
@@ -379,6 +514,9 @@
   const SYNC_QUARANTINE_DIAGNOSTICS_META_KEY = 'syncQuarantineDiagnostics';
   const SYNC_TIMESTAMP_CLAMP_WARNING_META_KEY = 'timestampClampWarningAtMs';
   const SYNC_TIMESTAMP_SKEW_DETECTED_META_KEY = 'timestampSkewDetectedAtMs';
+  const LINKED_SHARE_CURSOR_META_KEY = 'linkedShareCursorMs';
+  const LINKED_SHARE_LAST_PULL_META_KEY = 'lastLinkedSharePullAtMs';
+  const LINKED_SHARE_LINK_SIGNATURE_META_KEY = 'linkedShareLinkSignature';
   const SYNC_FUTURE_TIME_WINDOW_MS = 10 * 60 * 1000;
   const SYNC_PENDING_DIAGNOSTIC_LIMIT = 20;
   const SYNC_MAX_ITEM_KEY_LENGTH = 255;
@@ -477,6 +615,13 @@
       ...Object.values(LIST_KEY_TO_SECTOR_KEY),
       ...Object.values(EXTRA_SYNC_SECTOR_KEYS)
     ])
+  ]);
+  const ACCOUNT_LINK_SHARE_SCOPE_KEYS = Object.freeze([
+    'continueWatching',
+    'favorites',
+    'watchHistory',
+    'searchHistory',
+    'secretChat'
   ]);
   let lastAppliedCloudSignature = '';
   const pendingListOperations = new Map();
@@ -881,6 +1026,49 @@
     };
   }
 
+  function normalizeAccountLinkShareScopes(rawScopes = {}) {
+    const source = rawScopes && typeof rawScopes === 'object' && !Array.isArray(rawScopes)
+      ? rawScopes
+      : {};
+    const normalized = {};
+    ACCOUNT_LINK_SHARE_SCOPE_KEYS.forEach((scopeKey) => {
+      const snakeKey = scopeKey.replace(/[A-Z]/g, (character) => `_${character.toLowerCase()}`);
+      normalized[scopeKey] = source[scopeKey] === true || source[snakeKey] === true;
+    });
+    return normalized;
+  }
+
+  function normalizeAccountLinkStatePayload(payload = {}) {
+    const source = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload
+      : {};
+    const links = Array.isArray(source.links) ? source.links : [];
+    const incomingRequests = Array.isArray(source.incomingRequests) ? source.incomingRequests : [];
+    const pendingRequests = Array.isArray(source.pendingRequests) ? source.pendingRequests : [];
+    return {
+      ok: source.ok !== false,
+      chatReady: source.chatReady === true,
+      links,
+      incomingRequests,
+      pendingRequests,
+      activeLink: source.activeLink && typeof source.activeLink === 'object' ? source.activeLink : null
+    };
+  }
+
+  function normalizeAccountLinkCapabilityPayload(payload = {}, normalizedEmail = '') {
+    const source = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload
+      : {};
+    return {
+      ok: source.ok !== false,
+      targetEmail: String(source.targetEmail || normalizedEmail || '').trim().toLowerCase(),
+      accountFound: source.accountFound === true,
+      chatEligible: source.chatEligible === true,
+      requesterBlocked: source.requesterBlocked === true,
+      targetBlocked: source.targetBlocked === true
+    };
+  }
+
   async function parseTransferError(response) {
     const status = Number(response?.status || 0) || 0;
     const fallback = await response.text().catch(() => '');
@@ -1076,6 +1264,27 @@
 
   function setListSyncCursorMs(nextCursorMs) {
     return setScopedSyncMetaNumber(LIST_SYNC_CURSOR_META_KEY, nextCursorMs);
+  }
+
+  function getLinkedShareCursorMs() {
+    return getScopedSyncMetaNumber(LINKED_SHARE_CURSOR_META_KEY, 0);
+  }
+
+  function setLinkedShareCursorMs(nextCursorMs) {
+    return setScopedSyncMetaNumber(LINKED_SHARE_CURSOR_META_KEY, nextCursorMs);
+  }
+
+  function getLinkedShareLinkSignature(user = auth?.currentUser || currentUser) {
+    return String(getScopedSyncMetaValue(LINKED_SHARE_LINK_SIGNATURE_META_KEY, '', user) || '').trim();
+  }
+
+  function setLinkedShareLinkSignature(signature = '', user = auth?.currentUser || currentUser) {
+    return setScopedSyncMetaValue(LINKED_SHARE_LINK_SIGNATURE_META_KEY, String(signature || '').trim(), user);
+  }
+
+  function resetLinkedShareCursor(user = auth?.currentUser || currentUser) {
+    setScopedSyncMetaValue(LINKED_SHARE_CURSOR_META_KEY, 0, user);
+    return 0;
   }
 
   function getSectorMigrationCompletedAtMs() {
@@ -2383,6 +2592,97 @@
     return true;
   }
 
+  function splitLinkedShareOperations(operations = []) {
+    const listOperations = [];
+    const sectorOperations = [];
+    if (!Array.isArray(operations)) {
+      return { listOperations, sectorOperations };
+    }
+    operations.forEach((operation) => {
+      const normalized = toSectorOperation(operation);
+      if (!normalized) return;
+      const listOperation = toListOperation(normalized);
+      if (listOperation) {
+        listOperations.push(listOperation);
+        return;
+      }
+      if (Object.values(EXTRA_SYNC_SECTOR_KEYS).includes(normalized.sectorKey)) {
+        sectorOperations.push(normalized);
+      }
+    });
+    return { listOperations, sectorOperations };
+  }
+
+  function applyLinkedShareOperationsToLocalStorage(operations = []) {
+    if (!Array.isArray(operations) || operations.length === 0) return false;
+    const { listOperations, sectorOperations } = splitLinkedShareOperations(operations);
+    const listApplied = listOperations.length > 0
+      ? applyListOperationsToLocalStorage(listOperations)
+      : false;
+    const sectorApplied = sectorOperations.length > 0
+      ? applyStorageSectorOperationsToLocalStorage(sectorOperations)
+      : false;
+    return listApplied || sectorApplied;
+  }
+
+  async function syncLinkedSharedFeedNow(user, userId) {
+    let sinceMs = getLinkedShareCursorMs();
+    let pages = 0;
+    let applied = false;
+    let linkSignature = getLinkedShareLinkSignature(user);
+    let restartedForLinkChange = false;
+
+    while (pages < 4) {
+      pages += 1;
+      const response = await pullLinkedSharedFeedFromTransferApi(user, userId, {
+        sinceMs,
+        limit: 250
+      });
+      if (!response || !Array.isArray(response.operations)) break;
+
+      const activeLinkIds = Array.isArray(response?.activeLinkIds)
+        ? [...new Set(response.activeLinkIds.map((value) => String(value || '').trim()).filter(Boolean))].sort()
+        : [];
+      const nextLinkSignature = activeLinkIds.join('|');
+      if (nextLinkSignature !== linkSignature) {
+        setLinkedShareLinkSignature(nextLinkSignature, user);
+        linkSignature = nextLinkSignature;
+        if (!restartedForLinkChange && sinceMs > 0) {
+          restartedForLinkChange = true;
+          sinceMs = 0;
+          resetLinkedShareCursor(user);
+          continue;
+        }
+      }
+
+      const operations = response.operations;
+      if (operations.length > 0) {
+        const didApply = applyLinkedShareOperationsToLocalStorage(operations);
+        applied = applied || didApply;
+      }
+
+      const previousSinceMs = sinceMs;
+      const operationCursorMs = operations.reduce(
+        (max, operation) => Math.max(max, normalizeOperationUpdatedAt(operation?.updatedAtMs, 0, { context: 'linked-share-op' })),
+        previousSinceMs
+      );
+      const responseCursorMs = Math.max(
+        normalizeOperationUpdatedAt(response?.cursorMs, previousSinceMs, { context: 'linked-share-cursor' }),
+        operationCursorMs
+      );
+      sinceMs = Math.max(previousSinceMs, responseCursorMs);
+      if (sinceMs > 0) {
+        setLinkedShareCursorMs(sinceMs);
+      }
+      setScopedSyncMetaNumber(LINKED_SHARE_LAST_PULL_META_KEY, Date.now(), user);
+
+      const hasMore = response?.hasMore === true;
+      if (!hasMore || sinceMs <= previousSinceMs) break;
+    }
+
+    return applied;
+  }
+
   function clearListSyncRetryTimer() {
     if (listSyncRetryTimer) {
       window.clearTimeout(listSyncRetryTimer);
@@ -2976,6 +3276,13 @@
       if (operations.length < 250) break;
     }
 
+    try {
+      const linkedApplied = await syncLinkedSharedFeedNow(user, userId);
+      applied = applied || linkedApplied;
+    } catch (error) {
+      console.warn('Linked share pull failed:', error);
+    }
+
     return applied;
   }
 
@@ -3438,6 +3745,13 @@
     throw enhanceAuthError(lastError || new Error('Auth request failed.'));
   }
 
+  async function requireAccountLinkSession() {
+    await init();
+    const user = await requireAuth();
+    const userId = getTransferUserId(user);
+    return { user, userId };
+  }
+
   const api = {
     init,
     getFirestore() {
@@ -3796,6 +4110,103 @@
         reason,
         appliedAtMs: Date.now()
       };
+    },
+    getAccountLinkScopeTemplate() {
+      return normalizeAccountLinkShareScopes({});
+    },
+    normalizeAccountLinkShareScopes(scopes = {}) {
+      return normalizeAccountLinkShareScopes(scopes);
+    },
+    async getAccountLinkState() {
+      const { user, userId } = await requireAccountLinkSession();
+      const payload = await fetchAccountLinkStateFromTransferApi(user, userId);
+      return normalizeAccountLinkStatePayload(payload || {});
+    },
+    async getAccountLinkTargetCapabilities(targetEmail) {
+      const normalizedEmail = String(targetEmail || '').trim().toLowerCase();
+      if (!normalizedEmail) {
+        throw new Error('Target email is required.');
+      }
+      const { user, userId } = await requireAccountLinkSession();
+      const payload = await fetchAccountLinkTargetCapabilitiesFromTransferApi(user, userId, normalizedEmail);
+      return normalizeAccountLinkCapabilityPayload(payload || {}, normalizedEmail);
+    },
+    async createAccountLinkRequest({ targetEmail, shareScopes } = {}) {
+      const normalizedEmail = String(targetEmail || '').trim().toLowerCase();
+      if (!normalizedEmail) {
+        throw new Error('Target email is required.');
+      }
+      const normalizedScopes = normalizeAccountLinkShareScopes(shareScopes);
+      const { user, userId } = await requireAccountLinkSession();
+      const payload = await createAccountLinkRequestInTransferApi(user, userId, {
+        targetEmail: normalizedEmail,
+        shareScopes: normalizedScopes
+      });
+      return payload && typeof payload === 'object' ? payload : { ok: true };
+    },
+    async respondToAccountLinkRequest({ linkId, action, shareScopes } = {}) {
+      const normalizedLinkId = String(linkId || '').trim();
+      const normalizedAction = String(action || '').trim().toLowerCase();
+      if (!normalizedLinkId) {
+        throw new Error('Account link request id is required.');
+      }
+      if (normalizedAction !== 'approve' && normalizedAction !== 'decline') {
+        throw new Error('Action must be approve or decline.');
+      }
+      const normalizedScopes = normalizeAccountLinkShareScopes(shareScopes);
+      const { user, userId } = await requireAccountLinkSession();
+      const payload = await respondToAccountLinkRequestInTransferApi(user, userId, {
+        linkId: normalizedLinkId,
+        action: normalizedAction,
+        shareScopes: normalizedScopes
+      });
+      if (normalizedAction === 'approve') {
+        resetLinkedShareCursor(user);
+        setLinkedShareLinkSignature('', user);
+        void syncListsFromCloudNow().catch((error) => {
+          console.warn('Post-link approval sync failed:', error);
+        });
+      }
+      return payload && typeof payload === 'object' ? payload : { ok: true };
+    },
+    async updateAccountLinkScopes({ linkId, shareScopes } = {}) {
+      const normalizedLinkId = String(linkId || '').trim();
+      if (!normalizedLinkId) {
+        throw new Error('Account link id is required.');
+      }
+      const normalizedScopes = normalizeAccountLinkShareScopes(shareScopes);
+      const { user, userId } = await requireAccountLinkSession();
+      const payload = await updateAccountLinkScopesInTransferApi(user, userId, {
+        linkId: normalizedLinkId,
+        shareScopes: normalizedScopes
+      });
+      void syncListsFromCloudNow().catch((error) => {
+        console.warn('Post-scope update sync failed:', error);
+      });
+      return payload && typeof payload === 'object' ? payload : { ok: true };
+    },
+    async unlinkAccountLink(linkId) {
+      const normalizedLinkId = String(linkId || '').trim();
+      if (!normalizedLinkId) {
+        throw new Error('Account link id is required.');
+      }
+      const { user, userId } = await requireAccountLinkSession();
+      const payload = await unlinkAccountLinkInTransferApi(user, userId, { linkId: normalizedLinkId });
+      resetLinkedShareCursor(user);
+      setLinkedShareLinkSignature('', user);
+      return payload && typeof payload === 'object' ? payload : { ok: true };
+    },
+    async markAccountChatReady() {
+      await init();
+      const user = auth?.currentUser;
+      if (!user) {
+        return { ok: false, skipped: true, reason: 'missing_session' };
+      }
+      const userId = getTransferUserId(user);
+      const payload = await markAccountChatReadyInTransferApi(user, userId);
+      return payload && typeof payload === 'object'
+        ? payload
+        : { ok: true, userId, chatReady: true };
     },
     getFirebaseBackupStatus() {
       return getFirebaseBackupStatus();

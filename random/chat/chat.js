@@ -19,7 +19,8 @@
     filterText: '',
     pollingTimer: null,
     loadingConversations: false,
-    sendingMessage: false
+    sendingMessage: false,
+    chatReadyMarked: false
   };
 
   const elements = {};
@@ -86,6 +87,33 @@
     const targetHeight = Math.min(MESSAGE_INPUT_MAX_HEIGHT, Math.max(MESSAGE_INPUT_MIN_HEIGHT, input.scrollHeight));
     input.style.height = `${targetHeight}px`;
     input.style.overflowY = input.scrollHeight > MESSAGE_INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
+  }
+
+  function isMessageListNearBottom(threshold = 72) {
+    if (!elements.messageList) return true;
+    const distance = elements.messageList.scrollHeight - elements.messageList.scrollTop - elements.messageList.clientHeight;
+    return distance <= threshold;
+  }
+
+  function updateViewportKeyboardInset() {
+    const viewport = window.visualViewport;
+    const inset = viewport
+      ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      : 0;
+    document.documentElement.style.setProperty('--chat-keyboard-inset', `${Math.round(inset)}px`);
+  }
+
+  async function markChatReadyIfPossible({ force = false } = {}) {
+    if (!state.currentUser || !state.authApi?.markAccountChatReady) return false;
+    if (!force && state.chatReadyMarked) return true;
+    try {
+      await state.authApi.markAccountChatReady();
+      state.chatReadyMarked = true;
+      return true;
+    } catch (error) {
+      console.warn('Mark chat-ready skipped:', error);
+      return false;
+    }
   }
 
   function setConversations(conversations) {
@@ -523,6 +551,7 @@
   function renderMessages() {
     if (!elements.messageList) return;
     const conversation = getActiveConversation();
+    const shouldStickToBottom = !state.selectionMode && isMessageListNearBottom();
     elements.messageList.innerHTML = '';
     if (!conversation) return;
     const messages = getMessagesForConversation(conversation.id);
@@ -573,7 +602,7 @@
       elements.messageList.appendChild(row);
     });
     updateSelectionControls();
-    if (!state.selectionMode) {
+    if (shouldStickToBottom) {
       elements.messageList.scrollTop = elements.messageList.scrollHeight;
     }
   }
@@ -702,6 +731,7 @@
     }
     state.conversationsById.set(conversation.id, conversation);
     setActiveConversation(conversation.id);
+    void markChatReadyIfPossible();
     return conversation;
   }
 
@@ -781,6 +811,7 @@
       renderConversationList();
       renderActiveConversationHeader();
       renderMessages();
+      void markChatReadyIfPossible();
     } catch (error) {
       if (isAuthError(error)) {
         setComposerStatus('Create an account or log in to send messages.', 'error');
@@ -894,6 +925,7 @@
     state.currentUser = user || null;
     setLoginStatus(state.currentUser);
     if (!state.currentUser) {
+      state.chatReadyMarked = false;
       clearMessageSelection();
       stopPolling();
       setComposerStatus('Log in to start chatting.', 'muted');
@@ -903,6 +935,7 @@
     closeAuthPromptModal();
     startPolling();
     setComposerStatus('', 'muted');
+    void markChatReadyIfPossible({ force: true });
     void loadConversations({ quiet: true });
   }
 
@@ -914,7 +947,10 @@
       state.authApi.onAuthStateChanged?.((user) => {
         handleAuthChange(user);
       });
-      if (state.currentUser) startPolling();
+      if (state.currentUser) {
+        startPolling();
+        await markChatReadyIfPossible({ force: true });
+      }
       await loadConversations({ quiet: true });
     } catch (error) {
       setLoginStatus(null);
@@ -1047,8 +1083,17 @@
       }
     });
 
+    window.addEventListener('resize', updateViewportKeyboardInset);
+    window.addEventListener('orientationchange', updateViewportKeyboardInset);
+    window.addEventListener('pageshow', updateViewportKeyboardInset);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportKeyboardInset);
+      window.visualViewport.addEventListener('scroll', updateViewportKeyboardInset);
+    }
+
     window.addEventListener('pagehide', () => {
       stopPolling();
+      document.documentElement.style.setProperty('--chat-keyboard-inset', '0px');
     });
   }
 
@@ -1056,6 +1101,7 @@
     cleanupLegacyTabState();
     bindElements();
     bindEvents();
+    updateViewportKeyboardInset();
     state.apiBases = buildApiBases();
     if (elements.messageInput) {
       elements.messageInput.setAttribute('maxlength', String(MESSAGE_LENGTH_LIMIT));

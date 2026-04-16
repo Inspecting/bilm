@@ -61,6 +61,46 @@
         <p id="firebaseBackupCooldownText" class="muted">Manual backup availability: now</p>
       </section>
 
+      <section class="panel account-link-panel" id="accountLinkPanel">
+        <div class="panel-title-row">
+          <div class="stack">
+            <h2>Account Linking</h2>
+            <p class="muted">Securely link one account partner. Sharing only activates after both accounts approve.</p>
+          </div>
+          <div class="actions panel-title-actions">
+            <button id="refreshAccountLinksBtn" class="btn btn-outline" type="button">Refresh</button>
+            <button id="openAccountLinkModalBtn" class="btn" type="button">Link Account</button>
+          </div>
+        </div>
+        <p id="accountLinkSummaryText" class="muted">Sign in to manage account linking.</p>
+        <div id="accountLinkActiveCard" class="account-link-card" hidden>
+          <h3>Active Link</h3>
+          <p id="accountLinkActiveMeta" class="muted">No active link.</p>
+          <div class="scope-columns">
+            <div class="scope-column">
+              <h4>You Share</h4>
+              <p id="accountLinkMyScopesText" class="muted">Nothing selected.</p>
+            </div>
+            <div class="scope-column">
+              <h4>Partner Shares</h4>
+              <p id="accountLinkPartnerScopesText" class="muted">Nothing selected.</p>
+            </div>
+          </div>
+          <div class="actions">
+            <button id="editAccountLinkScopesBtn" class="btn btn-outline" type="button">Edit My Sharing</button>
+            <button id="unlinkAccountBtn" class="btn btn-danger" type="button">Unlink Account</button>
+          </div>
+        </div>
+        <div id="accountLinkPendingCard" class="account-link-card" hidden>
+          <h3>Pending Request</h3>
+          <p id="accountLinkPendingText" class="muted">No pending request.</p>
+        </div>
+        <div id="accountLinkIncomingCard" class="account-link-card" hidden>
+          <h3>Incoming Requests</h3>
+          <div id="accountLinkIncomingList" class="incoming-request-list"></div>
+        </div>
+      </section>
+
       <section class="panel">
         <h2>Data Transfer</h2>
         <p class="muted">Export/import works with local data. Cloud actions use your signed-in account.</p>
@@ -194,6 +234,31 @@
       <div class="actions modal-actions">
         <button id="confirmCloudLoginBtn" class="btn" type="button">Log In</button>
         <button id="cancelCloudLoginBtn" class="btn btn-outline" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="data-modal" id="accountLinkModal" role="dialog" aria-modal="true" aria-labelledby="accountLinkModalTitle">
+    <div class="data-modal__panel account-link-modal-panel">
+      <h3 id="accountLinkModalTitle">Link Account</h3>
+      <p id="accountLinkModalDescription">Send a secure account-link request. The other account must approve before data sharing starts.</p>
+      <div class="stack">
+        <label for="accountLinkEmailInput" class="field-label">Partner Email</label>
+        <input id="accountLinkEmailInput" type="email" placeholder="friend@example.com" autocomplete="email" />
+      </div>
+      <p id="accountLinkEmailStatus" class="muted">Enter an email to load sharing options.</p>
+      <div class="scope-picker-header">
+        <h4>What You Share</h4>
+        <div class="actions scope-picker-actions">
+          <button id="accountLinkSelectAllBtn" class="btn btn-outline" type="button">Select All</button>
+          <button id="accountLinkClearAllBtn" class="btn btn-outline" type="button">Clear</button>
+        </div>
+      </div>
+      <div id="accountLinkScopeOptions" class="scope-options-grid"></div>
+      <p id="accountLinkScopeHint" class="muted">Secret Chat appears only when the partner account already has chat history.</p>
+      <div class="actions modal-actions">
+        <button id="submitAccountLinkBtn" class="btn" type="button">Send Request</button>
+        <button id="closeAccountLinkModalBtn" class="btn btn-outline" type="button">Close</button>
       </div>
     </div>
   </div>
